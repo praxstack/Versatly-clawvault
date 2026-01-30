@@ -18,7 +18,7 @@ import {
   DEFAULT_CATEGORIES,
   Category
 } from '../types.js';
-import { SearchEngine, extractWikiLinks, extractTags } from './search.js';
+import { SearchEngine, extractWikiLinks, extractTags, hasQmd, qmdUpdate, qmdEmbed } from './search.js';
 
 const CONFIG_FILE = '.clawvault.json';
 const INDEX_FILE = '.clawvault-index.json';
@@ -35,6 +35,8 @@ export class ClawVault {
       categories: DEFAULT_CATEGORIES
     };
     this.search = new SearchEngine();
+    this.search.setVaultPath(this.config.path);
+    this.search.setCollection(this.config.name);
   }
 
   /**
@@ -98,7 +100,12 @@ export class ClawVault {
     this.config.name = meta.name;
     this.config.categories = meta.categories;
 
-    // Index all documents
+    // Configure search engine with vault info
+    this.search.setVaultPath(this.config.path);
+    // Use qmdCollection if set, otherwise fall back to vault name
+    this.search.setCollection(meta.qmdCollection || this.config.name);
+
+    // Index all documents (local cache)
     await this.reindex();
     this.initialized = true;
   }
@@ -162,7 +169,15 @@ export class ClawVault {
    * Store a new document
    */
   async store(options: StoreOptions): Promise<Document> {
-    const { category, title, content, frontmatter = {}, overwrite = false } = options;
+    const { 
+      category, 
+      title, 
+      content, 
+      frontmatter = {}, 
+      overwrite = false,
+      qmdUpdate: triggerUpdate = false,
+      qmdEmbed: triggerEmbed = false
+    } = options;
 
     // Create filename from title
     const filename = this.slugify(title) + '.md';
@@ -198,6 +213,16 @@ export class ClawVault {
       await this.saveIndex();
     }
 
+    // Trigger qmd reindex if requested
+    if (triggerUpdate || triggerEmbed) {
+      if (hasQmd()) {
+        qmdUpdate();
+        if (triggerEmbed) {
+          qmdEmbed();
+        }
+      }
+    }
+
     return doc!;
   }
 
@@ -214,10 +239,24 @@ export class ClawVault {
   }
 
   /**
-   * Search the vault
+   * Search the vault (BM25 via qmd)
    */
   async find(query: string, options: SearchOptions = {}): Promise<SearchResult[]> {
     return this.search.search(query, options);
+  }
+
+  /**
+   * Semantic/vector search (via qmd vsearch)
+   */
+  async vsearch(query: string, options: SearchOptions = {}): Promise<SearchResult[]> {
+    return this.search.vsearch(query, options);
+  }
+
+  /**
+   * Combined search with query expansion (via qmd query)
+   */
+  async query(query: string, options: SearchOptions = {}): Promise<SearchResult[]> {
+    return this.search.query(query, options);
   }
 
   /**

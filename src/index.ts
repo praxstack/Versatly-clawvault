@@ -26,7 +26,7 @@
 
 // Core exports
 export { ClawVault, createVault, findVault } from './lib/vault.js';
-export { SearchEngine, extractWikiLinks, extractTags } from './lib/search.js';
+export { SearchEngine, extractWikiLinks, extractTags, hasQmd, qmdUpdate, qmdEmbed } from './lib/search.js';
 
 // Type exports
 export type {

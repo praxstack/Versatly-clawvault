@@ -106,6 +106,8 @@ program
   .option('-f, --file <file>', 'Read content from file')
   .option('--stdin', 'Read content from stdin')
   .option('--overwrite', 'Overwrite if exists')
+  .option('--qmd-update', 'Trigger qmd reindex after storing')
+  .option('--qmd-embed', 'Trigger qmd embed after storing (for vector search)')
   .option('-v, --vault <path>', 'Vault path (default: find nearest)')
   .action(async (options) => {
     try {
@@ -123,7 +125,9 @@ program
         category: options.category,
         title: options.title,
         content,
-        overwrite: options.overwrite
+        overwrite: options.overwrite,
+        qmdUpdate: options.qmdUpdate,
+        qmdEmbed: options.qmdEmbed
       });
       
       console.log(chalk.green(`✓ Stored: ${doc.id}`));
@@ -205,15 +209,44 @@ program
   .command('vsearch <query>')
   .description('Semantic search via qmd (requires qmd installed)')
   .option('-n, --limit <n>', 'Max results', '5')
+  .option('-c, --category <category>', 'Filter by category')
+  .option('--tags <tags>', 'Filter by tags (comma-separated)')
+  .option('--full', 'Include full content in results')
   .option('-v, --vault <path>', 'Vault path')
+  .option('--json', 'Output as JSON')
   .action(async (query, options) => {
     try {
       const vault = await getVault(options.vault);
-      const collectionName = vault.getName();
       
-      console.log(chalk.cyan(`\n🧠 Semantic search for "${query}"...\n`));
+      const results = await vault.vsearch(query, {
+        limit: parseInt(options.limit),
+        category: options.category,
+        tags: options.tags?.split(',').map(t => t.trim()),
+        fullContent: options.full
+      });
       
-      await runQmd(['vsearch', query, '-c', collectionName, '-n', options.limit]);
+      if (options.json) {
+        console.log(JSON.stringify(results, null, 2));
+        return;
+      }
+      
+      if (results.length === 0) {
+        console.log(chalk.yellow('No results found.'));
+        return;
+      }
+      
+      console.log(chalk.cyan(`\n🧠 Found ${results.length} result(s) for "${query}":\n`));
+      
+      for (const result of results) {
+        const scoreBar = '█'.repeat(Math.round(result.score * 10)).padEnd(10, '░');
+        console.log(chalk.green(`📄 ${result.document.title}`));
+        console.log(chalk.dim(`   ${result.document.category}/${result.document.id.split('/').pop()}`));
+        console.log(chalk.dim(`   Score: ${scoreBar} ${(result.score * 100).toFixed(0)}%`));
+        if (result.snippet) {
+          console.log(chalk.white(`   ${result.snippet.split('\n')[0].slice(0, 80)}...`));
+        }
+        console.log();
+      }
     } catch (err) {
       console.error(chalk.red(`Error: ${err.message}`));
       console.log(chalk.dim('\nTip: Install qmd for semantic search: https://github.com/Versatly/qmd'));

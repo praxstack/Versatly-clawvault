@@ -1,255 +1,372 @@
 /**
- * ClawVault Search Engine
- * Simple but effective TF-IDF based semantic search
+ * ClawVault Search Engine - qmd Backend
+ * Uses qmd CLI for BM25 and vector search
  */
 
+import { execSync } from 'child_process';
+import * as path from 'path';
 import { Document, SearchResult, SearchOptions } from '../types.js';
 
-interface TermFrequency {
-  [term: string]: number;
-}
-
-interface DocumentIndex {
-  id: string;
-  terms: TermFrequency;
-  termCount: number;
+/**
+ * QMD search result format
+ */
+interface QmdResult {
+  docid: string;
+  score: number;
+  file: string;
+  title: string;
+  snippet: string;
 }
 
 /**
- * Simple stemmer - reduces words to their root form
+ * Execute qmd command and return parsed JSON
  */
-function stem(word: string): string {
-  word = word.toLowerCase();
-  
-  // Common suffix removal
-  const suffixes = [
-    'ingly', 'edly', 'tion', 'sion', 'ness', 'ment', 'able', 'ible',
-    'ally', 'ful', 'less', 'ous', 'ive', 'ing', 'ed', 'ly', 's'
-  ];
-  
-  for (const suffix of suffixes) {
-    if (word.length > suffix.length + 2 && word.endsWith(suffix)) {
-      return word.slice(0, -suffix.length);
+function execQmd(args: string[]): QmdResult[] {
+  try {
+    const result = execSync(`qmd ${args.join(' ')}`, {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      maxBuffer: 10 * 1024 * 1024 // 10MB
+    });
+    
+    // Parse JSON output
+    const parsed = JSON.parse(result.trim());
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err: any) {
+    // Check if there's output in stderr or stdout
+    if (err.stdout) {
+      try {
+        const parsed = JSON.parse(err.stdout.trim());
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        // Not JSON
+      }
     }
+    console.error(`qmd error: ${err.message}`);
+    return [];
   }
-  
-  return word;
 }
 
 /**
- * Tokenize and normalize text
+ * Check if qmd is available
  */
-function tokenize(text: string): string[] {
-  return text
-    .toLowerCase()
-    .replace(/\[\[([^\]]+)\]\]/g, '$1') // Extract wiki-links
-    .replace(/[^\w\s-]/g, ' ')
-    .split(/\s+/)
-    .filter(t => t.length > 2)
-    .map(stem);
+export function hasQmd(): boolean {
+  try {
+    execSync('which qmd', { stdio: 'pipe' });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
- * Calculate term frequency for a document
+ * Trigger qmd update (reindex)
  */
-function calculateTF(tokens: string[]): TermFrequency {
-  const tf: TermFrequency = {};
-  for (const token of tokens) {
-    tf[token] = (tf[token] || 0) + 1;
+export function qmdUpdate(): void {
+  try {
+    execSync('qmd update', { stdio: 'inherit' });
+  } catch (err: any) {
+    console.error(`qmd update failed: ${err.message}`);
   }
-  // Normalize by document length
-  const len = tokens.length || 1;
-  for (const term in tf) {
-    tf[term] = tf[term] / len;
-  }
-  return tf;
 }
 
 /**
- * BM25 Search Engine - industry standard for text search
+ * Trigger qmd embed (create/update vector embeddings)
+ */
+export function qmdEmbed(): void {
+  try {
+    execSync('qmd embed', { stdio: 'inherit' });
+  } catch (err: any) {
+    console.error(`qmd embed failed: ${err.message}`);
+  }
+}
+
+/**
+ * QMD Search Engine - wraps qmd CLI
  */
 export class SearchEngine {
   private documents: Map<string, Document> = new Map();
-  private index: Map<string, DocumentIndex> = new Map();
-  private idf: Map<string, number> = new Map();
-  private avgDocLength: number = 0;
-  
-  // BM25 parameters
-  private k1: number = 1.5;
-  private b: number = 0.75;
+  private collection: string = 'clawvault';
+  private vaultPath: string = '';
 
   /**
-   * Add or update a document in the index
+   * Set the collection name (usually vault name)
+   */
+  setCollection(name: string): void {
+    this.collection = name;
+  }
+
+  /**
+   * Set the vault path for file resolution
+   */
+  setVaultPath(vaultPath: string): void {
+    this.vaultPath = vaultPath;
+  }
+
+  /**
+   * Add or update a document in the local cache
+   * Note: qmd indexing happens via qmd update command
    */
   addDocument(doc: Document): void {
     this.documents.set(doc.id, doc);
-    
-    // Combine title and content for indexing
-    const text = `${doc.title} ${doc.title} ${doc.content}`; // Title weighted 2x
-    const tokens = tokenize(text);
-    
-    this.index.set(doc.id, {
-      id: doc.id,
-      terms: calculateTF(tokens),
-      termCount: tokens.length
-    });
-    
-    this.rebuildIDF();
   }
 
   /**
-   * Remove a document from the index
+   * Remove a document from the local cache
    */
   removeDocument(id: string): void {
     this.documents.delete(id);
-    this.index.delete(id);
-    this.rebuildIDF();
   }
 
   /**
-   * Rebuild IDF scores (call after bulk updates)
+   * No-op for qmd - indexing is managed externally
    */
   rebuildIDF(): void {
-    const docCount = this.index.size || 1;
-    const termDocCounts: Map<string, number> = new Map();
-    let totalLength = 0;
-    
-    // Count documents containing each term
-    for (const [, idx] of this.index) {
-      totalLength += idx.termCount;
-      for (const term in idx.terms) {
-        termDocCounts.set(term, (termDocCounts.get(term) || 0) + 1);
-      }
-    }
-    
-    this.avgDocLength = totalLength / docCount;
-    
-    // Calculate IDF for each term
-    this.idf.clear();
-    for (const [term, count] of termDocCounts) {
-      // BM25 IDF formula
-      this.idf.set(term, Math.log((docCount - count + 0.5) / (count + 0.5) + 1));
-    }
+    // qmd handles this
   }
 
   /**
-   * Search for documents matching query
+   * BM25 search via qmd
    */
   search(query: string, options: SearchOptions = {}): SearchResult[] {
     const { 
       limit = 10, 
-      minScore = 0.01, 
+      minScore = 0,
       category, 
       tags,
       fullContent = false 
     } = options;
     
-    const queryTokens = tokenize(query);
-    if (queryTokens.length === 0) return [];
+    if (!query.trim()) return [];
+
+    // Build qmd command
+    const args = [
+      'search',
+      `"${query.replace(/"/g, '\\"')}"`,
+      '-n', String(limit * 2), // Request extra for filtering
+      '--json'
+    ];
+
+    // Add collection filter if we have one
+    if (this.collection) {
+      args.push('-c', this.collection);
+    }
+
+    const qmdResults = execQmd(args);
     
-    const scores: Map<string, number> = new Map();
-    const matchedTerms: Map<string, Set<string>> = new Map();
+    // Convert qmd results to ClawVault format
+    return this.convertResults(qmdResults, {
+      limit,
+      minScore,
+      category,
+      tags,
+      fullContent
+    });
+  }
+
+  /**
+   * Vector/semantic search via qmd vsearch
+   */
+  vsearch(query: string, options: SearchOptions = {}): SearchResult[] {
+    const { 
+      limit = 10, 
+      minScore = 0,
+      category, 
+      tags,
+      fullContent = false 
+    } = options;
     
-    // Calculate BM25 score for each document
-    for (const [docId, idx] of this.index) {
-      const doc = this.documents.get(docId);
-      if (!doc) continue;
+    if (!query.trim()) return [];
+
+    // Build qmd vsearch command
+    const args = [
+      'vsearch',
+      `"${query.replace(/"/g, '\\"')}"`,
+      '-n', String(limit * 2), // Request extra for filtering
+      '--json'
+    ];
+
+    // Add collection filter if we have one
+    if (this.collection) {
+      args.push('-c', this.collection);
+    }
+
+    const qmdResults = execQmd(args);
+    
+    // Convert qmd results to ClawVault format
+    return this.convertResults(qmdResults, {
+      limit,
+      minScore,
+      category,
+      tags,
+      fullContent
+    });
+  }
+
+  /**
+   * Combined search with query expansion (qmd query command)
+   */
+  query(query: string, options: SearchOptions = {}): SearchResult[] {
+    const { 
+      limit = 10, 
+      minScore = 0,
+      category, 
+      tags,
+      fullContent = false 
+    } = options;
+    
+    if (!query.trim()) return [];
+
+    // Build qmd query command (combined search with reranking)
+    const args = [
+      'query',
+      `"${query.replace(/"/g, '\\"')}"`,
+      '-n', String(limit * 2),
+      '--json'
+    ];
+
+    if (this.collection) {
+      args.push('-c', this.collection);
+    }
+
+    const qmdResults = execQmd(args);
+    
+    return this.convertResults(qmdResults, {
+      limit,
+      minScore,
+      category,
+      tags,
+      fullContent
+    });
+  }
+
+  /**
+   * Convert qmd results to ClawVault SearchResult format
+   */
+  private convertResults(
+    qmdResults: QmdResult[], 
+    options: SearchOptions
+  ): SearchResult[] {
+    const { limit = 10, minScore = 0, category, tags, fullContent = false } = options;
+    
+    const results: SearchResult[] = [];
+    
+    // Normalize scores - qmd uses different scales
+    const maxScore = qmdResults[0]?.score || 1;
+    
+    for (const qr of qmdResults) {
+      // Extract file path from qmd:// URI
+      const filePath = this.qmdUriToPath(qr.file);
+      const relativePath = this.vaultPath 
+        ? path.relative(this.vaultPath, filePath)
+        : filePath;
       
-      // Apply filters
-      if (category && doc.category !== category) continue;
-      if (tags && tags.length > 0) {
+      // Get document from cache or create minimal one
+      const docId = relativePath.replace(/\.md$/, '');
+      let doc = this.documents.get(docId);
+      
+      // Determine category from path
+      const parts = relativePath.split(path.sep);
+      const docCategory = parts.length > 1 ? parts[0] : 'root';
+      
+      // Apply category filter
+      if (category && docCategory !== category) continue;
+      
+      // Apply tag filter (only if we have the document cached)
+      if (tags && tags.length > 0 && doc) {
         const docTags = new Set(doc.tags);
         if (!tags.some(t => docTags.has(t))) continue;
       }
       
-      let score = 0;
-      const matched = new Set<string>();
+      // Normalize score to 0-1 range
+      const normalizedScore = maxScore > 0 ? qr.score / maxScore : 0;
       
-      for (const term of queryTokens) {
-        const tf = idx.terms[term] || 0;
-        if (tf === 0) continue;
-        
-        const idf = this.idf.get(term) || 0;
-        const docLen = idx.termCount;
-        
-        // BM25 scoring formula
-        const numerator = tf * (this.k1 + 1);
-        const denominator = tf + this.k1 * (1 - this.b + this.b * (docLen / this.avgDocLength));
-        score += idf * (numerator / denominator);
-        matched.add(term);
-      }
-      
-      if (score > 0) {
-        scores.set(docId, score);
-        matchedTerms.set(docId, matched);
-      }
-    }
-    
-    // Sort by score and apply limit
-    const sortedIds = [...scores.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, limit);
-    
-    // Normalize scores to 0-1 range
-    const maxScore = sortedIds[0]?.[1] || 1;
-    
-    const results: SearchResult[] = [];
-    for (const [docId, score] of sortedIds) {
-      const normalizedScore = score / maxScore;
+      // Apply min score filter
       if (normalizedScore < minScore) continue;
       
-      const doc = this.documents.get(docId)!;
-      const matched = matchedTerms.get(docId) || new Set();
+      // Create document if not cached
+      if (!doc) {
+        doc = {
+          id: docId,
+          path: filePath,
+          category: docCategory,
+          title: qr.title || path.basename(relativePath, '.md'),
+          content: fullContent ? '' : '', // Content loaded separately if needed
+          frontmatter: {},
+          links: [],
+          tags: [],
+          modified: new Date()
+        };
+      }
       
       results.push({
-        document: fullContent ? doc : {
-          ...doc,
-          content: '' // Omit content unless requested
-        },
+        document: fullContent ? doc : { ...doc, content: '' },
         score: normalizedScore,
-        snippet: this.extractSnippet(doc.content, queryTokens),
-        matchedTerms: [...matched]
+        snippet: this.cleanSnippet(qr.snippet),
+        matchedTerms: [] // qmd doesn't provide this
       });
+      
+      if (results.length >= limit) break;
     }
     
     return results;
   }
 
   /**
-   * Extract relevant snippet from content
+   * Convert qmd:// URI to file path
    */
-  private extractSnippet(content: string, queryTokens: string[]): string {
-    const lines = content.split('\n');
-    const querySet = new Set(queryTokens);
-    
-    // Find the line with most query term matches
-    let bestLine = 0;
-    let bestScore = 0;
-    
-    for (let i = 0; i < lines.length; i++) {
-      const lineTokens = tokenize(lines[i]);
-      const matches = lineTokens.filter(t => querySet.has(t)).length;
-      if (matches > bestScore) {
-        bestScore = matches;
-        bestLine = i;
+  private qmdUriToPath(uri: string): string {
+    // qmd://collection/path/to/file.md -> actual path
+    if (uri.startsWith('qmd://')) {
+      const withoutScheme = uri.slice(6); // Remove 'qmd://'
+      const slashIndex = withoutScheme.indexOf('/');
+      if (slashIndex > -1) {
+        // Get collection name and relative path
+        const collectionName = withoutScheme.slice(0, slashIndex);
+        const relativePath = withoutScheme.slice(slashIndex + 1);
+        
+        // Try to resolve from vault path first
+        if (this.vaultPath) {
+          return path.join(this.vaultPath, relativePath);
+        }
+        
+        // Fallback: try common paths
+        const homeDir = process.env.HOME || '/home/frame';
+        const possiblePaths = [
+          path.join(homeDir, 'clawd/memory', relativePath),
+          path.join(homeDir, 'clawd', collectionName, relativePath),
+          relativePath
+        ];
+        
+        for (const p of possiblePaths) {
+          // Return first possibility (caller can verify existence)
+          return p;
+        }
       }
     }
     
-    // Extract context around best line
-    const start = Math.max(0, bestLine - 1);
-    const end = Math.min(lines.length, bestLine + 3);
-    const snippet = lines.slice(start, end).join('\n').trim();
-    
-    // Truncate if too long
-    if (snippet.length > 300) {
-      return snippet.slice(0, 297) + '...';
-    }
-    
-    return snippet || lines.slice(0, 3).join('\n').trim();
+    // Return as-is if not a qmd:// URI
+    return uri;
   }
 
   /**
-   * Get all documents
+   * Clean up qmd snippet format
+   */
+  private cleanSnippet(snippet: string): string {
+    if (!snippet) return '';
+    
+    // Remove diff-style markers like "@@ -2,4 @@ (1 before, 67 after)"
+    return snippet
+      .replace(/@@ [-+]?\d+,?\d* @@ \([^)]+\)/g, '')
+      .trim()
+      .split('\n')
+      .slice(0, 3)
+      .join('\n')
+      .slice(0, 300);
+  }
+
+  /**
+   * Get all cached documents
    */
   getAllDocuments(): Document[] {
     return [...this.documents.values()];
@@ -263,17 +380,14 @@ export class SearchEngine {
   }
 
   /**
-   * Clear the index
+   * Clear the local document cache
    */
   clear(): void {
     this.documents.clear();
-    this.index.clear();
-    this.idf.clear();
-    this.avgDocLength = 0;
   }
 
   /**
-   * Export index for persistence
+   * Export documents for persistence
    */
   export(): { documents: Document[]; } {
     return {

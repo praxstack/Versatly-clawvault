@@ -38,13 +38,16 @@ __export(index_exports, {
   createVault: () => createVault,
   extractTags: () => extractTags,
   extractWikiLinks: () => extractWikiLinks,
-  findVault: () => findVault
+  findVault: () => findVault,
+  hasQmd: () => hasQmd,
+  qmdEmbed: () => qmdEmbed,
+  qmdUpdate: () => qmdUpdate
 });
 module.exports = __toCommonJS(index_exports);
 
 // src/lib/vault.ts
 var fs = __toESM(require("fs"), 1);
-var path = __toESM(require("path"), 1);
+var path2 = __toESM(require("path"), 1);
 var import_gray_matter = __toESM(require("gray-matter"), 1);
 var import_glob = require("glob");
 
@@ -65,184 +68,262 @@ var DEFAULT_CONFIG = {
 };
 
 // src/lib/search.ts
-function stem(word) {
-  word = word.toLowerCase();
-  const suffixes = [
-    "ingly",
-    "edly",
-    "tion",
-    "sion",
-    "ness",
-    "ment",
-    "able",
-    "ible",
-    "ally",
-    "ful",
-    "less",
-    "ous",
-    "ive",
-    "ing",
-    "ed",
-    "ly",
-    "s"
-  ];
-  for (const suffix of suffixes) {
-    if (word.length > suffix.length + 2 && word.endsWith(suffix)) {
-      return word.slice(0, -suffix.length);
+var import_child_process = require("child_process");
+var path = __toESM(require("path"), 1);
+function execQmd(args) {
+  try {
+    const result = (0, import_child_process.execSync)(`qmd ${args.join(" ")}`, {
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+      maxBuffer: 10 * 1024 * 1024
+      // 10MB
+    });
+    const parsed = JSON.parse(result.trim());
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    if (err.stdout) {
+      try {
+        const parsed = JSON.parse(err.stdout.trim());
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+      }
     }
+    console.error(`qmd error: ${err.message}`);
+    return [];
   }
-  return word;
 }
-function tokenize(text) {
-  return text.toLowerCase().replace(/\[\[([^\]]+)\]\]/g, "$1").replace(/[^\w\s-]/g, " ").split(/\s+/).filter((t) => t.length > 2).map(stem);
+function hasQmd() {
+  try {
+    (0, import_child_process.execSync)("which qmd", { stdio: "pipe" });
+    return true;
+  } catch {
+    return false;
+  }
 }
-function calculateTF(tokens) {
-  const tf = {};
-  for (const token of tokens) {
-    tf[token] = (tf[token] || 0) + 1;
+function qmdUpdate() {
+  try {
+    (0, import_child_process.execSync)("qmd update", { stdio: "inherit" });
+  } catch (err) {
+    console.error(`qmd update failed: ${err.message}`);
   }
-  const len = tokens.length || 1;
-  for (const term in tf) {
-    tf[term] = tf[term] / len;
+}
+function qmdEmbed() {
+  try {
+    (0, import_child_process.execSync)("qmd embed", { stdio: "inherit" });
+  } catch (err) {
+    console.error(`qmd embed failed: ${err.message}`);
   }
-  return tf;
 }
 var SearchEngine = class {
   documents = /* @__PURE__ */ new Map();
-  index = /* @__PURE__ */ new Map();
-  idf = /* @__PURE__ */ new Map();
-  avgDocLength = 0;
-  // BM25 parameters
-  k1 = 1.5;
-  b = 0.75;
+  collection = "clawvault";
+  vaultPath = "";
   /**
-   * Add or update a document in the index
+   * Set the collection name (usually vault name)
+   */
+  setCollection(name) {
+    this.collection = name;
+  }
+  /**
+   * Set the vault path for file resolution
+   */
+  setVaultPath(vaultPath) {
+    this.vaultPath = vaultPath;
+  }
+  /**
+   * Add or update a document in the local cache
+   * Note: qmd indexing happens via qmd update command
    */
   addDocument(doc) {
     this.documents.set(doc.id, doc);
-    const text = `${doc.title} ${doc.title} ${doc.content}`;
-    const tokens = tokenize(text);
-    this.index.set(doc.id, {
-      id: doc.id,
-      terms: calculateTF(tokens),
-      termCount: tokens.length
-    });
-    this.rebuildIDF();
   }
   /**
-   * Remove a document from the index
+   * Remove a document from the local cache
    */
   removeDocument(id) {
     this.documents.delete(id);
-    this.index.delete(id);
-    this.rebuildIDF();
   }
   /**
-   * Rebuild IDF scores (call after bulk updates)
+   * No-op for qmd - indexing is managed externally
    */
   rebuildIDF() {
-    const docCount = this.index.size || 1;
-    const termDocCounts = /* @__PURE__ */ new Map();
-    let totalLength = 0;
-    for (const [, idx] of this.index) {
-      totalLength += idx.termCount;
-      for (const term in idx.terms) {
-        termDocCounts.set(term, (termDocCounts.get(term) || 0) + 1);
-      }
-    }
-    this.avgDocLength = totalLength / docCount;
-    this.idf.clear();
-    for (const [term, count] of termDocCounts) {
-      this.idf.set(term, Math.log((docCount - count + 0.5) / (count + 0.5) + 1));
-    }
   }
   /**
-   * Search for documents matching query
+   * BM25 search via qmd
    */
   search(query, options = {}) {
     const {
       limit = 10,
-      minScore = 0.01,
+      minScore = 0,
       category,
       tags,
       fullContent = false
     } = options;
-    const queryTokens = tokenize(query);
-    if (queryTokens.length === 0) return [];
-    const scores = /* @__PURE__ */ new Map();
-    const matchedTerms = /* @__PURE__ */ new Map();
-    for (const [docId, idx] of this.index) {
-      const doc = this.documents.get(docId);
-      if (!doc) continue;
-      if (category && doc.category !== category) continue;
-      if (tags && tags.length > 0) {
+    if (!query.trim()) return [];
+    const args = [
+      "search",
+      `"${query.replace(/"/g, '\\"')}"`,
+      "-n",
+      String(limit * 2),
+      // Request extra for filtering
+      "--json"
+    ];
+    if (this.collection) {
+      args.push("-c", this.collection);
+    }
+    const qmdResults = execQmd(args);
+    return this.convertResults(qmdResults, {
+      limit,
+      minScore,
+      category,
+      tags,
+      fullContent
+    });
+  }
+  /**
+   * Vector/semantic search via qmd vsearch
+   */
+  vsearch(query, options = {}) {
+    const {
+      limit = 10,
+      minScore = 0,
+      category,
+      tags,
+      fullContent = false
+    } = options;
+    if (!query.trim()) return [];
+    const args = [
+      "vsearch",
+      `"${query.replace(/"/g, '\\"')}"`,
+      "-n",
+      String(limit * 2),
+      // Request extra for filtering
+      "--json"
+    ];
+    if (this.collection) {
+      args.push("-c", this.collection);
+    }
+    const qmdResults = execQmd(args);
+    return this.convertResults(qmdResults, {
+      limit,
+      minScore,
+      category,
+      tags,
+      fullContent
+    });
+  }
+  /**
+   * Combined search with query expansion (qmd query command)
+   */
+  query(query, options = {}) {
+    const {
+      limit = 10,
+      minScore = 0,
+      category,
+      tags,
+      fullContent = false
+    } = options;
+    if (!query.trim()) return [];
+    const args = [
+      "query",
+      `"${query.replace(/"/g, '\\"')}"`,
+      "-n",
+      String(limit * 2),
+      "--json"
+    ];
+    if (this.collection) {
+      args.push("-c", this.collection);
+    }
+    const qmdResults = execQmd(args);
+    return this.convertResults(qmdResults, {
+      limit,
+      minScore,
+      category,
+      tags,
+      fullContent
+    });
+  }
+  /**
+   * Convert qmd results to ClawVault SearchResult format
+   */
+  convertResults(qmdResults, options) {
+    const { limit = 10, minScore = 0, category, tags, fullContent = false } = options;
+    const results = [];
+    const maxScore = qmdResults[0]?.score || 1;
+    for (const qr of qmdResults) {
+      const filePath = this.qmdUriToPath(qr.file);
+      const relativePath = this.vaultPath ? path.relative(this.vaultPath, filePath) : filePath;
+      const docId = relativePath.replace(/\.md$/, "");
+      let doc = this.documents.get(docId);
+      const parts = relativePath.split(path.sep);
+      const docCategory = parts.length > 1 ? parts[0] : "root";
+      if (category && docCategory !== category) continue;
+      if (tags && tags.length > 0 && doc) {
         const docTags = new Set(doc.tags);
         if (!tags.some((t) => docTags.has(t))) continue;
       }
-      let score = 0;
-      const matched = /* @__PURE__ */ new Set();
-      for (const term of queryTokens) {
-        const tf = idx.terms[term] || 0;
-        if (tf === 0) continue;
-        const idf = this.idf.get(term) || 0;
-        const docLen = idx.termCount;
-        const numerator = tf * (this.k1 + 1);
-        const denominator = tf + this.k1 * (1 - this.b + this.b * (docLen / this.avgDocLength));
-        score += idf * (numerator / denominator);
-        matched.add(term);
-      }
-      if (score > 0) {
-        scores.set(docId, score);
-        matchedTerms.set(docId, matched);
-      }
-    }
-    const sortedIds = [...scores.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit);
-    const maxScore = sortedIds[0]?.[1] || 1;
-    const results = [];
-    for (const [docId, score] of sortedIds) {
-      const normalizedScore = score / maxScore;
+      const normalizedScore = maxScore > 0 ? qr.score / maxScore : 0;
       if (normalizedScore < minScore) continue;
-      const doc = this.documents.get(docId);
-      const matched = matchedTerms.get(docId) || /* @__PURE__ */ new Set();
+      if (!doc) {
+        doc = {
+          id: docId,
+          path: filePath,
+          category: docCategory,
+          title: qr.title || path.basename(relativePath, ".md"),
+          content: fullContent ? "" : "",
+          // Content loaded separately if needed
+          frontmatter: {},
+          links: [],
+          tags: [],
+          modified: /* @__PURE__ */ new Date()
+        };
+      }
       results.push({
-        document: fullContent ? doc : {
-          ...doc,
-          content: ""
-          // Omit content unless requested
-        },
+        document: fullContent ? doc : { ...doc, content: "" },
         score: normalizedScore,
-        snippet: this.extractSnippet(doc.content, queryTokens),
-        matchedTerms: [...matched]
+        snippet: this.cleanSnippet(qr.snippet),
+        matchedTerms: []
+        // qmd doesn't provide this
       });
+      if (results.length >= limit) break;
     }
     return results;
   }
   /**
-   * Extract relevant snippet from content
+   * Convert qmd:// URI to file path
    */
-  extractSnippet(content, queryTokens) {
-    const lines = content.split("\n");
-    const querySet = new Set(queryTokens);
-    let bestLine = 0;
-    let bestScore = 0;
-    for (let i = 0; i < lines.length; i++) {
-      const lineTokens = tokenize(lines[i]);
-      const matches = lineTokens.filter((t) => querySet.has(t)).length;
-      if (matches > bestScore) {
-        bestScore = matches;
-        bestLine = i;
+  qmdUriToPath(uri) {
+    if (uri.startsWith("qmd://")) {
+      const withoutScheme = uri.slice(6);
+      const slashIndex = withoutScheme.indexOf("/");
+      if (slashIndex > -1) {
+        const collectionName = withoutScheme.slice(0, slashIndex);
+        const relativePath = withoutScheme.slice(slashIndex + 1);
+        if (this.vaultPath) {
+          return path.join(this.vaultPath, relativePath);
+        }
+        const homeDir = process.env.HOME || "/home/frame";
+        const possiblePaths = [
+          path.join(homeDir, "clawd/memory", relativePath),
+          path.join(homeDir, "clawd", collectionName, relativePath),
+          relativePath
+        ];
+        for (const p of possiblePaths) {
+          return p;
+        }
       }
     }
-    const start = Math.max(0, bestLine - 1);
-    const end = Math.min(lines.length, bestLine + 3);
-    const snippet = lines.slice(start, end).join("\n").trim();
-    if (snippet.length > 300) {
-      return snippet.slice(0, 297) + "...";
-    }
-    return snippet || lines.slice(0, 3).join("\n").trim();
+    return uri;
   }
   /**
-   * Get all documents
+   * Clean up qmd snippet format
+   */
+  cleanSnippet(snippet) {
+    if (!snippet) return "";
+    return snippet.replace(/@@ [-+]?\d+,?\d* @@ \([^)]+\)/g, "").trim().split("\n").slice(0, 3).join("\n").slice(0, 300);
+  }
+  /**
+   * Get all cached documents
    */
   getAllDocuments() {
     return [...this.documents.values()];
@@ -254,16 +335,13 @@ var SearchEngine = class {
     return this.documents.size;
   }
   /**
-   * Clear the index
+   * Clear the local document cache
    */
   clear() {
     this.documents.clear();
-    this.index.clear();
-    this.idf.clear();
-    this.avgDocLength = 0;
   }
   /**
-   * Export index for persistence
+   * Export documents for persistence
    */
   export() {
     return {
@@ -298,11 +376,13 @@ var ClawVault = class {
   initialized = false;
   constructor(vaultPath) {
     this.config = {
-      path: path.resolve(vaultPath),
-      name: path.basename(vaultPath),
+      path: path2.resolve(vaultPath),
+      name: path2.basename(vaultPath),
       categories: DEFAULT_CATEGORIES
     };
     this.search = new SearchEngine();
+    this.search.setVaultPath(this.config.path);
+    this.search.setCollection(this.config.name);
   }
   /**
    * Initialize a new vault
@@ -314,17 +394,17 @@ var ClawVault = class {
       fs.mkdirSync(vaultPath, { recursive: true });
     }
     for (const category of this.config.categories) {
-      const catPath = path.join(vaultPath, category);
+      const catPath = path2.join(vaultPath, category);
       if (!fs.existsSync(catPath)) {
         fs.mkdirSync(catPath, { recursive: true });
       }
     }
     await this.createTemplates();
-    const readmePath = path.join(vaultPath, "README.md");
+    const readmePath = path2.join(vaultPath, "README.md");
     if (!fs.existsSync(readmePath)) {
       fs.writeFileSync(readmePath, this.generateReadme());
     }
-    const configPath = path.join(vaultPath, CONFIG_FILE);
+    const configPath = path2.join(vaultPath, CONFIG_FILE);
     const meta = {
       name: this.config.name,
       version: "1.0.0",
@@ -341,13 +421,15 @@ var ClawVault = class {
    */
   async load() {
     const vaultPath = this.config.path;
-    const configPath = path.join(vaultPath, CONFIG_FILE);
+    const configPath = path2.join(vaultPath, CONFIG_FILE);
     if (!fs.existsSync(configPath)) {
       throw new Error(`Not a ClawVault: ${vaultPath} (missing ${CONFIG_FILE})`);
     }
     const meta = JSON.parse(fs.readFileSync(configPath, "utf-8"));
     this.config.name = meta.name;
     this.config.categories = meta.categories;
+    this.search.setVaultPath(this.config.path);
+    this.search.setCollection(meta.qmdCollection || this.config.name);
     await this.reindex();
     this.initialized = true;
   }
@@ -374,13 +456,13 @@ var ClawVault = class {
    */
   async loadDocument(relativePath) {
     try {
-      const fullPath = path.join(this.config.path, relativePath);
+      const fullPath = path2.join(this.config.path, relativePath);
       const content = fs.readFileSync(fullPath, "utf-8");
       const { data: frontmatter, content: body } = (0, import_gray_matter.default)(content);
       const stats = fs.statSync(fullPath);
-      const parts = relativePath.split(path.sep);
+      const parts = relativePath.split(path2.sep);
       const category = parts.length > 1 ? parts[0] : "root";
-      const filename = path.basename(relativePath, ".md");
+      const filename = path2.basename(relativePath, ".md");
       return {
         id: relativePath.replace(/\.md$/, ""),
         path: fullPath,
@@ -401,14 +483,22 @@ var ClawVault = class {
    * Store a new document
    */
   async store(options) {
-    const { category, title, content, frontmatter = {}, overwrite = false } = options;
+    const {
+      category,
+      title,
+      content,
+      frontmatter = {},
+      overwrite = false,
+      qmdUpdate: triggerUpdate = false,
+      qmdEmbed: triggerEmbed = false
+    } = options;
     const filename = this.slugify(title) + ".md";
-    const relativePath = path.join(category, filename);
-    const fullPath = path.join(this.config.path, relativePath);
+    const relativePath = path2.join(category, filename);
+    const fullPath = path2.join(this.config.path, relativePath);
     if (fs.existsSync(fullPath) && !overwrite) {
       throw new Error(`Document already exists: ${relativePath}. Use overwrite: true to replace.`);
     }
-    const categoryPath = path.join(this.config.path, category);
+    const categoryPath = path2.join(this.config.path, category);
     if (!fs.existsSync(categoryPath)) {
       fs.mkdirSync(categoryPath, { recursive: true });
     }
@@ -424,6 +514,14 @@ var ClawVault = class {
       this.search.addDocument(doc);
       await this.saveIndex();
     }
+    if (triggerUpdate || triggerEmbed) {
+      if (hasQmd()) {
+        qmdUpdate();
+        if (triggerEmbed) {
+          qmdEmbed();
+        }
+      }
+    }
     return doc;
   }
   /**
@@ -438,10 +536,22 @@ var ClawVault = class {
     });
   }
   /**
-   * Search the vault
+   * Search the vault (BM25 via qmd)
    */
   async find(query, options = {}) {
     return this.search.search(query, options);
+  }
+  /**
+   * Semantic/vector search (via qmd vsearch)
+   */
+  async vsearch(query, options = {}) {
+    return this.search.vsearch(query, options);
+  }
+  /**
+   * Combined search with query expansion (via qmd query)
+   */
+  async query(query, options = {}) {
+    return this.search.query(query, options);
   }
   /**
    * Get a document by ID or path
@@ -480,8 +590,8 @@ var ClawVault = class {
       fs.mkdirSync(target, { recursive: true });
     }
     for (const file of sourceFiles) {
-      const sourcePath = path.join(this.config.path, file);
-      const targetPath = path.join(target, file);
+      const sourcePath = path2.join(this.config.path, file);
+      const targetPath = path2.join(target, file);
       try {
         const sourceStats = fs.statSync(sourcePath);
         let shouldCopy = true;
@@ -494,7 +604,7 @@ var ClawVault = class {
         }
         if (shouldCopy) {
           if (!dryRun) {
-            const targetDir = path.dirname(targetPath);
+            const targetDir = path2.dirname(targetPath);
             if (!fs.existsSync(targetDir)) {
               fs.mkdirSync(targetDir, { recursive: true });
             }
@@ -512,7 +622,7 @@ var ClawVault = class {
       for (const file of targetFiles) {
         if (!sourceSet.has(file)) {
           if (!dryRun) {
-            fs.unlinkSync(path.join(target, file));
+            fs.unlinkSync(path2.join(target, file));
           }
           result.deleted.push(file);
         }
@@ -569,10 +679,10 @@ var ClawVault = class {
     return text.toLowerCase().replace(/[^\w\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").trim();
   }
   async saveIndex() {
-    const indexPath = path.join(this.config.path, INDEX_FILE);
+    const indexPath = path2.join(this.config.path, INDEX_FILE);
     const data = this.search.export();
     fs.writeFileSync(indexPath, JSON.stringify(data, null, 2));
-    const configPath = path.join(this.config.path, CONFIG_FILE);
+    const configPath = path2.join(this.config.path, CONFIG_FILE);
     if (fs.existsSync(configPath)) {
       const meta = JSON.parse(fs.readFileSync(configPath, "utf-8"));
       meta.lastUpdated = (/* @__PURE__ */ new Date()).toISOString();
@@ -581,7 +691,7 @@ var ClawVault = class {
     }
   }
   async createTemplates() {
-    const templatesPath = path.join(this.config.path, "templates");
+    const templatesPath = path2.join(this.config.path, "templates");
     const templates = {
       "decision.md": `---
 title: "Decision: {{title}}"
@@ -706,7 +816,7 @@ Reasoning behind it
 #preference`
     };
     for (const [filename, content] of Object.entries(templates)) {
-      const filePath = path.join(templatesPath, filename);
+      const filePath = path2.join(templatesPath, filename);
       if (!fs.existsSync(filePath)) {
         fs.writeFileSync(filePath, content);
       }
@@ -754,15 +864,15 @@ clawvault store --category inbox --title "note" --content "..."
   }
 };
 async function findVault(startPath = process.cwd()) {
-  let current = path.resolve(startPath);
-  while (current !== path.dirname(current)) {
-    const configPath = path.join(current, CONFIG_FILE);
+  let current = path2.resolve(startPath);
+  while (current !== path2.dirname(current)) {
+    const configPath = path2.join(current, CONFIG_FILE);
     if (fs.existsSync(configPath)) {
       const vault = new ClawVault(current);
       await vault.load();
       return vault;
     }
-    current = path.dirname(current);
+    current = path2.dirname(current);
   }
   return null;
 }
@@ -784,5 +894,8 @@ var VERSION = "1.0.0";
   createVault,
   extractTags,
   extractWikiLinks,
-  findVault
+  findVault,
+  hasQmd,
+  qmdEmbed,
+  qmdUpdate
 });

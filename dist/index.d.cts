@@ -18,6 +18,8 @@ interface VaultMeta {
     lastUpdated: string;
     categories: string[];
     documentCount: number;
+    /** qmd collection name (defaults to vault name if not set) */
+    qmdCollection?: string;
 }
 interface Document {
     /** Unique ID (relative path without extension) */
@@ -72,6 +74,10 @@ interface StoreOptions {
     frontmatter?: Record<string, unknown>;
     /** Override existing file */
     overwrite?: boolean;
+    /** Trigger qmd update after storing */
+    qmdUpdate?: boolean;
+    /** Trigger qmd embed after storing (implies qmdUpdate) */
+    qmdEmbed?: boolean;
 }
 interface SyncOptions {
     /** Target directory to sync to */
@@ -125,9 +131,17 @@ declare class ClawVault {
      */
     capture(note: string, title?: string): Promise<Document>;
     /**
-     * Search the vault
+     * Search the vault (BM25 via qmd)
      */
     find(query: string, options?: SearchOptions): Promise<SearchResult[]>;
+    /**
+     * Semantic/vector search (via qmd vsearch)
+     */
+    vsearch(query: string, options?: SearchOptions): Promise<SearchResult[]>;
+    /**
+     * Combined search with query expansion (via qmd query)
+     */
+    query(query: string, options?: SearchOptions): Promise<SearchResult[]>;
     /**
      * Get a document by ID or path
      */
@@ -183,42 +197,76 @@ declare function findVault(startPath?: string): Promise<ClawVault | null>;
 declare function createVault(vaultPath: string, options?: Partial<VaultConfig>): Promise<ClawVault>;
 
 /**
- * ClawVault Search Engine
- * Simple but effective TF-IDF based semantic search
+ * ClawVault Search Engine - qmd Backend
+ * Uses qmd CLI for BM25 and vector search
  */
 
 /**
- * BM25 Search Engine - industry standard for text search
+ * Check if qmd is available
+ */
+declare function hasQmd(): boolean;
+/**
+ * Trigger qmd update (reindex)
+ */
+declare function qmdUpdate(): void;
+/**
+ * Trigger qmd embed (create/update vector embeddings)
+ */
+declare function qmdEmbed(): void;
+/**
+ * QMD Search Engine - wraps qmd CLI
  */
 declare class SearchEngine {
     private documents;
-    private index;
-    private idf;
-    private avgDocLength;
-    private k1;
-    private b;
+    private collection;
+    private vaultPath;
     /**
-     * Add or update a document in the index
+     * Set the collection name (usually vault name)
+     */
+    setCollection(name: string): void;
+    /**
+     * Set the vault path for file resolution
+     */
+    setVaultPath(vaultPath: string): void;
+    /**
+     * Add or update a document in the local cache
+     * Note: qmd indexing happens via qmd update command
      */
     addDocument(doc: Document): void;
     /**
-     * Remove a document from the index
+     * Remove a document from the local cache
      */
     removeDocument(id: string): void;
     /**
-     * Rebuild IDF scores (call after bulk updates)
+     * No-op for qmd - indexing is managed externally
      */
     rebuildIDF(): void;
     /**
-     * Search for documents matching query
+     * BM25 search via qmd
      */
     search(query: string, options?: SearchOptions): SearchResult[];
     /**
-     * Extract relevant snippet from content
+     * Vector/semantic search via qmd vsearch
      */
-    private extractSnippet;
+    vsearch(query: string, options?: SearchOptions): SearchResult[];
     /**
-     * Get all documents
+     * Combined search with query expansion (qmd query command)
+     */
+    query(query: string, options?: SearchOptions): SearchResult[];
+    /**
+     * Convert qmd results to ClawVault SearchResult format
+     */
+    private convertResults;
+    /**
+     * Convert qmd:// URI to file path
+     */
+    private qmdUriToPath;
+    /**
+     * Clean up qmd snippet format
+     */
+    private cleanSnippet;
+    /**
+     * Get all cached documents
      */
     getAllDocuments(): Document[];
     /**
@@ -226,11 +274,11 @@ declare class SearchEngine {
      */
     get size(): number;
     /**
-     * Clear the index
+     * Clear the local document cache
      */
     clear(): void;
     /**
-     * Export index for persistence
+     * Export documents for persistence
      */
     export(): {
         documents: Document[];
@@ -279,4 +327,4 @@ declare function extractTags(content: string): string[];
 
 declare const VERSION = "1.0.0";
 
-export { type Category, ClawVault, DEFAULT_CATEGORIES, DEFAULT_CONFIG, type Document, SearchEngine, type SearchOptions, type SearchResult, type StoreOptions, type SyncOptions, type SyncResult, VERSION, type VaultConfig, type VaultMeta, createVault, extractTags, extractWikiLinks, findVault };
+export { type Category, ClawVault, DEFAULT_CATEGORIES, DEFAULT_CONFIG, type Document, SearchEngine, type SearchOptions, type SearchResult, type StoreOptions, type SyncOptions, type SyncResult, VERSION, type VaultConfig, type VaultMeta, createVault, extractTags, extractWikiLinks, findVault, hasQmd, qmdEmbed, qmdUpdate };

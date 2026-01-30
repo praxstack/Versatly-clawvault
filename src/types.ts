@@ -20,6 +20,8 @@ export interface VaultMeta {
   lastUpdated: string;
   categories: string[];
   documentCount: number;
+  /** qmd collection name (defaults to vault name if not set) */
+  qmdCollection?: string;
 }
 
 export interface Document {
@@ -78,6 +80,10 @@ export interface StoreOptions {
   frontmatter?: Record<string, unknown>;
   /** Override existing file */
   overwrite?: boolean;
+  /** Trigger qmd update after storing */
+  qmdUpdate?: boolean;
+  /** Trigger qmd embed after storing (implies qmdUpdate) */
+  qmdEmbed?: boolean;
 }
 
 export interface SyncOptions {
