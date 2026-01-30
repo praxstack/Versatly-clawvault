@@ -1,0 +1,62 @@
+{
+  "name": "clawvault",
+  "version": "1.0.0",
+  "description": "🐘 An elephant never forgets. Structured memory system for AI agents with Obsidian-compatible markdown and embedded semantic search.",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "clawvault": "./bin/clawvault.js"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "templates"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts --clean",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "memory",
+    "vault",
+    "obsidian",
+    "markdown",
+    "semantic-search",
+    "knowledge-base",
+    "llm",
+    "assistant"
+  ],
+  "author": "Versatly",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Versatly/clawvault.git"
+  },
+  "homepage": "https://github.com/Versatly/clawvault#readme",
+  "bugs": {
+    "url": "https://github.com/Versatly/clawvault/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "commander": "^12.0.0",
+    "chalk": "^5.3.0",
+    "glob": "^10.3.10",
+    "gray-matter": "^4.0.3",
+    "natural": "^6.10.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.0"
+  }
+}
