@@ -24,6 +24,8 @@
  * ```
  */
 
+import * as fs from 'fs';
+
 // Core exports
 export { ClawVault, createVault, findVault } from './lib/vault.js';
 export {
@@ -56,4 +58,14 @@ export type {
 export { DEFAULT_CATEGORIES, DEFAULT_CONFIG, MEMORY_TYPES, TYPE_TO_CATEGORY } from './types.js';
 
 // Version
-export const VERSION = '1.0.0';
+function readPackageVersion(): string {
+  try {
+    const pkgUrl = new URL('../package.json', import.meta.url);
+    const pkg = JSON.parse(fs.readFileSync(pkgUrl, 'utf-8')) as { version?: string };
+    return pkg.version ?? '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+}
+
+export const VERSION = readPackageVersion();

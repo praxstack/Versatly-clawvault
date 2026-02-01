@@ -95,6 +95,11 @@ export async function clearDirtyFlag(vaultPath: string): Promise<void> {
   }
 }
 
+// Alias for CLI ergonomics (`clawvault clean-exit`)
+export async function cleanExit(vaultPath: string): Promise<void> {
+  await clearDirtyFlag(vaultPath);
+}
+
 export async function checkDirtyDeath(vaultPath: string): Promise<{
   died: boolean;
   checkpoint: CheckpointData | null;

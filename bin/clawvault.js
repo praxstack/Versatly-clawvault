@@ -14,13 +14,22 @@ import {
   ClawVault,
   createVault,
   findVault,
-  VERSION,
   hasQmd,
   QmdUnavailableError,
   QMD_INSTALL_URL
 } from '../dist/index.js';
 
 const program = new Command();
+
+const CLI_VERSION = (() => {
+  try {
+    const pkgUrl = new URL('../package.json', import.meta.url);
+    const pkg = JSON.parse(fs.readFileSync(pkgUrl, 'utf-8'));
+    return pkg.version || '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+})();
 
 // Helper to get vault (required for most commands)
 // Checks: 1) explicit path, 2) CLAWVAULT_PATH env, 3) walk up from cwd
@@ -69,7 +78,7 @@ function printQmdMissing() {
 program
   .name('clawvault')
   .description('🐘 An elephant never forgets. Structured memory for AI agents.')
-  .version(VERSION);
+  .version(CLI_VERSION);
 
 // === INIT ===
 program
@@ -832,8 +841,8 @@ program
         process.exit(1);
       }
       
-      const { clearDirtyFlag } = await import('../dist/commands/checkpoint.js');
-      await clearDirtyFlag(path.resolve(vaultPath));
+      const { cleanExit } = await import('../dist/commands/checkpoint.js');
+      await cleanExit(path.resolve(vaultPath));
       console.log(chalk.green('✓ Clean exit recorded'));
     } catch (err) {
       console.error(chalk.red(`Error: ${err.message}`));
