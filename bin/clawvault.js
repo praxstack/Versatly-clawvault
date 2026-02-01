@@ -81,26 +81,28 @@ program
 
       const qmdAvailable = hasQmd();
       
-      // Set up qmd if requested
-      if (options.qmd) {
-        console.log(chalk.cyan('\nSetting up qmd collection...'));
-        if (!qmdAvailable) {
-          console.log(chalk.yellow('⚠ qmd setup skipped (qmd not installed).'));
-        } else {
-          try {
-            await runQmd([
-              'collection',
-              'add',
-              vault.getQmdRoot(),
-              '--name',
-              vault.getQmdCollection(),
-              '--mask',
-              '**/*.md'
-            ]);
-            console.log(chalk.green('✓ qmd collection created'));
-          } catch (err) {
-            console.log(chalk.yellow('⚠ qmd setup failed'));
-          }
+      // Always set up qmd collection (qmd is required)
+      console.log(chalk.cyan('\nSetting up qmd collection...'));
+      if (!qmdAvailable) {
+        console.log(chalk.red('✗ qmd not found. Install qmd first:'));
+        console.log(chalk.dim(`  bun install -g qmd`));
+        console.log(chalk.dim(`  # or: npm install -g qmd`));
+        console.log(chalk.dim(`  Then run: qmd collection add ${vault.getQmdRoot()} --name ${vault.getQmdCollection()} --mask "**/*.md"`));
+      } else {
+        try {
+          await runQmd([
+            'collection',
+            'add',
+            vault.getQmdRoot(),
+            '--name',
+            vault.getQmdCollection(),
+            '--mask',
+            '**/*.md'
+          ]);
+          console.log(chalk.green('✓ qmd collection created'));
+        } catch (err) {
+          // Collection might already exist
+          console.log(chalk.yellow('⚠ qmd collection may already exist'));
         }
       }
       
