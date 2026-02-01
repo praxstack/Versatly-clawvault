@@ -1,14 +1,16 @@
 ---
 name: clawvault
-version: 1.1.0
-description: Structured memory system for AI agents. Store memories by type, create session handoffs, recover from context death, and search with local embeddings. Obsidian-compatible.
+version: 1.3.0
+description: Structured memory system for OpenClaw agents. Context death resilience (checkpoint/recover), structured storage, Obsidian-compatible markdown, and local semantic search.
 author: Versatly
 repository: https://github.com/Versatly/clawvault
 ---
 
 # ClawVault 🐘
 
-An elephant never forgets. Structured memory for AI agents.
+An elephant never forgets. Structured memory for OpenClaw agents.
+
+> **Built for [OpenClaw](https://openclaw.ai)** — install via `clawhub install clawvault`
 
 ## Install
 

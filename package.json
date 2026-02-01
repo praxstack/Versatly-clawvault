@@ -1,7 +1,7 @@
 {
   "name": "clawvault",
   "version": "1.3.0",
-  "description": "🐘 An elephant never forgets. Structured memory system for AI agents with Obsidian-compatible markdown and embedded semantic search.",
+  "description": "🐘 An elephant never forgets. Structured memory for OpenClaw agents. Context death resilience, Obsidian-compatible markdown, local semantic search.",
   "type": "module",
   "main": "dist/index.cjs",
   "module": "dist/index.js",
@@ -30,6 +30,7 @@
     "prepublishOnly": "npm run build"
   },
   "keywords": [
+    "openclaw",
     "ai",
     "agent",
     "memory",
@@ -37,9 +38,8 @@
     "obsidian",
     "markdown",
     "semantic-search",
-    "knowledge-base",
-    "llm",
-    "assistant"
+    "context-death",
+    "llm"
   ],
   "author": "Versatly",
   "license": "MIT",
