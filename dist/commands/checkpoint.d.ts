@@ -14,6 +14,7 @@ interface CheckpointData {
     blocked: string | null;
     sessionId?: string;
 }
+declare function flush(): Promise<CheckpointData | null>;
 declare function checkpoint(options: CheckpointOptions): Promise<CheckpointData>;
 declare function clearDirtyFlag(vaultPath: string): Promise<void>;
 declare function checkDirtyDeath(vaultPath: string): Promise<{
@@ -23,4 +24,4 @@ declare function checkDirtyDeath(vaultPath: string): Promise<{
 }>;
 declare function setSessionState(vaultPath: string, sessionId: string): Promise<void>;
 
-export { type CheckpointData, type CheckpointOptions, checkDirtyDeath, checkpoint, clearDirtyFlag, setSessionState };
+export { type CheckpointData, type CheckpointOptions, checkDirtyDeath, checkpoint, clearDirtyFlag, flush, setSessionState };

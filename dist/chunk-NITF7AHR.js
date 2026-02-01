@@ -5,12 +5,31 @@ var CLAWVAULT_DIR = ".clawvault";
 var CHECKPOINT_FILE = "last-checkpoint.json";
 var SESSION_STATE_FILE = "session-state.json";
 var DIRTY_DEATH_FLAG = "dirty-death.flag";
+var pendingCheckpoint = null;
+var pendingData = null;
 function ensureClawvaultDir(vaultPath) {
   const dir = path.join(vaultPath, CLAWVAULT_DIR);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
   return dir;
+}
+function writeCheckpointToDisk(dir, data) {
+  const checkpointPath = path.join(dir, CHECKPOINT_FILE);
+  fs.writeFileSync(checkpointPath, JSON.stringify(data, null, 2));
+  const flagPath = path.join(dir, DIRTY_DEATH_FLAG);
+  fs.writeFileSync(flagPath, data.timestamp);
+}
+async function flush() {
+  if (pendingCheckpoint) {
+    clearTimeout(pendingCheckpoint);
+    pendingCheckpoint = null;
+  }
+  if (!pendingData) return null;
+  const { dir, data } = pendingData;
+  pendingData = null;
+  writeCheckpointToDisk(dir, data);
+  return data;
 }
 async function checkpoint(options) {
   const dir = ensureClawvaultDir(options.vaultPath);
@@ -28,10 +47,11 @@ async function checkpoint(options) {
     } catch {
     }
   }
-  const checkpointPath = path.join(dir, CHECKPOINT_FILE);
-  fs.writeFileSync(checkpointPath, JSON.stringify(data, null, 2));
-  const flagPath = path.join(dir, DIRTY_DEATH_FLAG);
-  fs.writeFileSync(flagPath, data.timestamp);
+  pendingData = { dir, data };
+  if (pendingCheckpoint) clearTimeout(pendingCheckpoint);
+  pendingCheckpoint = setTimeout(() => {
+    void flush();
+  }, 1e3);
   return data;
 }
 async function clearDirtyFlag(vaultPath) {
@@ -67,6 +87,7 @@ async function setSessionState(vaultPath, sessionId) {
 }
 
 export {
+  flush,
   checkpoint,
   clearDirtyFlag,
   checkDirtyDeath,
