@@ -1,34 +1,19 @@
 ---
-title: "{{name}}"
+title: "{{title}}"
 date: {{date}}
-type: person
+type: {{type}}
 relationship: contact
 ---
 
-# {{name}}
+# {{title}}
 
-**Contact:** [email / phone / handle]
-**First Contact:** {{date}}
-**Context:** [How you met / were introduced]
+## Context
+- 
 
-## Role
-[What they do, their expertise]
+## Details
+- Contact:
+- Role:
+- Timezone:
 
-## Working With
-- [ ] Active project together
-- [ ] Past collaboration
-- [ ] Potential collaboration
-
-## Key Info
-- [Important preferences or constraints]
-- [Communication style]
-- [Timezone if relevant]
-
-## Interactions
-### {{date}}
-- [What happened, what was discussed, outcome]
-
-## Notes
-[Anything to remember for future interactions]
-
-#person
+## History
+- {{date}}: 

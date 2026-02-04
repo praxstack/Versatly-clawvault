@@ -31,6 +31,21 @@ function findProtectedRanges(content) {
 function isProtected(pos, ranges) {
   return ranges.some((r) => pos >= r.start && pos < r.end);
 }
+function createLineLookup(content) {
+  const lines = content.split("\n");
+  let charPos = 0;
+  const lineStarts = [];
+  for (const line of lines) {
+    lineStarts.push(charPos);
+    charPos += line.length + 1;
+  }
+  return (pos) => {
+    for (let i = lineStarts.length - 1; i >= 0; i--) {
+      if (pos >= lineStarts[i]) return i + 1;
+    }
+    return 1;
+  };
+}
 function autoLink(content, index) {
   const protectedRanges = findProtectedRanges(content);
   const sortedAliases = getSortedAliases(index);
@@ -65,19 +80,7 @@ function dryRunLink(content, index) {
   const sortedAliases = getSortedAliases(index);
   const linkedEntities = /* @__PURE__ */ new Set();
   const matches = [];
-  const lines = content.split("\n");
-  let charPos = 0;
-  const lineStarts = [];
-  for (const line of lines) {
-    lineStarts.push(charPos);
-    charPos += line.length + 1;
-  }
-  function getLineNumber(pos) {
-    for (let i = lineStarts.length - 1; i >= 0; i--) {
-      if (pos >= lineStarts[i]) return i + 1;
-    }
-    return 1;
-  }
+  const getLineNumber = createLineLookup(content);
   for (const { alias, path } of sortedAliases) {
     if (linkedEntities.has(path)) continue;
     const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -96,8 +99,33 @@ function dryRunLink(content, index) {
   }
   return matches;
 }
+function findUnlinkedMentions(content, index) {
+  const protectedRanges = findProtectedRanges(content);
+  const sortedAliases = getSortedAliases(index);
+  const matches = [];
+  const seen = /* @__PURE__ */ new Set();
+  const getLineNumber = createLineLookup(content);
+  for (const { alias, path } of sortedAliases) {
+    if (seen.has(path)) continue;
+    const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(`\\b${escapedAlias}\\b`, "gi");
+    let match;
+    while ((match = regex.exec(content)) !== null) {
+      if (isProtected(match.index, protectedRanges)) continue;
+      matches.push({
+        alias: match[0],
+        path,
+        line: getLineNumber(match.index)
+      });
+      seen.add(path);
+      break;
+    }
+  }
+  return matches;
+}
 
 export {
   autoLink,
-  dryRunLink
+  dryRunLink,
+  findUnlinkedMentions
 };

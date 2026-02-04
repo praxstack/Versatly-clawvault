@@ -3,12 +3,13 @@
  * Uses qmd CLI for BM25 and vector search
  */
 
-import { execFileSync } from 'child_process';
+import { execFileSync, spawnSync } from 'child_process';
 import * as path from 'path';
 import { Document, SearchResult, SearchOptions } from '../types.js';
 
-export const QMD_INSTALL_URL = 'https://github.com/Versatly/qmd';
-const QMD_NOT_INSTALLED_MESSAGE = `qmd is required for search. Install it from ${QMD_INSTALL_URL}`;
+export const QMD_INSTALL_URL = 'https://github.com/tobi/qmd';
+export const QMD_INSTALL_COMMAND = 'bun install -g github:tobi/qmd';
+const QMD_NOT_INSTALLED_MESSAGE = `ClawVault requires qmd. Install: ${QMD_INSTALL_COMMAND}`;
 
 export class QmdUnavailableError extends Error {
   constructor(message: string = QMD_NOT_INSTALLED_MESSAGE) {
@@ -121,46 +122,32 @@ function execQmd(args: string[]): QmdResult[] {
  * Check if qmd is available
  */
 export function hasQmd(): boolean {
-  try {
-    // Use 'which' on Unix or 'where' on Windows to check if qmd exists
-    const cmd = process.platform === 'win32' ? 'where' : 'which';
-    execFileSync(cmd, ['qmd'], { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
+  const result = spawnSync('qmd', ['--version'], { stdio: 'ignore' });
+  return !result.error;
 }
 
 /**
  * Trigger qmd update (reindex)
  */
 export function qmdUpdate(collection?: string): void {
-  try {
-    ensureQmdAvailable();
-    const args = ['update'];
-    if (collection) {
-      args.push('-c', collection);
-    }
-    execFileSync('qmd', args, { stdio: 'inherit' });
-  } catch (err: any) {
-    console.error(`qmd update failed: ${err.message}`);
+  ensureQmdAvailable();
+  const args = ['update'];
+  if (collection) {
+    args.push('-c', collection);
   }
+  execFileSync('qmd', args, { stdio: 'inherit' });
 }
 
 /**
  * Trigger qmd embed (create/update vector embeddings)
  */
 export function qmdEmbed(collection?: string): void {
-  try {
-    ensureQmdAvailable();
-    const args = ['embed'];
-    if (collection) {
-      args.push('-c', collection);
-    }
-    execFileSync('qmd', args, { stdio: 'inherit' });
-  } catch (err: any) {
-    console.error(`qmd embed failed: ${err.message}`);
+  ensureQmdAvailable();
+  const args = ['embed'];
+  if (collection) {
+    args.push('-c', collection);
   }
+  execFileSync('qmd', args, { stdio: 'inherit' });
 }
 
 /**
@@ -219,97 +206,36 @@ export class SearchEngine {
    * BM25 search via qmd
    */
   search(query: string, options: SearchOptions = {}): SearchResult[] {
-    const { 
-      limit = 10, 
-      minScore = 0,
-      category, 
-      tags,
-      fullContent = false 
-    } = options;
-    
-    if (!query.trim()) return [];
-
-    // Build qmd command
-    const args = [
-      'search',
-      query,
-      '-n', String(limit * 2), // Request extra for filtering
-      '--json'
-    ];
-
-    // Add collection filter if we have one
-    if (this.collection) {
-      args.push('-c', this.collection);
-    }
-
-    const qmdResults = execQmd(args);
-    
-    // Convert qmd results to ClawVault format
-    return this.convertResults(qmdResults, {
-      limit,
-      minScore,
-      category,
-      tags,
-      fullContent
-    });
+    return this.runQmdQuery('search', query, options);
   }
 
   /**
    * Vector/semantic search via qmd vsearch
    */
   vsearch(query: string, options: SearchOptions = {}): SearchResult[] {
-    const { 
-      limit = 10, 
-      minScore = 0,
-      category, 
-      tags,
-      fullContent = false 
-    } = options;
-    
-    if (!query.trim()) return [];
-
-    // Build qmd vsearch command
-    const args = [
-      'vsearch',
-      query,
-      '-n', String(limit * 2), // Request extra for filtering
-      '--json'
-    ];
-
-    // Add collection filter if we have one
-    if (this.collection) {
-      args.push('-c', this.collection);
-    }
-
-    const qmdResults = execQmd(args);
-    
-    // Convert qmd results to ClawVault format
-    return this.convertResults(qmdResults, {
-      limit,
-      minScore,
-      category,
-      tags,
-      fullContent
-    });
+    return this.runQmdQuery('vsearch', query, options);
   }
 
   /**
    * Combined search with query expansion (qmd query command)
    */
   query(query: string, options: SearchOptions = {}): SearchResult[] {
-    const { 
-      limit = 10, 
+    return this.runQmdQuery('query', query, options);
+  }
+
+  private runQmdQuery(command: 'search' | 'vsearch' | 'query', query: string, options: SearchOptions): SearchResult[] {
+    const {
+      limit = 10,
       minScore = 0,
-      category, 
+      category,
       tags,
-      fullContent = false 
+      fullContent = false
     } = options;
-    
+
     if (!query.trim()) return [];
 
-    // Build qmd query command (combined search with reranking)
     const args = [
-      'query',
+      command,
       query,
       '-n', String(limit * 2),
       '--json'
@@ -320,7 +246,7 @@ export class SearchEngine {
     }
 
     const qmdResults = execQmd(args);
-    
+
     return this.convertResults(qmdResults, {
       limit,
       minScore,
@@ -381,7 +307,7 @@ export class SearchEngine {
           path: filePath,
           category: docCategory,
           title: qr.title || path.basename(relativePath, '.md'),
-          content: fullContent ? '' : '', // Content loaded separately if needed
+          content: '', // Content loaded separately if needed
           frontmatter: {},
           links: [],
           tags: [],

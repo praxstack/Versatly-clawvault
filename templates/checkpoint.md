@@ -1,19 +1,19 @@
 ---
-title: "Handoff {{datetime}}"
+title: "Checkpoint {{datetime}}"
 date: {{date}}
 type: {{type}}
 ---
 
-# Session Handoff
+# Checkpoint
 
 ## Working On
 - 
 
-## Blocked
+## Focus
 - 
 
-## Next
-- [ ]
+## Blocked
+- 
 
 ## Notes
 - 

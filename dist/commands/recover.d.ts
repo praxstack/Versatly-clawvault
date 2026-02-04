@@ -12,10 +12,15 @@ interface RecoveryInfo {
     handoffContent: string | null;
     recoveryMessage: string;
 }
-declare function recover(vaultPath: string, clearFlag?: boolean): Promise<RecoveryInfo>;
+declare function recover(vaultPath: string, options?: {
+    clearFlag?: boolean;
+    verbose?: boolean;
+}): Promise<RecoveryInfo>;
 /**
  * Format recovery info for CLI output
  */
-declare function formatRecoveryInfo(info: RecoveryInfo): string;
+declare function formatRecoveryInfo(info: RecoveryInfo, options?: {
+    verbose?: boolean;
+}): string;
 
 export { type RecoveryInfo, formatRecoveryInfo, recover };

@@ -28,6 +28,7 @@ import * as fs from 'fs';
 
 // Core exports
 export { ClawVault, createVault, findVault } from './lib/vault.js';
+export { setupCommand } from './commands/setup.js';
 export {
   SearchEngine,
   extractWikiLinks,
@@ -36,8 +37,15 @@ export {
   qmdUpdate,
   qmdEmbed,
   QmdUnavailableError,
+  QMD_INSTALL_COMMAND,
   QMD_INSTALL_URL
 } from './lib/search.js';
+
+export {
+  renderTemplate,
+  buildTemplateVariables
+} from './lib/template-engine.js';
+export type { TemplateVariables } from './lib/template-engine.js';
 
 // Type exports
 export type {

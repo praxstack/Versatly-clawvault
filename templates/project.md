@@ -1,35 +1,23 @@
 ---
 title: "{{title}}"
 date: {{date}}
-type: project
+type: {{type}}
 status: active
 ---
 
 # {{title}}
 
-## Goal
-[What is this project trying to achieve?]
+## Objective
+- 
 
-## Current Status
+## Status
 - [ ] Planning
-- [ ] In Progress
+- [ ] In progress
 - [ ] Blocked
-- [ ] Complete
+- [ ] Done
 
-## Key Files
-- [path/to/file.md]
+## Next
+- [ ]
 
-## People
-- [[person-name]] — [role]
-
-## Progress Log
-### {{date}}
-- [What happened]
-
-## Blockers
-- [Current blockers if any]
-
-## Next Steps
-- [ ] [Next action]
-
-#project
+## Notes
+- 

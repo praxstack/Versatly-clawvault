@@ -57,6 +57,23 @@ function isProtected(pos: number, ranges: ProtectedRange[]): boolean {
   return ranges.some(r => pos >= r.start && pos < r.end);
 }
 
+function createLineLookup(content: string): (pos: number) => number {
+  const lines = content.split('\n');
+  let charPos = 0;
+  const lineStarts: number[] = [];
+  for (const line of lines) {
+    lineStarts.push(charPos);
+    charPos += line.length + 1;
+  }
+
+  return (pos: number) => {
+    for (let i = lineStarts.length - 1; i >= 0; i--) {
+      if (pos >= lineStarts[i]) return i + 1;
+    }
+    return 1;
+  };
+}
+
 /**
  * Auto-link entities in markdown content.
  * Only links first occurrence of each entity.
@@ -117,21 +134,7 @@ export function dryRunLink(content: string, index: EntityIndex): Array<{ alias: 
   const sortedAliases = getSortedAliases(index);
   const linkedEntities = new Set<string>();
   const matches: Array<{ alias: string; path: string; line: number }> = [];
-  
-  const lines = content.split('\n');
-  let charPos = 0;
-  const lineStarts: number[] = [];
-  for (const line of lines) {
-    lineStarts.push(charPos);
-    charPos += line.length + 1;
-  }
-  
-  function getLineNumber(pos: number): number {
-    for (let i = lineStarts.length - 1; i >= 0; i--) {
-      if (pos >= lineStarts[i]) return i + 1;
-    }
-    return 1;
-  }
+  const getLineNumber = createLineLookup(content);
   
   for (const { alias, path } of sortedAliases) {
     if (linkedEntities.has(path)) continue;
@@ -153,5 +156,41 @@ export function dryRunLink(content: string, index: EntityIndex): Array<{ alias: 
     }
   }
   
+  return matches;
+}
+
+/**
+ * Find unlinked mentions of entities (suggested links).
+ */
+export function findUnlinkedMentions(
+  content: string,
+  index: EntityIndex
+): Array<{ alias: string; path: string; line: number }> {
+  const protectedRanges = findProtectedRanges(content);
+  const sortedAliases = getSortedAliases(index);
+  const matches: Array<{ alias: string; path: string; line: number }> = [];
+  const seen = new Set<string>();
+  const getLineNumber = createLineLookup(content);
+
+  for (const { alias, path } of sortedAliases) {
+    if (seen.has(path)) continue;
+
+    const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`\\b${escapedAlias}\\b`, 'gi');
+
+    let match;
+    while ((match = regex.exec(content)) !== null) {
+      if (isProtected(match.index, protectedRanges)) continue;
+
+      matches.push({
+        alias: match[0],
+        path,
+        line: getLineNumber(match.index)
+      });
+      seen.add(path);
+      break;
+    }
+  }
+
   return matches;
 }

@@ -14,5 +14,13 @@ declare function dryRunLink(content: string, index: EntityIndex): Array<{
     path: string;
     line: number;
 }>;
+/**
+ * Find unlinked mentions of entities (suggested links).
+ */
+declare function findUnlinkedMentions(content: string, index: EntityIndex): Array<{
+    alias: string;
+    path: string;
+    line: number;
+}>;
 
-export { autoLink, dryRunLink };
+export { autoLink, dryRunLink, findUnlinkedMentions };

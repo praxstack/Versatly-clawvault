@@ -1,3 +1,6 @@
+export { setupCommand } from './commands/setup.js';
+export { TemplateVariables, buildTemplateVariables, renderTemplate } from './lib/template-engine.js';
+
 /**
  * ClawVault Types - The elephant's memory structure
  */
@@ -300,7 +303,8 @@ declare function createVault(vaultPath: string, options?: Partial<VaultConfig>):
  * Uses qmd CLI for BM25 and vector search
  */
 
-declare const QMD_INSTALL_URL = "https://github.com/Versatly/qmd";
+declare const QMD_INSTALL_URL = "https://github.com/tobi/qmd";
+declare const QMD_INSTALL_COMMAND = "bun install -g github:tobi/qmd";
 declare class QmdUnavailableError extends Error {
     constructor(message?: string);
 }
@@ -361,6 +365,7 @@ declare class SearchEngine {
      * Combined search with query expansion (qmd query command)
      */
     query(query: string, options?: SearchOptions): SearchResult[];
+    private runQmdQuery;
     /**
      * Convert qmd results to ClawVault SearchResult format
      */
@@ -435,4 +440,4 @@ declare function extractTags(content: string): string[];
 
 declare const VERSION: string;
 
-export { type Category, ClawVault, DEFAULT_CATEGORIES, DEFAULT_CONFIG, type Document, type HandoffDocument, MEMORY_TYPES, type MemoryType, QMD_INSTALL_URL, QmdUnavailableError, SearchEngine, type SearchOptions, type SearchResult, type SessionRecap, type StoreOptions, type SyncOptions, type SyncResult, TYPE_TO_CATEGORY, VERSION, type VaultConfig, type VaultMeta, createVault, extractTags, extractWikiLinks, findVault, hasQmd, qmdEmbed, qmdUpdate };
+export { type Category, ClawVault, DEFAULT_CATEGORIES, DEFAULT_CONFIG, type Document, type HandoffDocument, MEMORY_TYPES, type MemoryType, QMD_INSTALL_COMMAND, QMD_INSTALL_URL, QmdUnavailableError, SearchEngine, type SearchOptions, type SearchResult, type SessionRecap, type StoreOptions, type SyncOptions, type SyncResult, TYPE_TO_CATEGORY, VERSION, type VaultConfig, type VaultMeta, createVault, extractTags, extractWikiLinks, findVault, hasQmd, qmdEmbed, qmdUpdate };

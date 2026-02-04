@@ -4,12 +4,14 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { execFileSync } from 'child_process';
 
 export interface CheckpointOptions {
   workingOn?: string;
   focus?: string;
   blocked?: string;
   vaultPath: string;
+  urgent?: boolean;
 }
 
 export interface CheckpointData {
@@ -18,6 +20,19 @@ export interface CheckpointData {
   focus: string | null;
   blocked: string | null;
   sessionId?: string;
+  sessionKey?: string;
+  model?: string;
+  tokenEstimate?: number;
+  sessionStartedAt?: string;
+  urgent?: boolean;
+}
+
+export interface SessionState {
+  sessionId?: string;
+  sessionKey?: string;
+  model?: string;
+  tokenEstimate?: number;
+  startedAt?: string;
 }
 
 const CLAWVAULT_DIR = '.clawvault';
@@ -44,6 +59,55 @@ function writeCheckpointToDisk(dir: string, data: CheckpointData): void {
   fs.writeFileSync(flagPath, data.timestamp);
 }
 
+function parseTokenEstimate(raw?: string): number | undefined {
+  if (!raw) return undefined;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function loadSessionState(dir: string): SessionState | null {
+  const sessionStatePath = path.join(dir, SESSION_STATE_FILE);
+  if (!fs.existsSync(sessionStatePath)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(sessionStatePath, 'utf-8')) as SessionState;
+  } catch {
+    return null;
+  }
+}
+
+function getEnvSessionState(): SessionState {
+  return {
+    sessionKey: process.env.OPENCLAW_SESSION_KEY,
+    model: process.env.OPENCLAW_MODEL,
+    tokenEstimate: parseTokenEstimate(
+      process.env.OPENCLAW_TOKEN_ESTIMATE || process.env.OPENCLAW_CONTEXT_TOKENS
+    )
+  };
+}
+
+function triggerUrgentWake(data: CheckpointData): void {
+  const summary = [
+    data.workingOn ? `Working on: ${data.workingOn}` : null,
+    data.focus ? `Focus: ${data.focus}` : null,
+    data.blocked ? `Blocked: ${data.blocked}` : null
+  ].filter(Boolean).join(' | ');
+
+  const text = summary
+    ? `Urgent checkpoint saved. ${summary}`
+    : 'Urgent checkpoint saved.';
+
+  try {
+    execFileSync('openclaw', ['gateway', 'wake', '--text', text, '--mode', 'now'], {
+      stdio: 'inherit'
+    });
+  } catch (err: any) {
+    if (err?.code === 'ENOENT') {
+      throw new Error('Urgent wake failed: openclaw CLI not found.');
+    }
+    throw new Error(`Urgent wake failed: ${err?.message || 'unknown error'}`);
+  }
+}
+
 export async function flush(): Promise<CheckpointData | null> {
   if (pendingCheckpoint) {
     clearTimeout(pendingCheckpoint);
@@ -65,25 +129,33 @@ export async function checkpoint(options: CheckpointOptions): Promise<Checkpoint
     workingOn: options.workingOn || null,
     focus: options.focus || null,
     blocked: options.blocked || null,
+    urgent: options.urgent || false
   };
   
-  // Read session ID if available
-  const sessionStatePath = path.join(dir, SESSION_STATE_FILE);
-  if (fs.existsSync(sessionStatePath)) {
-    try {
-      const sessionState = JSON.parse(fs.readFileSync(sessionStatePath, 'utf-8'));
-      data.sessionId = sessionState.sessionId;
-    } catch {
-      // Ignore parse errors
-    }
-  }
+  const sessionState = loadSessionState(dir);
+  const envState = getEnvSessionState();
+  data.sessionId = sessionState?.sessionId;
+  data.sessionKey = envState.sessionKey || sessionState?.sessionKey || sessionState?.sessionId;
+  data.model = envState.model || sessionState?.model;
+  data.tokenEstimate = envState.tokenEstimate ?? sessionState?.tokenEstimate;
+  data.sessionStartedAt = sessionState?.startedAt;
 
-  // Debounce writes to avoid rapid write spam; last call wins.
-  pendingData = { dir, data };
-  if (pendingCheckpoint) clearTimeout(pendingCheckpoint);
-  pendingCheckpoint = setTimeout(() => {
-    void flush();
-  }, 1000);
+  if (options.urgent) {
+    if (pendingCheckpoint) {
+      clearTimeout(pendingCheckpoint);
+      pendingCheckpoint = null;
+    }
+    pendingData = null;
+    writeCheckpointToDisk(dir, data);
+    triggerUrgentWake(data);
+  } else {
+    // Debounce writes to avoid rapid write spam; last call wins.
+    pendingData = { dir, data };
+    if (pendingCheckpoint) clearTimeout(pendingCheckpoint);
+    pendingCheckpoint = setTimeout(() => {
+      void flush();
+    }, 1000);
+  }
 
   return data;
 }
@@ -127,12 +199,17 @@ export async function checkDirtyDeath(vaultPath: string): Promise<{
   return { died: true, checkpoint, deathTime };
 }
 
-export async function setSessionState(vaultPath: string, sessionId: string): Promise<void> {
+export async function setSessionState(vaultPath: string, session: string | SessionState): Promise<void> {
   const dir = ensureClawvaultDir(vaultPath);
   const sessionStatePath = path.join(dir, SESSION_STATE_FILE);
   
-  fs.writeFileSync(sessionStatePath, JSON.stringify({
-    sessionId,
-    startedAt: new Date().toISOString(),
-  }, null, 2));
+  const state: SessionState = typeof session === 'string'
+    ? { sessionId: session }
+    : { ...session };
+
+  if (!state.startedAt) {
+    state.startedAt = new Date().toISOString();
+  }
+
+  fs.writeFileSync(sessionStatePath, JSON.stringify(state, null, 2));
 }

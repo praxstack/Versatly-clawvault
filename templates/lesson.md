@@ -1,18 +1,16 @@
 ---
 title: "{{title}}"
 date: {{date}}
-type: lesson
+type: {{type}}
 ---
 
 # Lesson: {{title}}
 
-## What Happened
-[The situation or event]
+## Insight
+- 
 
-## What I Learned
-[The insight or takeaway]
+## Evidence
+- 
 
-## How to Apply
-[How to use this knowledge going forward]
-
-#lesson
+## Application
+- 

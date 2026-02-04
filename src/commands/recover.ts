@@ -5,6 +5,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { checkDirtyDeath, clearDirtyFlag, CheckpointData } from './checkpoint.js';
+import { formatAge } from '../lib/time.js';
 
 export interface RecoveryInfo {
   died: boolean;
@@ -15,7 +16,11 @@ export interface RecoveryInfo {
   recoveryMessage: string;
 }
 
-export async function recover(vaultPath: string, clearFlag: boolean = false): Promise<RecoveryInfo> {
+export async function recover(
+  vaultPath: string,
+  options: { clearFlag?: boolean; verbose?: boolean } = {}
+): Promise<RecoveryInfo> {
+  const { clearFlag = false } = options;
   const { died, checkpoint, deathTime } = await checkDirtyDeath(vaultPath);
   
   if (!died) {
@@ -89,14 +94,20 @@ export async function recover(vaultPath: string, clearFlag: boolean = false): Pr
 /**
  * Format recovery info for CLI output
  */
-export function formatRecoveryInfo(info: RecoveryInfo): string {
+export function formatRecoveryInfo(info: RecoveryInfo, options: { verbose?: boolean } = {}): string {
+  const { verbose = false } = options;
   if (!info.died) {
     return '✓ Clean startup - no context death detected.';
   }
   
   let output = '\n⚠️  CONTEXT DEATH DETECTED\n';
   output += '═'.repeat(40) + '\n\n';
-  output += `Death time: ${info.deathTime}\n\n`;
+  output += `Death time: ${info.deathTime}\n`;
+  if (info.checkpoint?.timestamp) {
+    const age = formatAge(Date.now() - new Date(info.checkpoint.timestamp).getTime());
+    output += `Checkpoint: ${info.checkpoint.timestamp} (${age} ago)\n`;
+  }
+  output += '\n';
   
   if (info.checkpoint) {
     output += 'Last checkpoint:\n';
@@ -109,7 +120,21 @@ export function formatRecoveryInfo(info: RecoveryInfo): string {
     if (info.checkpoint.blocked) {
       output += `  • Blocked: ${info.checkpoint.blocked}\n`;
     }
+    if (info.checkpoint.sessionKey || info.checkpoint.model || info.checkpoint.tokenEstimate !== undefined) {
+      output += '  • Session:\n';
+      if (info.checkpoint.sessionKey) {
+        output += `    - Key: ${info.checkpoint.sessionKey}\n`;
+      }
+      if (info.checkpoint.model) {
+        output += `    - Model: ${info.checkpoint.model}\n`;
+      }
+      if (info.checkpoint.tokenEstimate !== undefined) {
+        output += `    - Token estimate: ${info.checkpoint.tokenEstimate}\n`;
+      }
+    }
     output += '\n';
+  } else {
+    output += 'No checkpoint data found.\n\n';
   }
   
   if (info.handoffPath) {
@@ -118,6 +143,17 @@ export function formatRecoveryInfo(info: RecoveryInfo): string {
     output += 'No handoff found - context may be lost.\n';
   }
   
+  if (verbose) {
+    if (info.checkpoint) {
+      output += '\nCheckpoint JSON:\n';
+      output += JSON.stringify(info.checkpoint, null, 2) + '\n';
+    }
+    if (info.handoffContent) {
+      output += '\nHandoff content:\n';
+      output += info.handoffContent.trim() + '\n';
+    }
+  }
+
   output += '\n' + '═'.repeat(40) + '\n';
   output += 'Run `clawvault recap` to see full context.\n';
   

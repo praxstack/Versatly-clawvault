@@ -1,12 +1,16 @@
 import {
   checkDirtyDeath,
   clearDirtyFlag
-} from "../chunk-ALIUE5KY.js";
+} from "../chunk-MZZJLQNQ.js";
+import {
+  formatAge
+} from "../chunk-7ZRP733D.js";
 
 // src/commands/recover.ts
 import * as fs from "fs";
 import * as path from "path";
-async function recover(vaultPath, clearFlag = false) {
+async function recover(vaultPath, options = {}) {
+  const { clearFlag = false } = options;
   const { died, checkpoint, deathTime } = await checkDirtyDeath(vaultPath);
   if (!died) {
     return {
@@ -67,15 +71,21 @@ async function recover(vaultPath, clearFlag = false) {
     recoveryMessage: message
   };
 }
-function formatRecoveryInfo(info) {
+function formatRecoveryInfo(info, options = {}) {
+  const { verbose = false } = options;
   if (!info.died) {
     return "\u2713 Clean startup - no context death detected.";
   }
   let output = "\n\u26A0\uFE0F  CONTEXT DEATH DETECTED\n";
   output += "\u2550".repeat(40) + "\n\n";
   output += `Death time: ${info.deathTime}
-
 `;
+  if (info.checkpoint?.timestamp) {
+    const age = formatAge(Date.now() - new Date(info.checkpoint.timestamp).getTime());
+    output += `Checkpoint: ${info.checkpoint.timestamp} (${age} ago)
+`;
+  }
+  output += "\n";
   if (info.checkpoint) {
     output += "Last checkpoint:\n";
     if (info.checkpoint.workingOn) {
@@ -90,13 +100,40 @@ function formatRecoveryInfo(info) {
       output += `  \u2022 Blocked: ${info.checkpoint.blocked}
 `;
     }
+    if (info.checkpoint.sessionKey || info.checkpoint.model || info.checkpoint.tokenEstimate !== void 0) {
+      output += "  \u2022 Session:\n";
+      if (info.checkpoint.sessionKey) {
+        output += `    - Key: ${info.checkpoint.sessionKey}
+`;
+      }
+      if (info.checkpoint.model) {
+        output += `    - Model: ${info.checkpoint.model}
+`;
+      }
+      if (info.checkpoint.tokenEstimate !== void 0) {
+        output += `    - Token estimate: ${info.checkpoint.tokenEstimate}
+`;
+      }
+    }
     output += "\n";
+  } else {
+    output += "No checkpoint data found.\n\n";
   }
   if (info.handoffPath) {
     output += `Last handoff: ${path.basename(info.handoffPath)}
 `;
   } else {
     output += "No handoff found - context may be lost.\n";
+  }
+  if (verbose) {
+    if (info.checkpoint) {
+      output += "\nCheckpoint JSON:\n";
+      output += JSON.stringify(info.checkpoint, null, 2) + "\n";
+    }
+    if (info.handoffContent) {
+      output += "\nHandoff content:\n";
+      output += info.handoffContent.trim() + "\n";
+    }
   }
   output += "\n" + "\u2550".repeat(40) + "\n";
   output += "Run `clawvault recap` to see full context.\n";

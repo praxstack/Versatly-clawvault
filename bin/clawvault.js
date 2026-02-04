@@ -16,7 +16,7 @@ import {
   findVault,
   hasQmd,
   QmdUnavailableError,
-  QMD_INSTALL_URL
+  QMD_INSTALL_COMMAND
 } from '../dist/index.js';
 
 const program = new Command();
@@ -66,13 +66,19 @@ async function runQmd(args) {
       if (code === 0) resolve();
       else reject(new Error(`qmd exited with code ${code}`));
     });
-    proc.on('error', reject);
+    proc.on('error', (err) => {
+      if (err?.code === 'ENOENT') {
+        reject(new QmdUnavailableError());
+      } else {
+        reject(err);
+      }
+    });
   });
 }
 
 function printQmdMissing() {
-  console.error(chalk.red('Error: qmd is not installed or not on PATH.'));
-  console.log(chalk.dim(`Install qmd: ${QMD_INSTALL_URL}`));
+  console.error(chalk.red('Error: ClawVault requires qmd.'));
+  console.log(chalk.dim(`Install: ${QMD_INSTALL_COMMAND}`));
 }
 
 program
@@ -100,31 +106,22 @@ program
       console.log(chalk.green('✓ Vault created'));
       console.log(chalk.dim(`  Categories: ${vault.getCategories().join(', ')}`));
 
-      const qmdAvailable = hasQmd();
-      
       // Always set up qmd collection (qmd is required)
       console.log(chalk.cyan('\nSetting up qmd collection...'));
-      if (!qmdAvailable) {
-        console.log(chalk.red('✗ qmd not found. Install qmd first:'));
-        console.log(chalk.dim(`  bun install -g qmd`));
-        console.log(chalk.dim(`  # or: npm install -g qmd`));
-        console.log(chalk.dim(`  Then run: qmd collection add ${vault.getQmdRoot()} --name ${vault.getQmdCollection()} --mask "**/*.md"`));
-      } else {
-        try {
-          await runQmd([
-            'collection',
-            'add',
-            vault.getQmdRoot(),
-            '--name',
-            vault.getQmdCollection(),
-            '--mask',
-            '**/*.md'
-          ]);
-          console.log(chalk.green('✓ qmd collection created'));
-        } catch (err) {
-          // Collection might already exist
-          console.log(chalk.yellow('⚠ qmd collection may already exist'));
-        }
+      try {
+        await runQmd([
+          'collection',
+          'add',
+          vault.getQmdRoot(),
+          '--name',
+          vault.getQmdCollection(),
+          '--mask',
+          '**/*.md'
+        ]);
+        console.log(chalk.green('✓ qmd collection created'));
+      } catch (err) {
+        // Collection might already exist
+        console.log(chalk.yellow('⚠ qmd collection may already exist'));
       }
       
       console.log(chalk.green('\n✅ ClawVault ready!\n'));
@@ -132,6 +129,20 @@ program
       console.log(chalk.dim('  clawvault store --category inbox --title "My note" --content "Hello world"'));
       console.log(chalk.dim('  clawvault search "hello"'));
       console.log();
+    } catch (err) {
+      console.error(chalk.red(`Error: ${err.message}`));
+      process.exit(1);
+    }
+  });
+
+// === SETUP ===
+program
+  .command('setup')
+  .description('Auto-discover and configure a ClawVault')
+  .action(async () => {
+    try {
+      const { setupCommand } = await import('../dist/commands/setup.js');
+      await setupCommand();
     } catch (err) {
       console.error(chalk.red(`Error: ${err.message}`));
       process.exit(1);
@@ -174,14 +185,12 @@ program
       console.log(chalk.dim(`  Path: ${doc.path}`));
       
       // Auto-update qmd index unless --no-index
-      if (options.index !== false && hasQmd()) {
-        try {
-          const collection = vault.getQmdCollection();
-          await runQmd(collection ? ['update', '-c', collection] : ['update']);
-          if (options.embed) {
-            await runQmd(['embed']);
-          }
-        } catch { /* ignore qmd errors */ }
+      if (options.index !== false) {
+        const collection = vault.getQmdCollection();
+        await runQmd(collection ? ['update', '-c', collection] : ['update']);
+        if (options.embed) {
+          await runQmd(collection ? ['embed', '-c', collection] : ['embed']);
+        }
       }
     } catch (err) {
       console.error(chalk.red(`Error: ${err.message}`));
@@ -203,11 +212,9 @@ program
       console.log(chalk.green(`✓ Captured: ${doc.id}`));
       
       // Auto-update qmd index unless --no-index
-      if (options.index !== false && hasQmd()) {
-        try {
-          const collection = vault.getQmdCollection();
-          await runQmd(collection ? ['update', '-c', collection] : ['update']);
-        } catch { /* ignore qmd errors */ }
+      if (options.index !== false) {
+        const collection = vault.getQmdCollection();
+        await runQmd(collection ? ['update', '-c', collection] : ['update']);
       }
     } catch (err) {
       console.error(chalk.red(`Error: ${err.message}`));
@@ -317,7 +324,7 @@ program
         process.exit(1);
       }
       console.error(chalk.red(`Error: ${err.message}`));
-      console.log(chalk.dim(`\nTip: Install qmd for semantic search: ${QMD_INSTALL_URL}`));
+      console.log(chalk.dim(`\nTip: Install qmd: ${QMD_INSTALL_COMMAND}`));
       process.exit(1);
     }
   });
@@ -511,13 +518,9 @@ program
       
       if (options.qmd) {
         console.log(chalk.cyan('Updating qmd embeddings...'));
-        try {
-          const collection = vault.getQmdCollection();
-          await runQmd(collection ? ['update', '-c', collection] : ['update']);
-          console.log(chalk.green('✓ qmd updated'));
-        } catch {
-          console.log(chalk.yellow('⚠ qmd update failed'));
-        }
+        const collection = vault.getQmdCollection();
+        await runQmd(collection ? ['update', '-c', collection] : ['update']);
+        console.log(chalk.green('✓ qmd updated'));
       }
       
       console.log();
@@ -558,11 +561,9 @@ program
       console.log(chalk.green(`✓ Remembered (${type}): ${doc.id}`));
       
       // Auto-update qmd index unless --no-index
-      if (options.index !== false && hasQmd()) {
-        try {
-          const collection = vault.getQmdCollection();
-          await runQmd(collection ? ['update', '-c', collection] : ['update']);
-        } catch { /* ignore qmd errors */ }
+      if (options.index !== false) {
+        const collection = vault.getQmdCollection();
+        await runQmd(collection ? ['update', '-c', collection] : ['update']);
       }
     } catch (err) {
       console.error(chalk.red(`Error: ${err.message}`));
@@ -608,11 +609,9 @@ program
       }
       
       // Auto-update qmd index unless --no-index
-      if (options.index !== false && hasQmd()) {
-        try {
-          const collection = vault.getQmdCollection();
-          await runQmd(collection ? ['update', '-c', collection] : ['update']);
-        } catch { /* ignore qmd errors */ }
+      if (options.index !== false) {
+        const collection = vault.getQmdCollection();
+        await runQmd(collection ? ['update', '-c', collection] : ['update']);
       }
     } catch (err) {
       console.error(chalk.red(`Error: ${err.message}`));
@@ -652,6 +651,74 @@ program
     }
   });
 
+// === TEMPLATE ===
+const template = program
+  .command('template')
+  .description('Manage templates');
+
+template
+  .command('list')
+  .description('List available templates')
+  .option('-v, --vault <path>', 'Vault path')
+  .action(async (options) => {
+    try {
+      const { listTemplates } = await import('../dist/commands/template.js');
+      const templates = listTemplates({ vaultPath: options.vault });
+      if (templates.length === 0) {
+        console.log(chalk.yellow('No templates found.'));
+        return;
+      }
+      console.log(chalk.cyan('\n📄 Templates:\n'));
+      for (const name of templates) {
+        console.log(`- ${name}`);
+      }
+      console.log();
+    } catch (err) {
+      console.error(chalk.red(`Error: ${err.message}`));
+      process.exit(1);
+    }
+  });
+
+template
+  .command('create <name>')
+  .description('Create a file from a template')
+  .option('-t, --title <title>', 'Document title')
+  .option('-v, --vault <path>', 'Vault path')
+  .action(async (name, options) => {
+    try {
+      const { createFromTemplate } = await import('../dist/commands/template.js');
+      const result = createFromTemplate(name, {
+        title: options.title,
+        vaultPath: options.vault
+      });
+      console.log(chalk.green(`✓ Created from template: ${name}`));
+      console.log(chalk.dim(`  Output: ${result.outputPath}`));
+    } catch (err) {
+      console.error(chalk.red(`Error: ${err.message}`));
+      process.exit(1);
+    }
+  });
+
+template
+  .command('add <file>')
+  .description('Add a custom template')
+  .requiredOption('--name <name>', 'Template name')
+  .option('-v, --vault <path>', 'Vault path')
+  .action(async (file, options) => {
+    try {
+      const { addTemplate } = await import('../dist/commands/template.js');
+      const result = addTemplate(file, {
+        name: options.name,
+        vaultPath: options.vault
+      });
+      console.log(chalk.green(`✓ Template added: ${result.name}`));
+      console.log(chalk.dim(`  Path: ${result.templatePath}`));
+    } catch (err) {
+      console.error(chalk.red(`Error: ${err.message}`));
+      process.exit(1);
+    }
+  });
+
 // === DOCTOR (health check) ===
 program
   .command('doctor')
@@ -667,7 +734,7 @@ program
       console.log(chalk.green('✓ qmd installed'));
     } else {
       console.log(chalk.red('✗ qmd not installed'));
-      console.log(chalk.dim(`  Install: bun install -g qmd`));
+      console.log(chalk.dim(`  Install: ${QMD_INSTALL_COMMAND}`));
       issues++;
     }
     
@@ -741,7 +808,10 @@ program
   .command('link [file]')
   .description('Auto-link entity mentions in markdown files')
   .option('--all', 'Link all files in vault')
+  .option('--backlinks <file>', 'Show backlinks to a file')
   .option('--dry-run', 'Show what would be linked without changing files')
+  .option('--orphans', 'List broken wiki-links')
+  .option('--rebuild', 'Rebuild backlinks index')
   .option('-v, --vault <path>', 'Vault path')
   .action(async (file, options) => {
     try {
@@ -752,7 +822,13 @@ program
       }
       
       const { linkCommand } = await import('../dist/commands/link.js');
-      await linkCommand(file, { all: options.all, dryRun: options.dryRun });
+      await linkCommand(file, {
+        all: options.all,
+        dryRun: options.dryRun,
+        backlinks: options.backlinks,
+        orphans: options.orphans,
+        rebuild: options.rebuild
+      });
     } catch (err) {
       console.error(chalk.red(`Error: ${err.message}`));
       process.exit(1);
@@ -766,6 +842,7 @@ program
   .option('--working-on <text>', 'What you are currently working on')
   .option('--focus <text>', 'Current focus area')
   .option('--blocked <text>', 'What is blocking progress')
+  .option('--urgent', 'Trigger OpenClaw wake after checkpoint')
   .option('-v, --vault <path>', 'Vault path')
   .option('--json', 'Output as JSON')
   .action(async (options) => {
@@ -782,6 +859,7 @@ program
         workingOn: options.workingOn,
         focus: options.focus,
         blocked: options.blocked,
+        urgent: options.urgent
       });
       
       if (options.json) {
@@ -792,6 +870,7 @@ program
         if (data.workingOn) console.log(chalk.dim(`  Working on: ${data.workingOn}`));
         if (data.focus) console.log(chalk.dim(`  Focus: ${data.focus}`));
         if (data.blocked) console.log(chalk.dim(`  Blocked: ${data.blocked}`));
+        if (data.urgent) console.log(chalk.dim('  Urgent: yes'));
       }
     } catch (err) {
       console.error(chalk.red(`Error: ${err.message}`));
@@ -804,6 +883,7 @@ program
   .command('recover')
   .description('Check for context death and recover state')
   .option('--clear', 'Clear the dirty death flag after recovery')
+  .option('--verbose', 'Show full checkpoint and handoff content')
   .option('-v, --vault <path>', 'Vault path')
   .option('--json', 'Output as JSON')
   .action(async (options) => {
@@ -815,13 +895,38 @@ program
       }
       
       const { recover, formatRecoveryInfo } = await import('../dist/commands/recover.js');
-      const info = await recover(path.resolve(vaultPath), options.clear);
+      const info = await recover(path.resolve(vaultPath), {
+        clearFlag: options.clear,
+        verbose: options.verbose
+      });
       
       if (options.json) {
         console.log(JSON.stringify(info, null, 2));
       } else {
-        console.log(formatRecoveryInfo(info));
+        console.log(formatRecoveryInfo(info, { verbose: options.verbose }));
       }
+    } catch (err) {
+      console.error(chalk.red(`Error: ${err.message}`));
+      process.exit(1);
+    }
+  });
+
+// === STATUS ===
+program
+  .command('status')
+  .description('Show vault health and status')
+  .option('-v, --vault <path>', 'Vault path')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    try {
+      const vaultPath = options.vault || process.env.CLAWVAULT_PATH;
+      if (!vaultPath) {
+        console.error(chalk.red('Error: No vault path. Set CLAWVAULT_PATH or use -v'));
+        process.exit(1);
+      }
+
+      const { statusCommand } = await import('../dist/commands/status.js');
+      await statusCommand(path.resolve(vaultPath), { json: options.json });
     } catch (err) {
       console.error(chalk.red(`Error: ${err.message}`));
       process.exit(1);

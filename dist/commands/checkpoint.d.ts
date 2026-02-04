@@ -6,6 +6,7 @@ interface CheckpointOptions {
     focus?: string;
     blocked?: string;
     vaultPath: string;
+    urgent?: boolean;
 }
 interface CheckpointData {
     timestamp: string;
@@ -13,6 +14,18 @@ interface CheckpointData {
     focus: string | null;
     blocked: string | null;
     sessionId?: string;
+    sessionKey?: string;
+    model?: string;
+    tokenEstimate?: number;
+    sessionStartedAt?: string;
+    urgent?: boolean;
+}
+interface SessionState {
+    sessionId?: string;
+    sessionKey?: string;
+    model?: string;
+    tokenEstimate?: number;
+    startedAt?: string;
 }
 declare function flush(): Promise<CheckpointData | null>;
 declare function checkpoint(options: CheckpointOptions): Promise<CheckpointData>;
@@ -23,6 +36,6 @@ declare function checkDirtyDeath(vaultPath: string): Promise<{
     checkpoint: CheckpointData | null;
     deathTime: string | null;
 }>;
-declare function setSessionState(vaultPath: string, sessionId: string): Promise<void>;
+declare function setSessionState(vaultPath: string, session: string | SessionState): Promise<void>;
 
-export { type CheckpointData, type CheckpointOptions, checkDirtyDeath, checkpoint, cleanExit, clearDirtyFlag, flush, setSessionState };
+export { type CheckpointData, type CheckpointOptions, type SessionState, checkDirtyDeath, checkpoint, cleanExit, clearDirtyFlag, flush, setSessionState };
