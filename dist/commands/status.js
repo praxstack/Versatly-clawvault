@@ -38,35 +38,19 @@ function getGitStatus(repoRoot) {
   const lines = output.split("\n").filter(Boolean);
   return { clean: lines.length === 0, dirtyCount: lines.length };
 }
-function parseQmdCollections(raw) {
-  const parsed = JSON.parse(raw);
-  if (Array.isArray(parsed)) return parsed;
-  if (parsed && typeof parsed === "object") {
-    const candidate = parsed.collections ?? parsed.items ?? parsed.data;
-    if (Array.isArray(candidate)) return candidate;
+function parseQmdCollectionsText(raw) {
+  const names = [];
+  const regex = /^(\S+)\s+\(qmd:\/\/\1\/\)/gm;
+  let match;
+  while ((match = regex.exec(raw)) !== null) {
+    names.push(match[1]);
   }
-  throw new Error("qmd collection list returned an unexpected JSON shape.");
+  return names;
 }
 function getQmdIndexStatus(collection, root) {
-  const output = execFileSync("qmd", ["collection", "list", "--json"], { encoding: "utf-8" });
-  const entries = parseQmdCollections(output);
-  const resolvedRoot = path.resolve(root);
-  for (const entry of entries) {
-    if (typeof entry === "string") {
-      if (entry === collection) {
-        return "present";
-      }
-      continue;
-    }
-    const name = String(
-      entry.name ?? entry.collection ?? entry.id ?? ""
-    );
-    if (name !== collection) continue;
-    const entryRoot = entry.root ?? entry.path ?? entry.dir;
-    if (entryRoot) {
-      const resolvedEntryRoot = path.resolve(String(entryRoot));
-      return resolvedEntryRoot === resolvedRoot ? "present" : "root-mismatch";
-    }
+  const output = execFileSync("qmd", ["collection", "list"], { encoding: "utf-8" });
+  const names = parseQmdCollectionsText(output);
+  if (names.includes(collection)) {
     return "present";
   }
   return "missing";

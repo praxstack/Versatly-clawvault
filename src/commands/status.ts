@@ -63,46 +63,33 @@ function getGitStatus(repoRoot: string): { clean: boolean; dirtyCount: number } 
   return { clean: lines.length === 0, dirtyCount: lines.length };
 }
 
-function parseQmdCollections(raw: string): Array<Record<string, unknown> | string> {
-  const parsed = JSON.parse(raw) as unknown;
-  if (Array.isArray(parsed)) return parsed;
-  if (parsed && typeof parsed === 'object') {
-    const candidate = (parsed as { collections?: unknown; items?: unknown; data?: unknown }).collections
-      ?? (parsed as { collections?: unknown; items?: unknown; data?: unknown }).items
-      ?? (parsed as { collections?: unknown; items?: unknown; data?: unknown }).data;
-    if (Array.isArray(candidate)) return candidate as Array<Record<string, unknown> | string>;
+/**
+ * Parse qmd collection list text output
+ * Format:
+ *   Collections (N):
+ *
+ *   name (qmd://name/)
+ *     Pattern:  **\/*.md
+ *     Files:    155
+ *     Updated:  1m ago
+ */
+function parseQmdCollectionsText(raw: string): string[] {
+  const names: string[] = [];
+  // Match lines like "memory (qmd://memory/)"
+  const regex = /^(\S+)\s+\(qmd:\/\/\1\/\)/gm;
+  let match;
+  while ((match = regex.exec(raw)) !== null) {
+    names.push(match[1]);
   }
-  throw new Error('qmd collection list returned an unexpected JSON shape.');
+  return names;
 }
 
 function getQmdIndexStatus(collection: string, root: string): 'present' | 'missing' | 'root-mismatch' {
-  const output = execFileSync('qmd', ['collection', 'list', '--json'], { encoding: 'utf-8' });
-  const entries = parseQmdCollections(output);
-  const resolvedRoot = path.resolve(root);
-
-  for (const entry of entries) {
-    if (typeof entry === 'string') {
-      if (entry === collection) {
-        return 'present';
-      }
-      continue;
-    }
-
-    const name = String(
-      (entry as { name?: unknown; collection?: unknown; id?: unknown }).name
-        ?? (entry as { name?: unknown; collection?: unknown; id?: unknown }).collection
-        ?? (entry as { name?: unknown; collection?: unknown; id?: unknown }).id
-        ?? ''
-    );
-    if (name !== collection) continue;
-
-    const entryRoot = (entry as { root?: unknown; path?: unknown; dir?: unknown }).root
-      ?? (entry as { root?: unknown; path?: unknown; dir?: unknown }).path
-      ?? (entry as { root?: unknown; path?: unknown; dir?: unknown }).dir;
-    if (entryRoot) {
-      const resolvedEntryRoot = path.resolve(String(entryRoot));
-      return resolvedEntryRoot === resolvedRoot ? 'present' : 'root-mismatch';
-    }
+  // qmd collection list doesn't support --json, parse text output instead
+  const output = execFileSync('qmd', ['collection', 'list'], { encoding: 'utf-8' });
+  const names = parseQmdCollectionsText(output);
+  
+  if (names.includes(collection)) {
     return 'present';
   }
 
