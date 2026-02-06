@@ -19,8 +19,12 @@
   "files": [
     "dist",
     "bin",
-    "templates"
+    "templates",
+    "hooks"
   ],
+  "openclaw": {
+    "hooks": ["./hooks/clawvault"]
+  },
   "scripts": {
     "build": "tsup src/index.ts src/commands/entities.ts src/commands/link.ts src/commands/checkpoint.ts src/commands/recover.ts src/commands/status.ts src/commands/template.ts src/commands/setup.ts src/commands/wake.ts src/commands/sleep.ts src/commands/doctor.ts src/commands/shell-init.ts src/lib/entity-index.ts src/lib/auto-linker.ts src/lib/config.ts src/lib/template-engine.ts --format esm --dts --clean",
     "dev": "tsup src/index.ts src/commands/*.ts src/lib/*.ts --format esm --dts --watch",
