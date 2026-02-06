@@ -14,7 +14,6 @@ import {
   ClawVault,
   createVault,
   findVault,
-  hasQmd,
   QmdUnavailableError,
   QMD_INSTALL_COMMAND
 } from '../dist/index.js';
@@ -57,6 +56,28 @@ async function getVault(vaultPath) {
     process.exit(1);
   }
   return vault;
+}
+
+function resolveVaultPath(vaultPath) {
+  if (vaultPath) {
+    return path.resolve(vaultPath);
+  }
+  if (process.env.CLAWVAULT_PATH) {
+    return path.resolve(process.env.CLAWVAULT_PATH);
+  }
+  let current = process.cwd();
+  while (true) {
+    if (fs.existsSync(path.join(current, '.clawvault.json'))) {
+      return current;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      console.error(chalk.red('Error: No ClawVault found. Run `clawvault init` first.'));
+      console.log(chalk.dim('Tip: Set CLAWVAULT_PATH environment variable to your vault path'));
+      process.exit(1);
+    }
+    current = parent;
+  }
 }
 
 async function runQmd(args) {
@@ -571,6 +592,117 @@ program
     }
   });
 
+// === WAKE (session start) ===
+program
+  .command('wake')
+  .description('Start a session (recover + recap + summary)')
+  .option('-n, --handoff-limit <n>', 'Number of recent handoffs to include', '3')
+  .option('--full', 'Show full recap (default: brief)')
+  .option('-v, --vault <path>', 'Vault path')
+  .action(async (options) => {
+    try {
+      const vaultPath = resolveVaultPath(options.vault);
+      const { wake } = await import('../dist/commands/wake.js');
+      const { formatRecoveryInfo } = await import('../dist/commands/recover.js');
+      const result = await wake({
+        vaultPath,
+        handoffLimit: parseInt(options.handoffLimit),
+        brief: !options.full
+      });
+
+      console.log(chalk.cyan('\n🌅 ClawVault Wake\n'));
+      console.log(formatRecoveryInfo(result.recovery));
+      console.log();
+      console.log(chalk.cyan('Recap'));
+      console.log(result.recapMarkdown.trim());
+      console.log();
+      console.log(chalk.green(`You were working on: ${result.summary}`));
+
+      process.exitCode = result.recovery.died ? 1 : 0;
+    } catch (err) {
+      if (err instanceof QmdUnavailableError) {
+        printQmdMissing();
+        process.exit(1);
+      }
+      console.error(chalk.red(`Error: ${err.message}`));
+      process.exit(1);
+    }
+  });
+
+// === SLEEP (session end) ===
+program
+  .command('sleep <summary>')
+  .description('End a session with a handoff (and optional git commit)')
+  .option('-n, --next <items>', 'Next steps (comma-separated)')
+  .option('-b, --blocked <items>', 'Blocked items (comma-separated)')
+  .option('-d, --decisions <items>', 'Key decisions made (comma-separated)')
+  .option('-q, --questions <items>', 'Open questions (comma-separated)')
+  .option('-f, --feeling <state>', 'Emotional/energy state')
+  .option('-s, --session <key>', 'Session key')
+  .option('--index', 'Update qmd index after handoff')
+  .option('--no-git', 'Skip git commit prompt')
+  .option('-v, --vault <path>', 'Vault path')
+  .action(async (summary, options) => {
+    try {
+      const vaultPath = resolveVaultPath(options.vault);
+      const { sleep } = await import('../dist/commands/sleep.js');
+      const result = await sleep({
+        workingOn: summary,
+        next: options.next,
+        blocked: options.blocked,
+        decisions: options.decisions,
+        questions: options.questions,
+        feeling: options.feeling,
+        sessionKey: options.session,
+        vaultPath,
+        index: options.index,
+        git: options.git
+      });
+
+      console.log(chalk.green(`✓ Handoff saved: ${result.document.id}`));
+      console.log(chalk.dim(`  Path: ${result.document.path}`));
+      console.log(chalk.dim(`  Working on: ${result.handoff.workingOn.join(', ')}`));
+      if (result.handoff.nextSteps.length > 0) {
+        console.log(chalk.dim(`  Next: ${result.handoff.nextSteps.join(', ')}`));
+      } else {
+        console.log(chalk.dim('  Next: (none)'));
+      }
+      if (result.handoff.blocked.length > 0) {
+        console.log(chalk.dim(`  Blocked: ${result.handoff.blocked.join(', ')}`));
+      } else {
+        console.log(chalk.dim('  Blocked: (none)'));
+      }
+      if (result.handoff.decisions?.length) {
+        console.log(chalk.dim(`  Decisions: ${result.handoff.decisions.join(', ')}`));
+      }
+      if (result.handoff.openQuestions?.length) {
+        console.log(chalk.dim(`  Questions: ${result.handoff.openQuestions.join(', ')}`));
+      }
+      if (result.handoff.feeling) {
+        console.log(chalk.dim(`  Feeling: ${result.handoff.feeling}`));
+      }
+      if (options.index) {
+        console.log(chalk.dim('  qmd: index updated'));
+      }
+      if (result.git) {
+        if (result.git.committed) {
+          console.log(chalk.green(`✓ Git commit created${result.git.message ? `: ${result.git.message}` : ''}`));
+        } else if (result.git.skippedReason === 'clean') {
+          console.log(chalk.dim('  Git: clean'));
+        } else if (result.git.skippedReason === 'declined') {
+          console.log(chalk.dim('  Git: commit skipped'));
+        }
+      }
+    } catch (err) {
+      if (err instanceof QmdUnavailableError) {
+        printQmdMissing();
+        process.exit(1);
+      }
+      console.error(chalk.red(`Error: ${err.message}`));
+      process.exit(1);
+    }
+  });
+
 // === HANDOFF (session bridge) ===
 program
   .command('handoff')
@@ -651,6 +783,20 @@ program
     }
   });
 
+// === SHELL INIT ===
+program
+  .command('shell-init')
+  .description('Output shell integration for ClawVault')
+  .action(async () => {
+    try {
+      const { shellInit } = await import('../dist/commands/shell-init.js');
+      console.log(shellInit());
+    } catch (err) {
+      console.error(chalk.red(`Error: ${err.message}`));
+      process.exit(1);
+    }
+  });
+
 // === TEMPLATE ===
 const template = program
   .command('template')
@@ -725,59 +871,39 @@ program
   .description('Check ClawVault setup health')
   .option('-v, --vault <path>', 'Vault path')
   .action(async (options) => {
-    console.log(chalk.cyan('\n🩺 ClawVault Health Check\n'));
-    
-    let issues = 0;
-    
-    // Check qmd
-    if (hasQmd()) {
-      console.log(chalk.green('✓ qmd installed'));
-    } else {
-      console.log(chalk.red('✗ qmd not installed'));
-      console.log(chalk.dim(`  Install: ${QMD_INSTALL_COMMAND}`));
-      issues++;
-    }
-    
-    // Check vault
     try {
-      const vault = await getVault(options.vault);
-      console.log(chalk.green(`✓ Vault found: ${vault.getPath()}`));
-      
-      const stats = await vault.stats();
-      console.log(chalk.dim(`  ${stats.documents} documents, ${stats.links} links`));
-      
-      // Check qmd collection
-      const collection = vault.getQmdCollection();
-      if (collection) {
-        console.log(chalk.green(`✓ qmd collection: ${collection}`));
+      const { doctor } = await import('../dist/commands/doctor.js');
+      const report = await doctor(options.vault);
+
+      console.log(chalk.cyan('\n🩺 ClawVault Health Check\n'));
+      if (report.vaultPath) {
+        console.log(chalk.dim(`Vault: ${report.vaultPath}`));
+        console.log();
+      }
+
+      for (const check of report.checks) {
+        const prefix = check.status === 'ok'
+          ? chalk.green('✓')
+          : check.status === 'warn'
+            ? chalk.yellow('⚠')
+            : chalk.red('✗');
+        const detail = check.detail ? ` — ${check.detail}` : '';
+        console.log(`${prefix} ${check.label}${detail}`);
+        if (check.hint) {
+          console.log(chalk.dim(`  ${check.hint}`));
+        }
+      }
+
+      const issues = report.warnings + report.errors;
+      console.log();
+      if (issues === 0) {
+        console.log(chalk.green('✅ ClawVault is healthy!\n'));
       } else {
-        console.log(chalk.yellow('⚠ No qmd collection configured'));
-        issues++;
+        console.log(chalk.yellow(`⚠ ${issues} issue(s) found\n`));
       }
-      
-      // Check for handoffs
-      const handoffs = await vault.list('handoffs');
-      if (handoffs.length > 0) {
-        console.log(chalk.green(`✓ ${handoffs.length} handoff(s) stored`));
-      } else {
-        console.log(chalk.yellow('⚠ No handoffs yet — run `clawvault handoff` before context death'));
-      }
-      
-      // Check for content
-      if (stats.documents < 5) {
-        console.log(chalk.yellow('⚠ Vault is sparse — start storing memories!'));
-      }
-      
     } catch (err) {
-      console.log(chalk.red(`✗ Vault error: ${err.message}`));
-      issues++;
-    }
-    
-    console.log();
-    if (issues === 0) {
-      console.log(chalk.green('✅ ClawVault is healthy!\n'));
-    } else {
-      console.log(chalk.yellow(`⚠ ${issues} issue(s) found\n`));
+      console.error(chalk.red(`Error: ${err.message}`));
+      process.exit(1);
     }
   });
 

@@ -4,13 +4,13 @@ import {
   findUnlinkedMentions
 } from "../chunk-42MXU7A6.js";
 import {
-  getVaultPath
-} from "../chunk-4KDZZW4X.js";
-import {
   readBacklinksIndex,
   rebuildBacklinksIndex,
   scanVaultLinks
 } from "../chunk-4VQTUVH7.js";
+import {
+  getVaultPath
+} from "../chunk-4KDZZW4X.js";
 import {
   buildEntityIndex
 } from "../chunk-J7ZWCI2C.js";

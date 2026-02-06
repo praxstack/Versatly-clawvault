@@ -55,13 +55,16 @@ clawvault search "decision"           # BM25 keyword search
 clawvault vsearch "what did I decide" # Semantic search
 
 # Session management
-clawvault handoff --working-on "task1" --next "task2"  # Before context death
-clawvault recap                                          # On session start
+clawvault wake
+clawvault sleep "build wake/sleep commands" --next "run doctor"
+clawvault handoff --working-on "task1" --next "task2"   # Manual handoff (advanced)
+clawvault recap                                         # Manual recap (advanced)
 ```
 
-**Tip:** Set `CLAWVAULT_PATH` environment variable to skip directory walk:
+**Tip:** Set `CLAWVAULT_PATH` to skip directory walk (or use `shell-init`):
 ```bash
 echo 'export CLAWVAULT_PATH="$HOME/memory"' >> ~/.bashrc
+eval "$(clawvault shell-init)"
 ```
 
 ## Search: qmd vs memory_search
@@ -135,18 +138,19 @@ clawvault stats               # Vault overview
 ### Session Continuity
 
 ```bash
-# Before context death (long pause, session end, hitting limits)
-clawvault handoff \
-  --working-on "building CRM, fixing webhook" \
+# Start a session (recover + recap + summary)
+clawvault wake
+
+# End a session with a handoff
+clawvault sleep "building CRM, fixing webhook" \
   --blocked "waiting for API key" \
   --next "deploy to production" \
   --decisions "chose Supabase over Firebase" \
   --feeling "focused"
 
-# On session start
-clawvault recap           # Full markdown recap
-clawvault recap --brief   # Token-efficient version
-clawvault recap --json    # For programmatic use
+# Manual tools (advanced)
+clawvault handoff --working-on "task1" --next "task2"
+clawvault recap --brief   # Token-efficient recap
 
 # Health check
 clawvault doctor
@@ -173,15 +177,19 @@ clawvault remember decision "Title" --content "..."
 clawvault remember lesson "Title" --content "..."
 \`\`\`
 
-### Session Handoff
-Before context death:
+### Session Start
 \`\`\`bash
-clawvault handoff --working-on "..." --next "..."
+clawvault wake
 \`\`\`
 
-On wake:
+### Session End
 \`\`\`bash
-clawvault recap
+clawvault sleep "..." --next "..."
+\`\`\`
+
+### Checkpoint (during heavy work)
+\`\`\`bash
+clawvault checkpoint --working-on "..." --focus "..." --blocked "..."
 \`\`\`
 
 ### Why qmd over memory_search?

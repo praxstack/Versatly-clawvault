@@ -1,6 +1,6 @@
 ---
 name: clawvault
-version: 1.3.1
+version: 1.4.1
 description: Structured memory system for OpenClaw agents. Context death resilience (checkpoint/recover), structured storage, Obsidian-compatible markdown, and local semantic search.
 author: Versatly
 repository: https://github.com/Versatly/clawvault
@@ -26,9 +26,36 @@ clawvault init ~/my-vault
 
 # Or set env var to use existing vault
 export CLAWVAULT_PATH=/path/to/memory
+
+# Optional: shell integration (aliases + CLAWVAULT_PATH)
+clawvault shell-init >> ~/.bashrc
+```
+
+## Quick Start for New Agents
+
+```bash
+# Start your session (recover + recap + summary)
+clawvault wake
+
+# Capture and checkpoint during work
+clawvault capture "TODO: Review PR tomorrow"
+clawvault checkpoint --working-on "PR review" --focus "type guards"
+
+# End your session with a handoff
+clawvault sleep "PR review + type guards" --next "respond to CI" --blocked "waiting for CI"
+
+# Health check when something feels off
+clawvault doctor
 ```
 
 ## Core Commands
+
+### Wake + Sleep (primary)
+
+```bash
+clawvault wake
+clawvault sleep "what I was working on" --next "ship v1" --blocked "waiting for API key"
+```
 
 ### Store memories by type
 
@@ -57,20 +84,32 @@ clawvault vsearch "what did we decide about the database"
 
 ## Context Death Resilience
 
+### Wake (start of session)
+
+```bash
+clawvault wake
+```
+
+### Sleep (end of session)
+
+```bash
+clawvault sleep "what I was working on" --next "finish docs" --blocked "waiting for review"
+```
+
 ### Checkpoint (save state frequently)
 
 ```bash
 clawvault checkpoint --working-on "PR review" --focus "type guards" --blocked "waiting for CI"
 ```
 
-### Recover (check on wake)
+### Recover (manual check)
 
 ```bash
 clawvault recover --clear
 # Shows: death time, last checkpoint, recent handoff
 ```
 
-### Handoff (before session end)
+### Handoff (manual session end)
 
 ```bash
 clawvault handoff \
@@ -117,11 +156,31 @@ vault/
 
 ## Best Practices
 
-1. **Checkpoint every 10-15 min** during heavy work
-2. **Handoff before session end** — future you will thank you
-3. **Recover on wake** — check if last session died
+1. **Wake at session start** — `clawvault wake` restores context
+2. **Checkpoint every 10-15 min** during heavy work
+3. **Sleep before session end** — `clawvault sleep` captures next steps
 4. **Use types** — knowing WHAT you're storing helps WHERE to put it
 5. **Wiki-link liberally** — `[[person-name]]` builds your knowledge graph
+
+## Checklist for AGENTS.md
+
+```markdown
+## Memory Checklist
+- [ ] Run `clawvault wake` at session start
+- [ ] Checkpoint during heavy work
+- [ ] Capture key decisions/lessons with `clawvault remember`
+- [ ] Use wiki-links like `[[person-name]]`
+- [ ] End with `clawvault sleep "..." --next "..." --blocked "..."`
+- [ ] Run `clawvault doctor` when something feels off
+```
+
+## Troubleshooting
+
+- **qmd not installed** — run `bun install -g github:tobi/qmd` or `npm install -g qmd`
+- **No ClawVault found** — run `clawvault init` or set `CLAWVAULT_PATH`
+- **CLAWVAULT_PATH missing** — run `clawvault shell-init` and add to shell rc
+- **Too many orphan links** — run `clawvault link --orphans`
+- **Inbox backlog warning** — process or archive inbox items
 
 ## Integration with qmd
 

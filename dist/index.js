@@ -1,11 +1,15 @@
 import {
-  setupCommand
-} from "./chunk-QYJI73KF.js";
+  buildTemplateVariables,
+  renderTemplate
+} from "./chunk-7766SIJP.js";
 import {
   ClawVault,
   createVault,
   findVault
 } from "./chunk-MXNXWOPL.js";
+import {
+  setupCommand
+} from "./chunk-QYJI73KF.js";
 import {
   DEFAULT_CATEGORIES,
   DEFAULT_CONFIG,
@@ -21,10 +25,6 @@ import {
   qmdEmbed,
   qmdUpdate
 } from "./chunk-VJIFT5T5.js";
-import {
-  buildTemplateVariables,
-  renderTemplate
-} from "./chunk-7766SIJP.js";
 
 // src/index.ts
 import * as fs from "fs";
