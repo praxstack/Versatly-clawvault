@@ -1,4 +1,4 @@
-# ClawVault 🐘
+# ClawVault™ 🐘
 
 **An elephant never forgets.**
 
