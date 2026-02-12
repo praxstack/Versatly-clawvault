@@ -36,6 +36,14 @@ import {
   qmdEmbed,
   qmdUpdate
 } from "./chunk-MIIXBNO3.js";
+import {
+  Compressor,
+  Observer,
+  Reflector,
+  SessionWatcher,
+  observeCommand,
+  registerObserveCommand
+} from "./chunk-NSPPVMWC.js";
 
 // src/index.ts
 import * as fs from "fs";
@@ -49,15 +57,23 @@ function readPackageVersion() {
   }
 }
 var VERSION = readPackageVersion();
+function registerCommanderCommands(program) {
+  registerObserveCommand(program);
+  return program;
+}
 export {
   ClawVault,
+  Compressor,
   DEFAULT_CATEGORIES,
   DEFAULT_CONFIG,
   MEMORY_TYPES,
+  Observer,
   QMD_INSTALL_COMMAND,
   QMD_INSTALL_URL,
   QmdUnavailableError,
+  Reflector,
   SearchEngine,
+  SessionWatcher,
   TYPE_TO_CATEGORY,
   VERSION,
   buildContext,
@@ -71,8 +87,11 @@ export {
   formatContextMarkdown,
   formatSessionRecapMarkdown,
   hasQmd,
+  observeCommand,
   qmdEmbed,
   qmdUpdate,
+  registerCommanderCommands,
+  registerObserveCommand,
   renderTemplate,
   sessionRecapCommand,
   setupCommand

@@ -1,4 +1,7 @@
 import {
+  clearDirtyFlag
+} from "../chunk-MZZJLQNQ.js";
+import {
   autoSyncOnHandoff
 } from "../chunk-BBPSJL6H.js";
 import {
@@ -7,9 +10,6 @@ import {
 import {
   qmdUpdate
 } from "../chunk-MIIXBNO3.js";
-import {
-  clearDirtyFlag
-} from "../chunk-MZZJLQNQ.js";
 
 // src/commands/sleep.ts
 import * as fs from "fs";

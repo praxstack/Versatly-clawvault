@@ -1,7 +1,9 @@
+import { Command } from 'commander';
 import { V as VaultConfig, S as StoreOptions, D as Document, a as SearchOptions, b as SearchResult, c as SyncOptions, d as SyncResult, C as Category, M as MemoryType, H as HandoffDocument, e as SessionRecap } from './types-DMU3SuAV.js';
 export { f as DEFAULT_CATEGORIES, g as DEFAULT_CONFIG, h as MEMORY_TYPES, T as TYPE_TO_CATEGORY, i as VaultMeta } from './types-DMU3SuAV.js';
 export { setupCommand } from './commands/setup.js';
 export { ContextEntry, ContextFormat, ContextOptions, ContextResult, buildContext, contextCommand, formatContextMarkdown } from './commands/context.js';
+export { ObserveCommandOptions, observeCommand, registerObserveCommand } from './commands/observe.js';
 export { SessionRecapFormat, SessionRecapOptions, SessionRecapResult, SessionTurn, buildSessionRecap, formatSessionRecapMarkdown, sessionRecapCommand } from './commands/session-recap.js';
 export { TemplateVariables, buildTemplateVariables, renderTemplate } from './lib/template-engine.js';
 
@@ -261,6 +263,112 @@ declare function extractWikiLinks(content: string): string[];
  */
 declare function extractTags(content: string): string[];
 
+interface ObserverCompressor {
+    compress(messages: string[], existingObservations: string): Promise<string>;
+}
+interface ObserverReflector {
+    reflect(observations: string): string;
+}
+interface ObserverOptions {
+    tokenThreshold?: number;
+    reflectThreshold?: number;
+    model?: string;
+    compressor?: ObserverCompressor;
+    reflector?: ObserverReflector;
+    now?: () => Date;
+}
+declare class Observer {
+    private readonly vaultPath;
+    private readonly observationsDir;
+    private readonly tokenThreshold;
+    private readonly reflectThreshold;
+    private readonly compressor;
+    private readonly reflector;
+    private readonly now;
+    private readonly router;
+    private pendingMessages;
+    private observationsCache;
+    private lastRoutingSummary;
+    constructor(vaultPath: string, options?: ObserverOptions);
+    processMessages(messages: string[]): Promise<void>;
+    /**
+     * Force-flush pending messages regardless of threshold.
+     * Call this on session end to capture everything.
+     */
+    flush(): Promise<{
+        observations: string;
+        routingSummary: string;
+    }>;
+    getObservations(): string;
+    private estimateTokens;
+    private getObservationPath;
+    private readTodayObservations;
+    private readObservationFile;
+    private writeObservationFile;
+    private getObservationFiles;
+    private readObservationCorpus;
+    private reflectIfNeeded;
+}
+
+interface CompressorOptions {
+    model?: string;
+    now?: () => Date;
+    fetchImpl?: typeof fetch;
+}
+declare class Compressor {
+    private readonly model?;
+    private readonly now;
+    private readonly fetchImpl;
+    constructor(options?: CompressorOptions);
+    compress(messages: string[], existingObservations: string): Promise<string>;
+    private resolveProvider;
+    private buildPrompt;
+    private callAnthropic;
+    private callOpenAI;
+    private normalizeLlmOutput;
+    private fallbackCompression;
+    private mergeObservations;
+    private parseSections;
+    private renderSections;
+    private inferPriority;
+    private normalizeText;
+    private extractDate;
+    private extractTime;
+    private formatDate;
+    private formatTime;
+}
+
+interface ReflectorOptions {
+    now?: () => Date;
+}
+declare class Reflector {
+    private readonly now;
+    constructor(options?: ReflectorOptions);
+    reflect(observations: string): string;
+    private buildCutoffDate;
+    private parseDate;
+    private parseSections;
+    private renderSections;
+    private normalizeText;
+    private isSimilar;
+}
+
+interface SessionWatcherOptions {
+    ignoreInitial?: boolean;
+}
+declare class SessionWatcher {
+    private readonly watchPath;
+    private readonly observer;
+    private readonly ignoreInitial;
+    private watcher;
+    private fileOffsets;
+    private processingQueue;
+    constructor(watchPath: string, observer: Observer, options?: SessionWatcherOptions);
+    start(): Promise<void>;
+    stop(): Promise<void>;
+    private consumeFile;
+}
+
 /**
  * ClawVault 🐘 — An Elephant Never Forgets
  *
@@ -288,5 +396,6 @@ declare function extractTags(content: string): string[];
  */
 
 declare const VERSION: string;
+declare function registerCommanderCommands(program: Command): Command;
 
-export { Category, ClawVault, Document, HandoffDocument, MemoryType, QMD_INSTALL_COMMAND, QMD_INSTALL_URL, QmdUnavailableError, SearchEngine, SearchOptions, SearchResult, SessionRecap, StoreOptions, SyncOptions, SyncResult, VERSION, VaultConfig, createVault, extractTags, extractWikiLinks, findVault, hasQmd, qmdEmbed, qmdUpdate };
+export { Category, ClawVault, Compressor, type CompressorOptions, Document, HandoffDocument, MemoryType, Observer, type ObserverCompressor, type ObserverOptions, type ObserverReflector, QMD_INSTALL_COMMAND, QMD_INSTALL_URL, QmdUnavailableError, Reflector, type ReflectorOptions, SearchEngine, SearchOptions, SearchResult, SessionRecap, SessionWatcher, type SessionWatcherOptions, StoreOptions, SyncOptions, SyncResult, VERSION, VaultConfig, createVault, extractTags, extractWikiLinks, findVault, hasQmd, qmdEmbed, qmdUpdate, registerCommanderCommands };

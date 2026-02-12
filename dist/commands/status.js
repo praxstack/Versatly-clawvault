@@ -1,4 +1,7 @@
 import {
+  formatAge
+} from "../chunk-7ZRP733D.js";
+import {
   ClawVault
 } from "../chunk-3HFB7EMU.js";
 import {
@@ -9,9 +12,6 @@ import {
   scanVaultLinks
 } from "../chunk-4VQTUVH7.js";
 import "../chunk-J7ZWCI2C.js";
-import {
-  formatAge
-} from "../chunk-7ZRP733D.js";
 
 // src/commands/status.ts
 import * as fs from "fs";
