@@ -32,10 +32,10 @@ describe('Router', () => {
       const peopleFile = path.join(vaultPath, 'people', '2026-02-11.md');
       expect(fs.existsSync(peopleFile)).toBe(true);
       const content = fs.readFileSync(peopleFile, 'utf-8');
-      expect(content).toContain('talked to Pedro');
-      expect(content).toContain('met with Maria');
-      expect(content).toContain('Justin from ops mentioned latency spikes');
-      expect(content).toContain('Alex said rollback drills are complete');
+      expect(content).toContain('talked to [[Pedro]]');
+      expect(content).toContain('met with [[Maria]]');
+      expect(content).toContain('[[Justin]] from ops mentioned latency spikes');
+      expect(content).toContain('[[Alex]] said rollback drills are complete');
     } finally {
       fs.rmSync(vaultPath, { recursive: true, force: true });
     }

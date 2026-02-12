@@ -144,13 +144,69 @@ export class Router {
     // Don't duplicate
     if (existing.includes(item.content)) return;
 
-    const entry = `- ${item.priority} ${item.content}`;
+    const linkedContent = this.addWikiLinks(item.content);
+    const entry = `- ${item.priority} ${linkedContent}`;
     const header = existing ? '' : `# ${category} — ${item.date}\n`;
     const newContent = existing
       ? `${existing}\n${entry}\n`
       : `${header}\n${entry}\n`;
 
     fs.writeFileSync(filePath, newContent, 'utf-8');
+  }
+
+  /**
+   * Auto-link proper nouns and known entities with [[wiki-links]].
+   * Scans for capitalized names, project names, and tool names.
+   * Skips content already inside [[brackets]].
+   */
+  private addWikiLinks(content: string): string {
+    // Don't double-link
+    if (content.includes('[[')) return content;
+
+    // Match capitalized proper nouns (2+ chars, not at start of sentence after emoji/time)
+    // Pattern: standalone capitalized word that looks like a name/entity
+    const namePattern = /\b([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})?)\b/g;
+
+    // Words to skip (common English words that happen to appear capitalized)
+    const skipWords = new Set([
+      'The', 'This', 'That', 'These', 'Those', 'There', 'Then', 'Than',
+      'When', 'Where', 'What', 'Which', 'While', 'With', 'Would', 'Will',
+      'Should', 'Could', 'About', 'After', 'Before', 'Between', 'Because',
+      'Also', 'Always', 'Already', 'Another', 'Any', 'Each', 'Every',
+      'From', 'Have', 'Has', 'Had', 'Into', 'Just', 'Keep', 'Like',
+      'Made', 'Make', 'Many', 'More', 'Most', 'Much', 'Must', 'Need',
+      'Never', 'Next', 'None', 'Not', 'Now', 'Only', 'Other', 'Over',
+      'Same', 'Some', 'Such', 'Sure', 'Take', 'Them', 'They', 'Too',
+      'Under', 'Until', 'Upon', 'Very', 'Want', 'Were', 'Work', 'Yet',
+      'Decision', 'Error', 'Deadline', 'Friday', 'Monday', 'Tuesday',
+      'Wednesday', 'Thursday', 'Saturday', 'Sunday', 'January', 'February',
+      'March', 'April', 'May', 'June', 'July', 'August', 'September',
+      'October', 'November', 'December', 'Today', 'Tomorrow', 'Yesterday',
+      'Message', 'Feature', 'Session', 'Update', 'System', 'User',
+      'Processed', 'Working', 'Built', 'Deployed', 'Discussed', 'Talked',
+      'Mentioned', 'Requested', 'Asked', 'Said',
+    ]);
+
+    // Known tool/project names to always link (lowercase for matching)
+    const knownEntities = new Set([
+      'PostgreSQL', 'MongoDB', 'Railway', 'Vercel', 'React', 'Vue', 'Svelte',
+      'Express', 'NestJS', 'Prisma', 'Docker', 'Kubernetes', 'Redis',
+      'GraphQL', 'Stripe', 'ClawVault', 'OpenClaw', 'GitHub', 'Obsidian',
+    ]);
+
+    return content.replace(namePattern, (match) => {
+      if (skipWords.has(match)) return match;
+      if (knownEntities.has(match)) return `[[${match}]]`;
+      // Link proper nouns (likely people/orgs)
+      if (/^[A-Z][a-z]+$/.test(match) && match.length >= 3) {
+        return `[[${match}]]`;
+      }
+      // Link multi-word proper nouns (e.g., "Justin Dukes")
+      if (/^[A-Z][a-z]+ [A-Z][a-z]+$/.test(match)) {
+        return `[[${match}]]`;
+      }
+      return match;
+    });
   }
 
   private buildSummary(routed: RoutedItem[]): string {
