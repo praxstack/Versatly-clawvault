@@ -5,20 +5,25 @@ import type { Observer } from './observer.js';
 
 export interface SessionWatcherOptions {
   ignoreInitial?: boolean;
+  debounceMs?: number;
 }
 
 export class SessionWatcher {
   private readonly watchPath: string;
   private readonly observer: Observer;
   private readonly ignoreInitial: boolean;
+  private readonly debounceMs: number;
   private watcher: FSWatcher | null = null;
   private fileOffsets = new Map<string, number>();
+  private pendingPaths = new Set<string>();
+  private debounceTimer: NodeJS.Timeout | null = null;
   private processingQueue: Promise<void> = Promise.resolve();
 
   constructor(watchPath: string, observer: Observer, options: SessionWatcherOptions = {}) {
     this.watchPath = path.resolve(watchPath);
     this.observer = observer;
     this.ignoreInitial = options.ignoreInitial ?? false;
+    this.debounceMs = options.debounceMs ?? 500;
   }
 
   async start(): Promise<void> {
@@ -36,21 +41,51 @@ export class SessionWatcher {
     });
 
     const enqueue = (changedPath: string): void => {
-      this.processingQueue = this.processingQueue
-        .then(() => this.consumeFile(changedPath))
-        .catch(() => undefined);
+      this.pendingPaths.add(path.resolve(changedPath));
+      this.scheduleDrain();
     };
 
     this.watcher.on('add', enqueue);
     this.watcher.on('change', enqueue);
     this.watcher.on('unlink', (deletedPath: string) => {
-      this.fileOffsets.delete(path.resolve(deletedPath));
+      const resolved = path.resolve(deletedPath);
+      this.fileOffsets.delete(resolved);
+      this.pendingPaths.delete(resolved);
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      this.watcher?.once('ready', () => resolve());
+      this.watcher?.once('error', (error) => reject(error));
     });
   }
 
   async stop(): Promise<void> {
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
+    this.pendingPaths.clear();
+    await this.processingQueue.catch(() => undefined);
     await this.watcher?.close();
     this.watcher = null;
+  }
+
+  private scheduleDrain(): void {
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+    }
+
+    this.debounceTimer = setTimeout(() => {
+      this.debounceTimer = null;
+      const nextPaths = [...this.pendingPaths];
+      this.pendingPaths.clear();
+
+      for (const changedPath of nextPaths) {
+        this.processingQueue = this.processingQueue
+          .then(() => this.consumeFile(changedPath))
+          .catch(() => undefined);
+      }
+    }, this.debounceMs);
   }
 
   private async consumeFile(filePath: string): Promise<void> {

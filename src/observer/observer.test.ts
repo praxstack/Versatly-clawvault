@@ -113,4 +113,45 @@ describe('Observer', () => {
       fs.rmSync(vaultPath, { recursive: true, force: true });
     }
   });
+
+  it('deduplicates existing and newly compressed observations', async () => {
+    const vaultPath = makeTempVault();
+    const now = withFixedNow('2026-02-11T10:00:00.000Z');
+    const observationPath = path.join(vaultPath, 'observations', '2026-02-11.md');
+    fs.mkdirSync(path.dirname(observationPath), { recursive: true });
+    fs.writeFileSync(
+      observationPath,
+      '## 2026-02-11\n\n🟢 09:00 Keep deployment logs\n🟢 09:01 Keep deployment logs\n',
+      'utf-8'
+    );
+
+    const compressSpy = vi.fn(async (_messages: string[], existing: string) => (
+      `${existing}\n🟢 10:00 Added rollback checklist\n🟢 10:01 Added rollback checklist`
+    ));
+
+    try {
+      const observer = new Observer(vaultPath, {
+        tokenThreshold: 1,
+        reflectThreshold: 99999,
+        now,
+        compressor: {
+          compress: (messages, existing) => compressSpy(messages, existing)
+        },
+        reflector: { reflect: (value: string) => value }
+      });
+
+      await observer.processMessages(['sync observation state']);
+
+      expect(compressSpy).toHaveBeenCalledTimes(1);
+      const existingPassedToCompressor = compressSpy.mock.calls[0][1] as string;
+      expect(existingPassedToCompressor).toContain('🟢 09:00 Keep deployment logs');
+      expect(existingPassedToCompressor).not.toContain('🟢 09:01 Keep deployment logs');
+
+      const updated = fs.readFileSync(observationPath, 'utf-8');
+      expect((updated.match(/Keep deployment logs/g) ?? []).length).toBe(1);
+      expect((updated.match(/Added rollback checklist/g) ?? []).length).toBe(1);
+    } finally {
+      fs.rmSync(vaultPath, { recursive: true, force: true });
+    }
+  });
 });

@@ -14,7 +14,7 @@ interface ObservationLine {
 const DATE_HEADING_RE = /^##\s+(\d{4}-\d{2}-\d{2})\s*$/;
 const OBSERVATION_LINE_RE = /^(🔴|🟡|🟢)\s+(.+)$/u;
 const CRITICAL_RE =
-  /\b(decid(?:e|ed|ing|ion)|error|fail(?:ed|ure)?|prefer(?:ence)?|block(?:ed|er)?|must|required?|urgent)\b/i;
+  /(?:\b(?:decision|decided|chose|selected)\s*:|\bdecid(?:e|ed|ing|ion)\b|\berror\b|\bfail(?:ed|ure)?\b|\bprefer(?:ence)?\b|\bblock(?:ed|er)?\b|\bmust\b|\brequired?\b|\burgent\b)/i;
 const NOTABLE_RE = /\b(context|pattern|architecture|approach|trade[- ]?off|milestone|notable)\b/i;
 
 export class Compressor {
@@ -256,13 +256,47 @@ export class Compressor {
       return this.renderSections(incomingSections);
     }
 
+    for (const [date, lines] of existingSections.entries()) {
+      existingSections.set(date, this.deduplicateObservationLines(lines));
+    }
+
     for (const [date, lines] of incomingSections.entries()) {
-      const current = existingSections.get(date) ?? [];
-      current.push(...lines);
+      const current = this.deduplicateObservationLines(existingSections.get(date) ?? []);
+      const seen = new Set(current.map((line) => this.normalizeObservationContent(line.content)));
+      for (const line of lines) {
+        const normalized = this.normalizeObservationContent(line.content);
+        if (!normalized || seen.has(normalized)) {
+          continue;
+        }
+        seen.add(normalized);
+        current.push(line);
+      }
       existingSections.set(date, current);
     }
 
     return this.renderSections(existingSections);
+  }
+
+  private deduplicateObservationLines(lines: ObservationLine[]): ObservationLine[] {
+    const deduped: ObservationLine[] = [];
+    const seen = new Set<string>();
+    for (const line of lines) {
+      const normalized = this.normalizeObservationContent(line.content);
+      if (!normalized || seen.has(normalized)) {
+        continue;
+      }
+      seen.add(normalized);
+      deduped.push(line);
+    }
+    return deduped;
+  }
+
+  private normalizeObservationContent(content: string): string {
+    return content
+      .replace(/^\d{2}:\d{2}\s+/, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
   }
 
   private parseSections(markdown: string): Map<string, ObservationLine[]> {

@@ -34,6 +34,9 @@ const CATEGORY_PATTERNS: Array<{ category: string; patterns: RegExp[] }> = [
     patterns: [
       /\b(said|asked|told|mentioned|emailed|called|messaged|met with)\b/i,
       /\b(client|partner|team|colleague|contact)\b/i,
+      /\b(?:Pedro|Justin|Maria|Sarah|[A-Z][a-z]+ (?:said|asked|told|mentioned))\b/,
+      /\b(?:talked to|met with)\s+[A-Z][a-z]+\b/i,
+      /\b[A-Z][a-z]+\s+from\b/,
     ],
   },
   {

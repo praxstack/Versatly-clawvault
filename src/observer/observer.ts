@@ -4,6 +4,16 @@ import { Compressor } from './compressor.js';
 import { Reflector } from './reflector.js';
 import { Router } from './router.js';
 
+type ObservationPriority = '🔴' | '🟡' | '🟢';
+
+interface ObservationLine {
+  priority: ObservationPriority;
+  content: string;
+}
+
+const DATE_HEADING_RE = /^##\s+(\d{4}-\d{2}-\d{2})\s*$/;
+const OBSERVATION_LINE_RE = /^(🔴|🟡|🟢)\s+(.+)$/u;
+
 export interface ObserverCompressor {
   compress(messages: string[], existingObservations: string): Promise<string>;
 }
@@ -63,9 +73,14 @@ export class Observer {
     }
 
     const todayPath = this.getObservationPath(this.now());
-    const existing = this.readObservationFile(todayPath);
-    const compressed = (await this.compressor.compress(this.pendingMessages, existing)).trim();
+    const existingRaw = this.readObservationFile(todayPath);
+    const existing = this.deduplicateObservationMarkdown(existingRaw);
+    if (existingRaw.trim() !== existing) {
+      this.writeObservationFile(todayPath, existing);
+    }
+    const compressedRaw = (await this.compressor.compress(this.pendingMessages, existing)).trim();
     this.pendingMessages = [];
+    const compressed = this.deduplicateObservationMarkdown(compressedRaw);
 
     if (!compressed) {
       return;
@@ -93,9 +108,14 @@ export class Observer {
     }
 
     const todayPath = this.getObservationPath(this.now());
-    const existing = this.readObservationFile(todayPath);
-    const compressed = (await this.compressor.compress(this.pendingMessages, existing)).trim();
+    const existingRaw = this.readObservationFile(todayPath);
+    const existing = this.deduplicateObservationMarkdown(existingRaw);
+    if (existingRaw.trim() !== existing) {
+      this.writeObservationFile(todayPath, existing);
+    }
+    const compressedRaw = (await this.compressor.compress(this.pendingMessages, existing)).trim();
     this.pendingMessages = [];
+    const compressed = this.deduplicateObservationMarkdown(compressedRaw);
 
     if (compressed) {
       this.writeObservationFile(todayPath, compressed);
@@ -159,6 +179,91 @@ export class Observer {
       .map((filePath) => this.readObservationFile(filePath))
       .filter(Boolean)
       .join('\n\n');
+  }
+
+  private deduplicateObservationMarkdown(markdown: string): string {
+    const parsed = this.parseSections(markdown);
+    if (parsed.size === 0) {
+      return markdown.trim();
+    }
+
+    for (const [date, lines] of parsed.entries()) {
+      const seen = new Set<string>();
+      const deduped: ObservationLine[] = [];
+      for (const line of lines) {
+        const normalized = this.normalizeObservationContent(line.content);
+        if (!normalized || seen.has(normalized)) {
+          continue;
+        }
+        seen.add(normalized);
+        deduped.push(line);
+      }
+      parsed.set(date, deduped);
+    }
+
+    return this.renderSections(parsed);
+  }
+
+  private parseSections(markdown: string): Map<string, ObservationLine[]> {
+    const sections = new Map<string, ObservationLine[]>();
+    let currentDate: string | null = null;
+
+    for (const rawLine of markdown.split(/\r?\n/)) {
+      const dateMatch = rawLine.match(DATE_HEADING_RE);
+      if (dateMatch) {
+        currentDate = dateMatch[1];
+        if (!sections.has(currentDate)) {
+          sections.set(currentDate, []);
+        }
+        continue;
+      }
+
+      if (!currentDate) {
+        continue;
+      }
+
+      const lineMatch = rawLine.match(OBSERVATION_LINE_RE);
+      if (!lineMatch) {
+        continue;
+      }
+
+      const current = sections.get(currentDate) ?? [];
+      current.push({
+        priority: lineMatch[1] as ObservationPriority,
+        content: lineMatch[2].trim()
+      });
+      sections.set(currentDate, current);
+    }
+
+    return sections;
+  }
+
+  private renderSections(sections: Map<string, ObservationLine[]>): string {
+    const chunks: string[] = [];
+    const dates = [...sections.keys()].sort((a, b) => a.localeCompare(b));
+
+    for (const date of dates) {
+      const lines = sections.get(date) ?? [];
+      if (lines.length === 0) {
+        continue;
+      }
+      chunks.push(`## ${date}`);
+      chunks.push('');
+      for (const line of lines) {
+        chunks.push(`${line.priority} ${line.content}`);
+      }
+      chunks.push('');
+    }
+
+    return chunks.join('\n').trim();
+  }
+
+  private normalizeObservationContent(content: string): string {
+    return content
+      .replace(/^\d{2}:\d{2}\s+/, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
   }
 
   private async reflectIfNeeded(): Promise<void> {

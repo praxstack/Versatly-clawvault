@@ -2,7 +2,7 @@ import * as path from 'path';
 import type { Command } from 'commander';
 import { ClawVault } from '../lib/vault.js';
 import { parseObservationLines, readObservations } from '../lib/observation-reader.js';
-import { fitWithinBudget } from '../lib/token-counter.js';
+import { estimateTokens } from '../lib/token-counter.js';
 import type { Document, SearchResult } from '../types.js';
 
 const DEFAULT_LIMIT = 5;
@@ -81,9 +81,7 @@ export function formatContextMarkdown(task: string, entries: ContextEntry[]): st
 
 interface PrioritizedContextItem {
   entry: ContextEntry;
-  text: string;
   priority: number;
-  source: string;
 }
 
 function estimateSnippet(source: string): string {
@@ -205,11 +203,8 @@ async function buildDailyContextItems(vault: ClawVault): Promise<PrioritizedCont
 
     const relativePath = path.relative(vault.getPath(), document.path).split(path.sep).join('/');
     const snippet = estimateSnippet(document.content);
-    const sourceId = `daily:${date}:${relativePath}`;
     items.push({
       priority: 2,
-      source: sourceId,
-      text: `${date}\n${snippet}`,
       entry: {
         title: `Daily note ${date}`,
         path: relativePath,
@@ -231,17 +226,14 @@ function buildObservationContextItems(vaultPath: string): PrioritizedContextItem
   const parsed = parseObservationLines(observationMarkdown);
   const items: PrioritizedContextItem[] = [];
 
-  for (const [index, observation] of parsed.entries()) {
+  for (const observation of parsed) {
     const priority = observationPriorityToRank(observation.priority);
     const modifiedDate = asDate(observation.date, new Date());
     const date = observation.date || modifiedDate.toISOString().slice(0, 10);
     const snippet = estimateSnippet(observation.content);
-    const sourceId = `observation:${priority}:${date}:${index}`;
 
     items.push({
       priority,
-      source: sourceId,
-      text: `${observation.priority} ${date}\n${snippet}`,
       entry: {
         title: `${observation.priority} observation (${date})`,
         path: `observations/${date}.md`,
@@ -259,7 +251,7 @@ function buildObservationContextItems(vaultPath: string): PrioritizedContextItem
 }
 
 function buildSearchContextItems(vault: ClawVault, results: SearchResult[]): PrioritizedContextItem[] {
-  return results.map((result, index): PrioritizedContextItem => {
+  return results.map((result): PrioritizedContextItem => {
     const relativePath = path.relative(vault.getPath(), result.document.path).split(path.sep).join('/');
     const entry: ContextEntry = {
       title: result.document.title,
@@ -274,36 +266,56 @@ function buildSearchContextItems(vault: ClawVault, results: SearchResult[]): Pri
 
     return {
       priority: 3,
-      source: `search:${index}:${entry.path}`,
-      text: `${entry.title}\n${entry.snippet}`,
       entry
     };
   });
 }
 
-function applyTokenBudget(items: PrioritizedContextItem[], budget?: number): ContextEntry[] {
-  if (budget === undefined) {
-    return items.map((item) => item.entry);
+function renderEntryBlock(entry: ContextEntry): string {
+  return `### ${entry.title} (${entry.source}, score: ${entry.score.toFixed(2)}, ${entry.age})\n${entry.snippet}\n\n`;
+}
+
+function truncateToBudget(text: string, budget: number): string {
+  if (!Number.isFinite(budget) || budget <= 0) {
+    return '';
   }
 
-  const selected = fitWithinBudget(
-    items.map((item) => ({
-      text: item.text,
-      priority: item.priority,
-      source: item.source
-    })),
-    budget
-  );
+  const maxChars = Math.max(0, Math.floor(budget) * 4);
+  if (text.length <= maxChars) {
+    return text;
+  }
+  return text.slice(0, maxChars).trimEnd();
+}
 
-  const bySource = new Map(items.map((item) => [item.source, item.entry]));
+function applyTokenBudget(items: PrioritizedContextItem[], task: string, budget?: number): { context: ContextEntry[]; markdown: string } {
+  const fullContext = items.map((item) => item.entry);
+  const fullMarkdown = formatContextMarkdown(task, fullContext);
+
+  if (budget === undefined) {
+    return { context: fullContext, markdown: fullMarkdown };
+  }
+
+  const normalizedBudget = Math.max(1, Math.floor(budget));
+  const header = `## Relevant Context for: ${task}\n\n`;
+  let remaining = normalizedBudget - estimateTokens(header);
   const selectedEntries: ContextEntry[] = [];
-  for (const selectedItem of selected) {
-    const entry = bySource.get(selectedItem.source);
-    if (entry) {
-      selectedEntries.push(entry);
+
+  for (const item of [...items].sort((a, b) => a.priority - b.priority)) {
+    if (remaining <= 0) {
+      break;
+    }
+    const cost = estimateTokens(renderEntryBlock(item.entry));
+    if (cost <= remaining) {
+      selectedEntries.push(item.entry);
+      remaining -= cost;
     }
   }
-  return selectedEntries;
+
+  const markdown = truncateToBudget(formatContextMarkdown(task, selectedEntries), normalizedBudget);
+  return {
+    context: selectedEntries,
+    markdown
+  };
 }
 
 export async function buildContext(task: string, options: ContextOptions): Promise<ContextResult> {
@@ -342,13 +354,13 @@ export async function buildContext(task: string, options: ContextOptions): Promi
     ...greenObservations
   ];
 
-  const context = applyTokenBudget(ordered, options.budget);
+  const { context, markdown } = applyTokenBudget(ordered, normalizedTask, options.budget);
 
   return {
     task: normalizedTask,
     generated: new Date().toISOString(),
     context,
-    markdown: formatContextMarkdown(normalizedTask, context)
+    markdown
   };
 }
 
