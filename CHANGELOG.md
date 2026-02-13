@@ -79,6 +79,7 @@
 - Consolidated `npm run ci` now includes build-backed contract validation (`test:compat-contract:fast`) before full compatibility fixture execution for earlier contract drift failure signals.
 - `compat` diagnostics now warn when `openclaw --version` exits non-zero (not only missing binary), and skill metadata checks now parse frontmatter with explicit hint guidance for missing `metadata.openclaw`.
 - Fast compatibility checks now validate build freshness (`src/commands/compat.ts` vs `dist/commands/compat.js`) and fail early on stale artifacts to prevent false local results.
+- Skill metadata compatibility diagnostics now distinguish malformed `SKILL.md` frontmatter from missing metadata and emit clearer warning details with actionable hints.
 
 ## [1.11.2] - 2026-02-12
 
