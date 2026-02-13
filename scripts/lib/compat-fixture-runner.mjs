@@ -195,6 +195,33 @@ export function evaluateCaseReport(testCase, report, actualExitCode) {
   };
 }
 
+export function validateExpectedCheckLabels(cases, availableLabels) {
+  const knownLabels = new Set(availableLabels);
+  const unknownByCase = [];
+
+  for (const testCase of cases) {
+    const expectedLabels = new Set([
+      ...Object.keys(testCase.expectedCheckStatuses ?? {}),
+      ...Object.keys(testCase.expectedDetailIncludes ?? {}),
+      ...Object.keys(testCase.expectedHintIncludes ?? {})
+    ]);
+    const unknownLabels = [...expectedLabels].filter((label) => !knownLabels.has(label));
+    if (unknownLabels.length > 0) {
+      unknownByCase.push({
+        caseName: testCase.name,
+        labels: unknownLabels
+      });
+    }
+  }
+
+  if (unknownByCase.length > 0) {
+    const formatted = unknownByCase
+      .map((entry) => `${entry.caseName}: ${entry.labels.join(', ')}`)
+      .join('; ');
+    throw new Error(`compat fixture cases reference unknown check labels: ${formatted}`);
+  }
+}
+
 export function assertFixtureFiles(caseName, fixturePath, requiredPaths = REQUIRED_FIXTURE_FILES, allowMissingFiles = []) {
   const allowedMissing = new Set(allowMissingFiles);
   const missing = requiredPaths

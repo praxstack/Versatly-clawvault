@@ -10,6 +10,7 @@ import {
   loadCases,
   parseCompatReport,
   selectCases,
+  validateExpectedCheckLabels,
   validateFixtureDirectoryCoverage,
   validateFixtureReadmeCoverage
 } from './compat-fixture-runner.mjs';
@@ -170,6 +171,20 @@ describe('compat fixture runner utilities', () => {
     expect(() => ensureCompatReportShape(report, 'healthy')).not.toThrow();
     expect(parseCompatReport(JSON.stringify(report), 'healthy')).toEqual(report);
     expect(() => parseCompatReport('{}', 'bad')).toThrow('invalid JSON report');
+  });
+
+  it('validates expected check labels against available report labels', () => {
+    const cases = [
+      {
+        name: 'healthy',
+        description: 'ok',
+        expectedCheckStatuses: { 'hook handler safety': 'ok' },
+        expectedDetailIncludes: { 'hook handler safety': 'all good' },
+        expectedHintIncludes: { 'hook handler safety': 'execFileSync' }
+      }
+    ];
+    expect(() => validateExpectedCheckLabels(cases, ['hook handler safety'])).not.toThrow();
+    expect(() => validateExpectedCheckLabels(cases, ['skill metadata'])).toThrow('unknown check labels');
   });
 
   it('evaluates expected report signals and surfaces mismatches', () => {

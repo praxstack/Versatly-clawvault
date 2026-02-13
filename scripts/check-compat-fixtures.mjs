@@ -9,6 +9,7 @@ import {
   loadCases,
   parseCompatReport,
   selectCases,
+  validateExpectedCheckLabels,
   validateFixtureDirectoryCoverage,
   validateFixtureReadmeCoverage
 } from './lib/compat-fixture-runner.mjs';
@@ -105,6 +106,26 @@ function runCase(testCase, env) {
   };
 }
 
+function discoverCompatCheckLabels(env) {
+  const healthyFixturePath = path.join(fixturesRoot, 'healthy');
+  const result = spawnSync(
+    process.execPath,
+    ['./bin/clawvault.js', 'compat', '--base-dir', healthyFixturePath, '--json'],
+    {
+      cwd: repoRoot,
+      env,
+      encoding: 'utf-8'
+    }
+  );
+
+  if (result.status !== 0) {
+    throw new Error(`Unable to discover compatibility check labels from healthy fixture (exit ${String(result.status)})`);
+  }
+
+  const report = parseCompatReport(result.stdout, 'healthy-label-discovery');
+  return report.checks.map((check) => check.label);
+}
+
 function main() {
   if (!fs.existsSync(distEntryPath)) {
     throw new Error('Missing dist/index.js. Run `npm run build` before running compatibility fixture checks.');
@@ -122,6 +143,8 @@ function main() {
   };
 
   try {
+    const availableLabels = discoverCompatCheckLabels(env);
+    validateExpectedCheckLabels(allCases, availableLabels);
     const results = cases.map((testCase) => runCase(testCase, env));
     writeSummaryReport({
       generatedAt: new Date().toISOString(),
