@@ -63,6 +63,21 @@ export {
   QMD_INSTALL_COMMAND,
   QMD_INSTALL_URL
 } from './lib/search.js';
+export {
+  MEMORY_GRAPH_SCHEMA_VERSION,
+  buildOrUpdateMemoryGraphIndex,
+  getMemoryGraph,
+  loadMemoryGraphIndex
+} from './lib/memory-graph.js';
+export type {
+  MemoryGraph,
+  MemoryGraphNode,
+  MemoryGraphEdge,
+  MemoryGraphEdgeType,
+  MemoryGraphNodeType,
+  MemoryGraphIndex,
+  MemoryGraphStats
+} from './lib/memory-graph.js';
 export { Observer } from './observer/observer.js';
 export type { ObserverOptions, ObserverCompressor, ObserverReflector } from './observer/observer.js';
 export { Compressor } from './observer/compressor.js';
