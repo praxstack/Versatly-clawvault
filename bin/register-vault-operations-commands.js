@@ -10,9 +10,7 @@ export function registerVaultOperationsCommands(
     getVault,
     runQmd,
     resolveVaultPath,
-    path,
-    QmdUnavailableError,
-    printQmdMissing
+    path
   }
 ) {
   // === LIST ===

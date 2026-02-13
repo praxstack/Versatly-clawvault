@@ -10,7 +10,6 @@ import chalk from 'chalk';
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawn } from 'child_process';
-import { createInterface } from 'readline/promises';
 import { registerMaintenanceCommands } from './register-maintenance-commands.js';
 import { registerCoreCommands } from './register-core-commands.js';
 import { registerQueryCommands } from './register-query-commands.js';
@@ -110,20 +109,6 @@ function printQmdMissing() {
   console.log(chalk.dim(`Install: ${QMD_INSTALL_COMMAND}`));
 }
 
-function parseBooleanInput(value, defaultValue = true) {
-  const normalized = value.trim().toLowerCase();
-  if (!normalized) {
-    return defaultValue;
-  }
-  if (['y', 'yes', 'true', '1'].includes(normalized)) {
-    return true;
-  }
-  if (['n', 'no', 'false', '0'].includes(normalized)) {
-    return false;
-  }
-  return null;
-}
-
 program
   .name('clawvault')
   .description('🐘 An elephant never forgets. Structured memory for AI agents.')
@@ -164,9 +149,7 @@ registerVaultOperationsCommands(program, {
   getVault,
   runQmd,
   resolveVaultPath,
-  path,
-  QmdUnavailableError,
-  printQmdMissing
+  path
 });
 
 // Parse and run
