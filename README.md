@@ -252,7 +252,7 @@ npm run test:compat-fixtures:fast
 
 # Optional: write per-fixture JSON reports to a directory
 COMPAT_REPORT_DIR=/tmp/clawvault-compat-reports npm run test:compat-fixtures
-# includes per-case reports and summary.json (mode/schemaVersion/selectedCases + expected/runtime labels + preflight/overall timing + slowest cases)
+# includes per-case reports and summary.json (mode/schemaVersion/selectedCases + expected/runtime labels + passed/failed case lists + preflight/overall timing + slowest cases)
 ```
 
 

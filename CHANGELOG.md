@@ -98,6 +98,7 @@
 - Compatibility fixture runner now logs the resolved case selection set before execution, improving observability for targeted `COMPAT_CASES` runs.
 - Fixture manifest validation now restricts `allowMissingFiles` entries to known required fixture paths, preventing typo-induced false assumptions in drift scenarios.
 - Fixture manifest now enforces lowercase kebab-case identifiers for fixture case names, improving consistency between declarative contracts and directory naming.
+- Compatibility summary generation now uses a shared fixture pass/fail summarizer utility, and summary artifacts explicitly include `passedCases` / `failedCases` lists for triage.
 
 ## [1.11.2] - 2026-02-12
 
