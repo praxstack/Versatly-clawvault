@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  REQUIRED_COMPAT_CI_REACHABLE_SCRIPT_NAMES,
   REQUIRED_COMPAT_CI_SEQUENCE,
   REQUIRED_COMPAT_ARTIFACT_CLI_DRIFT_PATHS,
   REQUIRED_COMPAT_ARTIFACT_STACK_SEQUENCE,
@@ -20,7 +21,9 @@ function expectNonEmptyUniqueStringArray(values, label) {
 describe('compat npm script contracts constants', () => {
   it('keeps required script names unique and non-empty', () => {
     expectNonEmptyUniqueStringArray(REQUIRED_COMPAT_NPM_SCRIPT_NAMES, 'REQUIRED_COMPAT_NPM_SCRIPT_NAMES');
+    expectNonEmptyUniqueStringArray(REQUIRED_COMPAT_CI_REACHABLE_SCRIPT_NAMES, 'REQUIRED_COMPAT_CI_REACHABLE_SCRIPT_NAMES');
     expectNonEmptyUniqueStringArray(REQUIRED_COMPAT_SCRIPT_REFERENCE_SOURCES, 'REQUIRED_COMPAT_SCRIPT_REFERENCE_SOURCES');
+    expect(REQUIRED_COMPAT_CI_REACHABLE_SCRIPT_NAMES).toEqual(REQUIRED_COMPAT_NPM_SCRIPT_NAMES);
     expect(REQUIRED_COMPAT_SCRIPT_REFERENCE_SOURCES.every((name) => REQUIRED_COMPAT_NPM_SCRIPT_NAMES.includes(name))).toBe(true);
   });
 

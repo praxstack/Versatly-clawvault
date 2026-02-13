@@ -200,6 +200,7 @@
 - Npm script-stack contract checks now build a transitive reachable npm-run graph from required stack sources and enforce both resolvability and cycle-safety across that graph, improving protection against nested script wiring regressions.
 - Npm script-stack graph parsing/traversal logic is now centralized in shared helpers (`compat-npm-script-graph-utils`) with dedicated unit coverage, reducing duplicate regex/graph logic in stack-contract tests and making future script-governance checks easier to extend safely.
 - Added `test:compat-script-stack-contract:fast` and wired it into `test:compat-summary:fast`, so fast compatibility flows now enforce npm-script stack wiring contracts before fixture/schema validators run.
+- Npm script-stack contract constants now also encode required CI-reachable compat script domain, and stack-contract tests assert those scripts are reachable from `ci` via the transitive npm-run graph, tightening end-to-end workflow wiring guarantees.
 - Added `test:compat-artifact-cli-drift:fast` and wired it into `test:compat-artifact-stack:fast`, ensuring artifact CLI drift-regression suites run in the fast compatibility artifact stack gate (not only in full-unit-test runs).
 - Compatibility npm workflows are now modularized into composable stack scripts (`test:compat-report-stack:fast`, `test:compat-validator-stack:fast`, `test:compat-artifact-stack:fast`) so `test:compat-summary:fast` remains maintainable as contract gates grow.
 

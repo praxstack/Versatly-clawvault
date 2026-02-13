@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
+  REQUIRED_COMPAT_CI_REACHABLE_SCRIPT_NAMES,
   REQUIRED_COMPAT_CI_SEQUENCE,
   REQUIRED_COMPAT_ARTIFACT_CLI_DRIFT_PATHS,
   REQUIRED_COMPAT_ARTIFACT_STACK_SEQUENCE,
@@ -130,5 +131,23 @@ describe('compat npm script stack contracts', () => {
       REQUIRED_COMPAT_CI_SEQUENCE,
       'ci'
     );
+  });
+
+  it('keeps required compat scripts reachable from ci npm-run graph', () => {
+    const scripts = loadPackageScripts();
+    const { unresolvedScripts, visitedScripts } = buildReachableNpmRunGraph({
+      scripts,
+      sourceScripts: ['ci']
+    });
+    expect(
+      [...unresolvedScripts],
+      'cannot evaluate ci reachability contracts with unresolved npm-run targets'
+    ).toEqual([]);
+    for (const requiredScriptName of REQUIRED_COMPAT_CI_REACHABLE_SCRIPT_NAMES) {
+      expect(
+        visitedScripts.has(requiredScriptName),
+        `ci npm-run graph does not reach required compat script: ${requiredScriptName}`
+      ).toBe(true);
+    }
   });
 });

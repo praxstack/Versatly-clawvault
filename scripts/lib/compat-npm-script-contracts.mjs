@@ -9,6 +9,10 @@ export const REQUIRED_COMPAT_NPM_SCRIPT_NAMES = Object.freeze([
   'test:compat-artifact-cli-drift:fast'
 ]);
 
+export const REQUIRED_COMPAT_CI_REACHABLE_SCRIPT_NAMES = Object.freeze([
+  ...REQUIRED_COMPAT_NPM_SCRIPT_NAMES
+]);
+
 export const REQUIRED_COMPAT_SCRIPT_REFERENCE_SOURCES = Object.freeze([
   'ci',
   'test:compat-summary:fast',
