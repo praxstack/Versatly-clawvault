@@ -219,7 +219,7 @@ npm run test:compat-fixtures
 # fixture manifest includes schemaVersion for explicit contract evolution (current schemaVersion=2)
 # includes expectedCheckLabels to lock compat check-label contract
 # supports expected status, detail snippets, and hint snippets per check
-# supports openclawExitCode for declarative CLI failure simulation cases
+# supports openclawExitCode/openclawSignal for declarative CLI failure simulation cases
 # each case also owns its scenario description (README coverage is validated)
 # expected check labels are validated against live compat output to catch stale contracts
 # includes a fresh build before running fixtures
