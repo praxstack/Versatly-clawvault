@@ -98,6 +98,9 @@ export function loadCaseManifest(casesPath) {
       if (typeof label !== 'string' || !label) {
         throw new Error(`compat fixture case[${index}] has invalid status label`);
       }
+      if (!expectedCheckLabelSet.has(label)) {
+        throw new Error(`compat fixture case[${index}] expectedCheckStatuses references undeclared check label: ${label}`);
+      }
       if (!VALID_CHECK_STATUSES.has(status)) {
         throw new Error(`compat fixture case[${index}] has invalid status "${status}" for "${label}"`);
       }

@@ -571,6 +571,32 @@ describe('compat fixture runner utilities', () => {
     expect(() => validateExpectedCheckLabels(cases, ['skill metadata'])).toThrow('unknown check labels');
   });
 
+  it('rejects expectedCheckStatuses labels that are not declared in expectedCheckLabels', () => {
+    const root = makeTempDir('compat-cases-');
+    const file = path.join(root, 'cases.json');
+    fs.writeFileSync(file, JSON.stringify({
+      schemaVersion: COMPAT_FIXTURE_SCHEMA_VERSION,
+      expectedCheckLabels: ['hook handler safety'],
+      cases: [
+        {
+          name: 'undeclared-status-label',
+          description: 'status labels must be declared by expectedCheckLabels.',
+          expectedExitCode: 1,
+          expectedWarnings: 1,
+          expectedErrors: 0,
+          expectedCheckStatuses: {
+            'skill metadata': 'warn'
+          }
+        }
+      ]
+    }), 'utf-8');
+    try {
+      expect(() => loadCases(file)).toThrow('expectedCheckStatuses references undeclared check label');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('validates declared compat label contract against runtime labels', () => {
     expect(() => validateDeclaredCheckLabels(
       ['openclaw CLI available', 'hook handler safety'],
