@@ -159,10 +159,12 @@ function main() {
   };
 
   try {
+    const preflightStartedAtMs = Date.now();
     const availableLabels = discoverCompatCheckLabels(env);
     validateDeclaredCheckLabels(manifest.expectedCheckLabels, availableLabels);
     validateExpectedCheckLabels(allCases, manifest.expectedCheckLabels);
     validateCheckStatusCoverage(allCases, manifest.expectedCheckLabels);
+    const preflightDurationMs = Date.now() - preflightStartedAtMs;
     if (validateOnly) {
       writeSummaryReport(compatReportDir, {
         generatedAt: new Date().toISOString(),
@@ -172,9 +174,12 @@ function main() {
         expectedCheckLabels: manifest.expectedCheckLabels,
         runtimeCheckLabels: availableLabels,
         total: 0,
+        preflightDurationMs,
+        totalDurationMs: preflightDurationMs,
         failures: 0,
         results: []
       });
+      console.log(`Compatibility contract runtime: ${preflightDurationMs}ms`);
       console.log('Compatibility fixture contract validation passed.');
       return;
     }
@@ -183,6 +188,7 @@ function main() {
     const averageDurationMs = results.length > 0
       ? Math.round(totalDurationMs / results.length)
       : 0;
+    const overallDurationMs = preflightDurationMs + totalDurationMs;
     writeSummaryReport(compatReportDir, {
       generatedAt: new Date().toISOString(),
       mode: 'fixtures',
@@ -191,8 +197,10 @@ function main() {
       expectedCheckLabels: manifest.expectedCheckLabels,
       runtimeCheckLabels: availableLabels,
       total: results.length,
+      preflightDurationMs,
       totalDurationMs,
       averageDurationMs,
+      overallDurationMs,
       failures: results.filter((result) => !result.passed).length,
       results
     });
@@ -203,7 +211,7 @@ function main() {
       process.exit(1);
     }
 
-    console.log(`Compatibility fixtures runtime: total=${totalDurationMs}ms avg=${averageDurationMs}ms`);
+    console.log(`Compatibility fixtures runtime: preflight=${preflightDurationMs}ms total=${totalDurationMs}ms avg=${averageDurationMs}ms overall=${overallDurationMs}ms`);
     console.log('Compatibility fixture check passed.');
   } finally {
     fs.rmSync(shimDir, { recursive: true, force: true });
