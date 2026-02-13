@@ -73,6 +73,7 @@
 - Compatibility fixture runner now supports contract-only mode (`COMPAT_VALIDATE_ONLY=1`) and dedicated scripts (`test:compat-contract`, `test:compat-contract:fast`) for quick manifest/docs/runtime-label validation.
 - Compatibility smoke workflow now runs fast contract validation before the healthy fixture case, improving early drift detection during local iteration.
 - Compatibility fixture summary artifacts now include execution metadata (`mode`, `schemaVersion`, `selectedCases`) for clearer CI triage across contract-only and full fixture runs.
+- Compatibility report artifact writing (`summary.json`, per-case JSON) is now centralized in fixture-runner library utilities with dedicated unit coverage.
 
 ## [1.11.2] - 2026-02-12
 
