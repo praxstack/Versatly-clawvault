@@ -7,9 +7,11 @@ import {
   countStepNameOccurrences,
   extractEnvField,
   extractJobBlock,
+  extractJobTopLevelFieldNames,
   extractJobMetadata,
   extractPushBranches,
   extractNestedSectionFieldNames,
+  extractTopLevelFieldNames,
   extractTopLevelJobNames,
   extractRunCommand,
   extractScalarField,
@@ -60,6 +62,7 @@ jobs:
 describe('compat ci workflow test utils', () => {
   it('extracts workflow-level trigger metadata', () => {
     expect(extractWorkflowName(`\n${SAMPLE_WORKFLOW_YAML}\n`)).toBe('CI');
+    expect(extractTopLevelFieldNames(`\n${SAMPLE_WORKFLOW_YAML}\n`)).toEqual(['name', 'on', 'jobs']);
     expect(countTopLevelFieldOccurrences(`\n${SAMPLE_WORKFLOW_YAML}\n`, 'name')).toBe(1);
     expect(countTopLevelFieldOccurrences(`\n${SAMPLE_WORKFLOW_YAML}\n`, 'on')).toBe(1);
     expect(countTopLevelFieldOccurrences(`\n${SAMPLE_WORKFLOW_YAML}\n`, 'jobs')).toBe(1);
@@ -78,6 +81,7 @@ describe('compat ci workflow test utils', () => {
     expect(jobBlock).toContain('- name: Upload');
     expect(jobBlock).not.toContain('second-job:');
     expect(extractScalarField(jobBlock, 'runs-on')).toBe('ubuntu-latest');
+    expect(extractJobTopLevelFieldNames(jobBlock)).toEqual(['runs-on', 'steps']);
     expect(countJobNameOccurrences(`\n${SAMPLE_WORKFLOW_YAML}\n`, 'test-and-compat')).toBe(1);
     expect(countJobNameOccurrences(`\n${SAMPLE_WORKFLOW_YAML}\n`, 'Missing Job')).toBe(0);
     expect(countScalarFieldOccurrences(jobBlock, 'runs-on')).toBe(1);
@@ -131,8 +135,10 @@ describe('compat ci workflow test utils', () => {
     expect(extractUploadArtifactPaths('- name: Upload\n  uses: actions/upload-artifact@v4')).toBe(null);
     expect(countScalarFieldOccurrences('run: npm test', 'missing')).toBe(0);
     expect(extractWorkflowName('jobs:\n  test:\n    runs-on: ubuntu-latest')).toBe(null);
+    expect(extractTopLevelFieldNames('  name: CI\njobs:\n  test:\n    runs-on: ubuntu-latest')).toEqual(['jobs']);
     expect(extractOnTriggerNames('name: CI\njobs:\n  test:\n    runs-on: ubuntu-latest')).toBe(null);
     expect(extractTopLevelJobNames('name: CI\non:\n  pull_request:')).toBe(null);
+    expect(extractJobTopLevelFieldNames('name: CI\njobs:\n  # no concrete job header')).toBe(null);
     expect(extractPushBranches('on:\n  pull_request:')).toBe(null);
     expect(hasPullRequestTrigger('on:\n  push:\n    branches:\n      - main')).toBe(false);
   });

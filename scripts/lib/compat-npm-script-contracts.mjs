@@ -55,6 +55,9 @@ export const REQUIRED_COMPAT_CI_WORKFLOW_UNIQUE_FIELD_NAMES = Object.freeze([
   'on',
   'jobs'
 ]);
+export const REQUIRED_COMPAT_CI_WORKFLOW_FIELD_NAMES = Object.freeze([
+  ...REQUIRED_COMPAT_CI_WORKFLOW_UNIQUE_FIELD_NAMES
+]);
 export const REQUIRED_COMPAT_CI_TRIGGER_PUSH_BRANCHES = Object.freeze([
   'main',
   'master',
@@ -93,6 +96,9 @@ export const REQUIRED_COMPAT_CI_JOB_UNIQUE_FIELD_NAMES = Object.freeze([
   'runs-on',
   'timeout-minutes',
   'steps'
+]);
+export const REQUIRED_COMPAT_CI_JOB_FIELD_NAMES = Object.freeze([
+  ...REQUIRED_COMPAT_CI_JOB_UNIQUE_FIELD_NAMES
 ]);
 export const REQUIRED_COMPAT_CI_SETUP_NODE_STEP_NAME = 'Setup Node';
 export const REQUIRED_COMPAT_CI_SETUP_NODE_USES = 'actions/setup-node@v4';

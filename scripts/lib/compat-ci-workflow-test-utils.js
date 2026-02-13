@@ -7,6 +7,14 @@ export function extractWorkflowName(workflowYaml) {
   return match ? match[1].trim() : null;
 }
 
+export function extractTopLevelFieldNames(workflowYaml) {
+  return workflowYaml
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .filter((line) => /^[A-Za-z0-9_-]+:\s*/.test(line))
+    .map((line) => line.replace(/^([A-Za-z0-9_-]+):.*/, '$1'));
+}
+
 export function extractOnTriggerNames(workflowYaml) {
   const lines = workflowYaml.split('\n');
   const onLineIndex = lines.findIndex((line) => /^on:\s*$/.test(line.trim()));
@@ -87,6 +95,25 @@ export function extractJobMetadata(workflowYaml, jobName) {
 
 export function extractJobBlock(workflowYaml, jobName) {
   return extractJobMetadata(workflowYaml, jobName)?.block ?? null;
+}
+
+export function extractJobTopLevelFieldNames(jobBlock) {
+  const lines = jobBlock.split('\n');
+  const jobHeaderLine = lines.find((line) => /^\s{2}[A-Za-z0-9_-]+:\s*$/.test(line));
+  if (!jobHeaderLine) {
+    return null;
+  }
+  const jobHeaderIndent = countLeadingSpaces(jobHeaderLine);
+  const jobFieldIndent = jobHeaderIndent + 2;
+  const jobFieldPattern = new RegExp(`^\\s{${jobFieldIndent}}([A-Za-z0-9-]+):\\s*`);
+  const fieldNames = [];
+  for (const line of lines) {
+    const fieldMatch = jobFieldPattern.exec(line);
+    if (fieldMatch) {
+      fieldNames.push(fieldMatch[1]);
+    }
+  }
+  return fieldNames;
 }
 
 export function countJobNameOccurrences(workflowYaml, jobName) {

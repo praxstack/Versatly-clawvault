@@ -6,6 +6,7 @@ import {
   REQUIRED_COMPAT_CI_JOB_NAMES,
   REQUIRED_COMPAT_CI_JOB_RUNS_ON,
   REQUIRED_COMPAT_CI_JOB_TIMEOUT_MINUTES,
+  REQUIRED_COMPAT_CI_JOB_FIELD_NAMES,
   REQUIRED_COMPAT_CI_JOB_UNIQUE_FIELD_NAMES,
   REQUIRED_COMPAT_CI_CHECKOUT_STEP_NAME,
   REQUIRED_COMPAT_CI_CHECKOUT_USES,
@@ -16,6 +17,7 @@ import {
   REQUIRED_COMPAT_CI_FAILURE_UPLOAD_STEP_NAME,
   REQUIRED_COMPAT_CI_FAILURE_UPLOAD_USES,
   REQUIRED_COMPAT_CI_WORKFLOW_NAME,
+  REQUIRED_COMPAT_CI_WORKFLOW_FIELD_NAMES,
   REQUIRED_COMPAT_CI_WORKFLOW_UNIQUE_FIELD_NAMES,
   REQUIRED_COMPAT_CI_TRIGGER_PUSH_BRANCHES,
   REQUIRED_COMPAT_CI_TRIGGER_NAMES,
@@ -49,6 +51,7 @@ import {
   countStepNameOccurrences,
   extractEnvField,
   extractJobBlock,
+  extractJobTopLevelFieldNames,
   extractRunCommand,
   extractScalarField,
   extractStepFieldNames,
@@ -56,6 +59,7 @@ import {
   extractStepMetadata,
   extractPushBranches,
   extractTopLevelJobNames,
+  extractTopLevelFieldNames,
   extractOnTriggerNames,
   extractNestedSectionFieldNames,
   extractStepNames,
@@ -74,6 +78,7 @@ describe('compat ci workflow contract', () => {
   it('keeps workflow identity and top-level fields aligned with contracts', () => {
     const workflowYaml = loadCiWorkflowYaml();
     expect(extractWorkflowName(workflowYaml)).toBe(REQUIRED_COMPAT_CI_WORKFLOW_NAME);
+    expect(extractTopLevelFieldNames(workflowYaml)).toEqual(REQUIRED_COMPAT_CI_WORKFLOW_FIELD_NAMES);
     for (const fieldName of REQUIRED_COMPAT_CI_WORKFLOW_UNIQUE_FIELD_NAMES) {
       expect(
         countTopLevelFieldOccurrences(workflowYaml, fieldName),
@@ -102,6 +107,7 @@ describe('compat ci workflow contract', () => {
     const workflowYaml = loadCiWorkflowYaml();
     const ciJobBlock = extractJobBlock(workflowYaml, REQUIRED_COMPAT_CI_JOB_NAME);
     expect(ciJobBlock, `missing CI workflow job: ${REQUIRED_COMPAT_CI_JOB_NAME}`).toBeTruthy();
+    expect(extractJobTopLevelFieldNames(ciJobBlock)).toEqual(REQUIRED_COMPAT_CI_JOB_FIELD_NAMES);
     expect(extractScalarField(ciJobBlock, 'runs-on')).toBe(REQUIRED_COMPAT_CI_JOB_RUNS_ON);
     expect(extractScalarField(ciJobBlock, 'timeout-minutes')).toBe(REQUIRED_COMPAT_CI_JOB_TIMEOUT_MINUTES);
   });
