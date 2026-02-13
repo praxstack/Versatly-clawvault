@@ -34,6 +34,7 @@
 - Main CLI now uses shared vault path resolution from the config library, reducing drift between command entrypoint and command modules.
 - Config resolver test coverage now includes env-vs-discovery precedence and explicit missing-vault failure behavior.
 - `clawvault compat --strict` now exits non-zero on warnings/errors for CI-friendly OpenClaw compatibility gates.
+- CLI entrypoint runtime helpers (`getVault`, `runQmd`, qmd-missing handling) were extracted into a dedicated module to keep command bootstrap maintainable.
 
 ## [1.11.2] - 2026-02-12
 
