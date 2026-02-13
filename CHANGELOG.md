@@ -52,6 +52,7 @@
 - Compatibility fixture runner internals were extracted into reusable utilities with dedicated unit tests (schema selection/parsing/layout guards) to improve maintainability.
 - Added `tests/compat-fixtures/README.md` documenting fixture layout and scenario intent for easier extension/review.
 - Compatibility fixture runner now emits `summary.json` alongside per-case reports for faster CI artifact triage.
+- Compatibility fixture manifest now includes explicit `schemaVersion` validation to make contract changes intentional and reviewable.
 
 ## [1.11.2] - 2026-02-12
 

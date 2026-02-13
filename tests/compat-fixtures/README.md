@@ -3,6 +3,7 @@
 This directory contains declarative fixtures used by `npm run test:compat-fixtures`.
 
 - `cases.json` is the source of truth for expected outcomes.
+  - includes `schemaVersion` for explicit contract evolution.
 - Each case references a fixture folder with:
   - `package.json`
   - `SKILL.md`
