@@ -10,67 +10,19 @@ import {
   loadCompatArtifactBundleValidatorPayload
 } from './compat-artifact-bundle-validator-output.mjs';
 import {
-  REQUIRED_COMPAT_ARTIFACT_BUNDLE_SCHEMA_IDS,
-  REQUIRED_COMPAT_ARTIFACT_BUNDLE_SCHEMA_PATHS
+  REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_DEFINITIONS
 } from './compat-artifact-bundle-contracts.mjs';
 
 function buildValidArtifactContracts() {
-  return [
-    {
-      artifactName: 'summary.json',
-      artifactPath: '/tmp/reports/summary.json',
-      schemaPath: path.resolve(process.cwd(), REQUIRED_COMPAT_ARTIFACT_BUNDLE_SCHEMA_PATHS['summary.json']),
-      schemaId: REQUIRED_COMPAT_ARTIFACT_BUNDLE_SCHEMA_IDS['summary.json'],
-      versionField: 'summarySchemaVersion',
-      expectedSchemaVersion: 1,
-      actualSchemaVersion: 1
-    },
-    {
-      artifactName: 'report-schema-validator-result.json',
-      artifactPath: '/tmp/reports/report-schema-validator-result.json',
-      schemaPath: path.resolve(process.cwd(), REQUIRED_COMPAT_ARTIFACT_BUNDLE_SCHEMA_PATHS['report-schema-validator-result.json']),
-      schemaId: REQUIRED_COMPAT_ARTIFACT_BUNDLE_SCHEMA_IDS['report-schema-validator-result.json'],
-      versionField: 'outputSchemaVersion',
-      expectedSchemaVersion: 1,
-      actualSchemaVersion: 1
-    },
-    {
-      artifactName: 'validator-result.json',
-      artifactPath: '/tmp/reports/validator-result.json',
-      schemaPath: path.resolve(process.cwd(), REQUIRED_COMPAT_ARTIFACT_BUNDLE_SCHEMA_PATHS['validator-result.json']),
-      schemaId: REQUIRED_COMPAT_ARTIFACT_BUNDLE_SCHEMA_IDS['validator-result.json'],
-      versionField: 'outputSchemaVersion',
-      expectedSchemaVersion: 1,
-      actualSchemaVersion: 1
-    },
-    {
-      artifactName: 'schema-validator-result.json',
-      artifactPath: '/tmp/reports/schema-validator-result.json',
-      schemaPath: path.resolve(process.cwd(), REQUIRED_COMPAT_ARTIFACT_BUNDLE_SCHEMA_PATHS['schema-validator-result.json']),
-      schemaId: REQUIRED_COMPAT_ARTIFACT_BUNDLE_SCHEMA_IDS['schema-validator-result.json'],
-      versionField: 'outputSchemaVersion',
-      expectedSchemaVersion: 1,
-      actualSchemaVersion: 1
-    },
-    {
-      artifactName: 'validator-result-verifier-result.json',
-      artifactPath: '/tmp/reports/validator-result-verifier-result.json',
-      schemaPath: path.resolve(process.cwd(), REQUIRED_COMPAT_ARTIFACT_BUNDLE_SCHEMA_PATHS['validator-result-verifier-result.json']),
-      schemaId: REQUIRED_COMPAT_ARTIFACT_BUNDLE_SCHEMA_IDS['validator-result-verifier-result.json'],
-      versionField: 'outputSchemaVersion',
-      expectedSchemaVersion: 1,
-      actualSchemaVersion: 1
-    },
-    {
-      artifactName: 'artifact-bundle-manifest-validator-result.json',
-      artifactPath: '/tmp/reports/artifact-bundle-manifest-validator-result.json',
-      schemaPath: path.resolve(process.cwd(), REQUIRED_COMPAT_ARTIFACT_BUNDLE_SCHEMA_PATHS['artifact-bundle-manifest-validator-result.json']),
-      schemaId: REQUIRED_COMPAT_ARTIFACT_BUNDLE_SCHEMA_IDS['artifact-bundle-manifest-validator-result.json'],
-      versionField: 'outputSchemaVersion',
-      expectedSchemaVersion: 1,
-      actualSchemaVersion: 1
-    }
-  ];
+  return REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_DEFINITIONS.map((definition) => ({
+    artifactName: definition.artifactName,
+    artifactPath: `/tmp/reports/${definition.artifactFile}`,
+    schemaPath: path.resolve(process.cwd(), definition.schemaPath),
+    schemaId: definition.schemaId,
+    versionField: definition.versionField,
+    expectedSchemaVersion: 1,
+    actualSchemaVersion: 1
+  }));
 }
 
 describe('compat artifact bundle validator output payload contracts', () => {

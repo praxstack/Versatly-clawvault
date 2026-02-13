@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_COUNT,
+  REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_DEFINITIONS,
   REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_FILES,
   REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES,
   REQUIRED_COMPAT_ARTIFACT_BUNDLE_PATH_FIELDS,
@@ -10,6 +11,13 @@ import {
 } from './compat-artifact-bundle-contracts.mjs';
 
 describe('compat artifact bundle contracts constants', () => {
+  it('keeps canonical artifact definitions unique and ordered', () => {
+    expect(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_DEFINITIONS.length).toBe(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_COUNT);
+    const artifactNames = REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_DEFINITIONS.map((entry) => entry.artifactName);
+    expect(new Set(artifactNames).size).toBe(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_COUNT);
+    expect(artifactNames).toEqual(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES);
+  });
+
   it('keeps required artifact names unique and non-empty', () => {
     expect(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES.length).toBeGreaterThan(0);
     expect(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_COUNT).toBe(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES.length);

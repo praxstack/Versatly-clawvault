@@ -11,18 +11,17 @@ import {
 } from './compat-artifact-bundle-manifest-validator-output.mjs';
 import {
   REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_COUNT,
-  REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES,
-  REQUIRED_COMPAT_ARTIFACT_BUNDLE_SCHEMA_IDS,
-  REQUIRED_COMPAT_ARTIFACT_BUNDLE_SCHEMA_PATHS
+  REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_DEFINITIONS,
+  REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES
 } from './compat-artifact-bundle-contracts.mjs';
 
 function buildRequiredSchemaContracts() {
-  return REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES.map((artifactName) => ({
-    artifactName,
-    artifactFile: artifactName,
-    schemaPath: path.resolve(process.cwd(), REQUIRED_COMPAT_ARTIFACT_BUNDLE_SCHEMA_PATHS[artifactName]),
-    schemaId: REQUIRED_COMPAT_ARTIFACT_BUNDLE_SCHEMA_IDS[artifactName],
-    versionField: artifactName === 'summary.json' ? 'summarySchemaVersion' : 'outputSchemaVersion',
+  return REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_DEFINITIONS.map((definition) => ({
+    artifactName: definition.artifactName,
+    artifactFile: definition.artifactFile,
+    schemaPath: path.resolve(process.cwd(), definition.schemaPath),
+    schemaId: definition.schemaId,
+    versionField: definition.versionField,
     expectedSchemaVersion: 1
   }));
 }
