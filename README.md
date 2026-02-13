@@ -211,6 +211,9 @@ clawvault compat --strict   # exits non-zero on warnings/errors
 
 # Run strict compatibility fixture matrix (healthy + intentional drift cases)
 npm run test:compat-fixtures
+
+# Run full local CI gate (typecheck + tests + compat fixtures)
+npm run ci
 ```
 
 

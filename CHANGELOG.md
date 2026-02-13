@@ -42,6 +42,7 @@
 - `compat` command now supports `--base-dir` to validate alternate project roots (used for fixture and CI contract checks).
 - Added compatibility fixture matrix runner (`npm run test:compat-fixtures`) with healthy and drifted OpenClaw integration fixtures.
 - Added GitHub Actions CI workflow running typecheck, tests, and compatibility fixture matrix.
+- Added consolidated `npm run ci` local gate and wired CI workflow to use it for parity with local validation.
 
 ## [1.11.2] - 2026-02-12
 
