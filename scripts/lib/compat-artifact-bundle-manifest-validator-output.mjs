@@ -57,6 +57,9 @@ export function ensureCompatArtifactBundleManifestValidatorPayloadShape(payload)
     assertNonEmptyString(payload.manifestPath, 'manifestPath');
     assertNonNegativeInteger(payload.artifactCount, 'artifactCount');
     assertUniqueNonEmptyStringArray(payload.artifacts, 'artifacts');
+    if (payload.artifacts.length !== payload.artifactCount) {
+      throw new Error('compat artifact bundle manifest validator payload artifacts.length must match artifactCount');
+    }
     if (!Array.isArray(payload.schemaContracts)) {
       throw new Error('compat artifact bundle manifest validator payload field "schemaContracts" must be an array');
     }

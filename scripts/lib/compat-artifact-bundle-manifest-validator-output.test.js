@@ -56,6 +56,32 @@ describe('compat artifact bundle manifest validator output payload contracts', (
       status: 'ok',
       manifestPath: '/tmp/manifest.json',
       artifactCount: 2,
+      artifacts: ['summary.json'],
+      schemaContracts: [
+        {
+          artifactName: 'summary.json',
+          artifactFile: 'summary.json',
+          schemaPath: '/tmp/schemas/compat-summary.schema.json',
+          schemaId: 'https://clawvault.dev/schemas/compat-summary.schema.json',
+          versionField: 'summarySchemaVersion',
+          expectedSchemaVersion: 1
+        },
+        {
+          artifactName: 'validator-result.json',
+          artifactFile: 'validator-result.json',
+          schemaPath: '/tmp/schemas/compat-summary-validator-output.schema.json',
+          schemaId: 'https://clawvault.dev/schemas/compat-summary-validator-output.schema.json',
+          versionField: 'outputSchemaVersion',
+          expectedSchemaVersion: 1
+        }
+      ]
+    })).toThrow('artifacts.length must match artifactCount');
+
+    expect(() => ensureCompatArtifactBundleManifestValidatorPayloadShape({
+      outputSchemaVersion: COMPAT_ARTIFACT_BUNDLE_MANIFEST_VALIDATOR_OUTPUT_SCHEMA_VERSION,
+      status: 'ok',
+      manifestPath: '/tmp/manifest.json',
+      artifactCount: 2,
       artifacts: ['summary.json', 'validator-result.json'],
       schemaContracts: [
         {

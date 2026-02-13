@@ -161,6 +161,7 @@
 - Artifact-bundle coherence now enforces that `report-schema-validator-result.summarySchemaPath` matches the active manifest-derived `summary.json` schema contract path, with dedicated drift coverage in helper and CLI-level tests.
 - Artifact-bundle coherence now also enforces canonical `report-schema-validator-result.caseSchemaPath` parity with the active case-report schema contract path (`schemas/compat-case-report.schema.json`) to prevent drifted case-schema validation artifacts from passing bundle gates.
 - `compat-artifact-bundle-validator-output` JSON schema now encodes required artifact presence in both `verifiedArtifacts` and `artifactContracts` (via `contains` constraints), making standalone schema validation stricter for downstream consumers.
+- Manifest-validator runtime output shape checks now enforce `artifacts.length === artifactCount` explicitly, producing clearer diagnostics when emitted artifact lists drift from declared counts.
 - Compatibility npm workflows are now modularized into composable stack scripts (`test:compat-report-stack:fast`, `test:compat-validator-stack:fast`, `test:compat-artifact-stack:fast`) so `test:compat-summary:fast` remains maintainable as contract gates grow.
 
 ## [1.11.2] - 2026-02-12
