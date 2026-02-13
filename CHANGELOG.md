@@ -12,6 +12,7 @@
 - **Context profiles** for `clawvault context`:
   - `default`, `planning`, `incident`, `handoff`.
 - **CLI command registration smoke tests** for modular command groups.
+- **Expanded CLI registration smoke coverage** across maintenance/resilience/session-lifecycle/template modules, including duplicate-command detection.
 - Doctor now includes an **OpenClaw compatibility** check summary.
 - Dashboard graph parser now emits:
   - typed nodes,
