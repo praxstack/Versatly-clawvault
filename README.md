@@ -245,6 +245,7 @@ npm run ci
 # Optional: run only specific compatibility fixtures
 COMPAT_CASES=healthy,missing-events npm run test:compat-fixtures
 # duplicate COMPAT_CASES entries are rejected to prevent ambiguous selection
+# empty/whitespace-only COMPAT_CASES values are rejected as invalid selection input
 # runner logs resolved case selection before execution for easier verification
 
 # Optional: run fast fixture checks without building
