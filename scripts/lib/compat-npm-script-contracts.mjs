@@ -8,6 +8,14 @@ export const REQUIRED_COMPAT_NPM_SCRIPT_NAMES = Object.freeze([
   'test:compat-artifact-cli-drift:fast'
 ]);
 
+export const REQUIRED_COMPAT_SCRIPT_REFERENCE_SOURCES = Object.freeze([
+  'ci',
+  'test:compat-summary:fast',
+  'test:compat-report-stack:fast',
+  'test:compat-validator-stack:fast',
+  'test:compat-artifact-stack:fast'
+]);
+
 export const REQUIRED_COMPAT_ARTIFACT_CLI_DRIFT_PATHS = Object.freeze([
   'scripts/validate-compat-artifact-bundle-manifest.test.js',
   'scripts/validate-compat-artifact-bundle.test.js'

@@ -7,6 +7,7 @@ import {
   REQUIRED_COMPAT_ARTIFACT_STACK_SEQUENCE,
   REQUIRED_COMPAT_NPM_SCRIPT_NAMES,
   REQUIRED_COMPAT_REPORT_STACK_SEQUENCE,
+  REQUIRED_COMPAT_SCRIPT_REFERENCE_SOURCES,
   REQUIRED_COMPAT_SUMMARY_STACK_SEQUENCE,
   REQUIRED_COMPAT_VALIDATOR_STACK_SEQUENCE
 } from './compat-npm-script-contracts.mjs';
@@ -26,11 +27,31 @@ function expectContainsInOrder(value, parts, label) {
   }
 }
 
+function collectNpmRunTargets(scriptCommand) {
+  const matches = scriptCommand.matchAll(/npm run\s+([^\s&]+)/g);
+  return [...matches].map((match) => match[1]);
+}
+
 describe('compat npm script stack contracts', () => {
   it('keeps required compat script names present', () => {
     const scripts = loadPackageScripts();
     for (const scriptName of REQUIRED_COMPAT_NPM_SCRIPT_NAMES) {
       expect(typeof scripts[scriptName], `missing required script: ${scriptName}`).toBe('string');
+    }
+  });
+
+  it('keeps npm-run references resolvable across required stack sources', () => {
+    const scripts = loadPackageScripts();
+    for (const sourceScriptName of REQUIRED_COMPAT_SCRIPT_REFERENCE_SOURCES) {
+      const command = scripts[sourceScriptName];
+      expect(typeof command, `missing required script: ${sourceScriptName}`).toBe('string');
+      const targets = collectNpmRunTargets(command);
+      for (const targetName of targets) {
+        expect(
+          typeof scripts[targetName],
+          `${sourceScriptName} references missing npm script target: ${targetName}`
+        ).toBe('string');
+      }
     }
   });
 

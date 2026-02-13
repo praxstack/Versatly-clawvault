@@ -195,6 +195,7 @@
 - Added `compat-npm-script-stack-contract` coverage to lock required fast-stack script composition in `package.json` (including `test:compat-artifact-cli-drift:fast` ordering inside `test:compat-artifact-stack:fast`), reducing risk of accidental workflow-gate regressions.
 - Compatibility npm script-gate contract metadata is now centralized in `scripts/lib/compat-npm-script-contracts.mjs`, and stack-contract tests consume these constants (including report-stack ordering checks), reducing duplicated script-sequence literals and improving drift-test maintainability.
 - Npm script-stack contract coverage now also enforces validator-stack and `ci` sequence ordering via centralized contract constants, extending workflow-gate drift protection beyond artifact/report/summary stack wiring.
+- Npm script-stack contract tests now also enforce npm-run target resolvability for required stack-source scripts (`ci`, summary/report/validator/artifact fast stacks), catching missing/renamed referenced scripts as explicit contract failures.
 - Added `test:compat-artifact-cli-drift:fast` and wired it into `test:compat-artifact-stack:fast`, ensuring artifact CLI drift-regression suites run in the fast compatibility artifact stack gate (not only in full-unit-test runs).
 - Compatibility npm workflows are now modularized into composable stack scripts (`test:compat-report-stack:fast`, `test:compat-validator-stack:fast`, `test:compat-artifact-stack:fast`) so `test:compat-summary:fast` remains maintainable as contract gates grow.
 
