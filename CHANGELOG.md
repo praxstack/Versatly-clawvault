@@ -103,6 +103,7 @@
 - Contract-only and full fixture summary artifacts now share a consistent telemetry field set (`averageDurationMs`, `overallDurationMs`, `slowestCases`, pass/fail lists) for stable downstream parsing.
 - Compatibility summary artifacts are now explicitly schema-versioned (`summarySchemaVersion`) and built via a shared summary-header utility for contract/fixtures mode consistency.
 - Summary header metadata now includes `selectedTotal` alongside `selectedCases` for easier targeted-run accounting in downstream tooling.
+- Shared summary-header builder now validates array-field shape and duplicate entries (`selectedCases`, expected/runtime label lists), hardening report contract generation.
 - Fixture manifest validation now requires `expectedCheckStatuses` labels to be declared in `expectedCheckLabels`, tightening declarative contract integrity.
 
 ## [1.11.2] - 2026-02-12
