@@ -85,6 +85,7 @@
 - Compatibility fixture execution output now includes per-case `durationMs`, and summary artifacts include aggregate timing metadata for faster CI triage.
 - Compatibility fixture contracts now support signal-based OpenClaw CLI simulation (`openclawSignal`), with matrix coverage for signal-terminated CLI readiness warnings.
 - Fixture manifest validation now enforces that simulated non-ready OpenClaw CLI cases (`openclawExitCode != 0` or `openclawSignal`) explicitly assert `openclaw CLI available: warn`.
+- Compatibility fixture runner now emits aggregate runtime telemetry (`totalDurationMs`, `averageDurationMs`) in summary artifacts and console output.
 
 ## [1.11.2] - 2026-02-12
 
