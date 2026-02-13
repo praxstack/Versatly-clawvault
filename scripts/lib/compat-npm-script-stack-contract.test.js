@@ -35,15 +35,20 @@ function expectContainsInOrder(value, parts, label) {
   }
 }
 
-function expectContainsExactlyOnceInOrder(value, parts, label) {
-  expectContainsInOrder(value, parts, label);
+function expectContainsExactlyOnce(value, parts, label) {
   for (const part of parts) {
-    expect(value.indexOf(part), `${label} contains no occurrence for segment: ${part}`).toBeGreaterThanOrEqual(0);
+    const firstIndex = value.indexOf(part);
+    expect(firstIndex, `${label} contains no occurrence for segment: ${part}`).toBeGreaterThanOrEqual(0);
     expect(
-      value.indexOf(part),
+      firstIndex,
       `${label} contains duplicate segment occurrence: ${part}`
     ).toBe(value.lastIndexOf(part));
   }
+}
+
+function expectContainsExactlyOnceInOrder(value, parts, label) {
+  expectContainsInOrder(value, parts, label);
+  expectContainsExactlyOnce(value, parts, label);
 }
 
 describe('compat npm script stack contracts', () => {
@@ -86,18 +91,22 @@ describe('compat npm script stack contracts', () => {
     const scripts = loadPackageScripts();
     const cliDriftScript = scripts['test:compat-artifact-cli-drift:fast'];
     expect(typeof cliDriftScript).toBe('string');
-    for (const driftPath of REQUIRED_COMPAT_ARTIFACT_CLI_DRIFT_PATHS) {
-      expect(cliDriftScript).toContain(driftPath);
-    }
+    expectContainsExactlyOnce(
+      cliDriftScript,
+      REQUIRED_COMPAT_ARTIFACT_CLI_DRIFT_PATHS,
+      'test:compat-artifact-cli-drift:fast'
+    );
   });
 
   it('keeps script-stack contract runner wired to all governance suites', () => {
     const scripts = loadPackageScripts();
     const stackContractScript = scripts['test:compat-script-stack-contract:fast'];
     expect(typeof stackContractScript).toBe('string');
-    for (const testPath of REQUIRED_COMPAT_SCRIPT_STACK_CONTRACT_TEST_PATHS) {
-      expect(stackContractScript).toContain(testPath);
-    }
+    expectContainsExactlyOnce(
+      stackContractScript,
+      REQUIRED_COMPAT_SCRIPT_STACK_CONTRACT_TEST_PATHS,
+      'test:compat-script-stack-contract:fast'
+    );
   });
 
   it('keeps fast artifact stack ordering aligned with required contract gates', () => {
