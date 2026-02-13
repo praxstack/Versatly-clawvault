@@ -88,14 +88,27 @@ describe('compat payload json schema contracts', () => {
     expect(schema.properties.verifiedArtifacts.minItems).toBe(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES.length);
     expect(schema.properties.verifiedArtifacts.maxItems).toBe(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES.length);
     expect(schema.properties.verifiedArtifacts.items.enum).toEqual(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES);
+    expect(
+      schema.properties.verifiedArtifacts.allOf?.[0]?.prefixItems?.map((entry) => entry?.const)
+    ).toEqual(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES);
     expect(schema.properties.artifactContracts.minItems).toBe(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES.length);
     expect(schema.properties.artifactContracts.maxItems).toBe(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES.length);
     expect(schema.properties.artifactContracts.items.properties.artifactName.enum).toEqual(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES);
+    expect(
+      schema.properties.artifactContracts.allOf?.[0]?.prefixItems?.map((entry) => (
+        entry?.properties?.artifactName?.const
+      ))
+    ).toEqual(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES);
     const okBranch = schema.allOf.find(
       (entry) => entry?.if?.properties?.status?.const === 'ok'
     )?.then;
     for (const artifactName of REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES) {
       const expectedVersionField = REQUIRED_COMPAT_ARTIFACT_BUNDLE_VERSION_FIELDS[artifactName];
+      expect(
+        schema.properties.artifactContracts.allOf?.[0]?.prefixItems?.find(
+          (entry) => entry?.properties?.artifactName?.const === artifactName
+        )?.properties?.versionField?.const
+      ).toBe(expectedVersionField);
       expect(
         okBranch?.allOf?.some((entry) => entry?.properties?.verifiedArtifacts?.contains?.const === artifactName)
       ).toBe(true);
@@ -115,6 +128,10 @@ describe('compat payload json schema contracts', () => {
     expect(schema.properties.artifacts.minItems).toBe(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES.length);
     expect(schema.properties.artifacts.maxItems).toBe(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES.length);
     expect(schema.properties.artifacts.items.properties.artifactName.enum).toEqual(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES);
+    expect(
+      schema.properties.artifacts.allOf?.find((entry) => Array.isArray(entry?.prefixItems))
+        ?.prefixItems?.map((entry) => entry?.properties?.artifactName?.const)
+    ).toEqual(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES);
     for (const artifactName of REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES) {
       const expectedVersionField = REQUIRED_COMPAT_ARTIFACT_BUNDLE_VERSION_FIELDS[artifactName];
       const expectedArtifactFile = REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_FILES[artifactName];
@@ -139,13 +156,28 @@ describe('compat payload json schema contracts', () => {
     expect(schema.properties.artifacts.minItems).toBe(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES.length);
     expect(schema.properties.artifacts.maxItems).toBe(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES.length);
     expect(schema.properties.artifacts.items.enum).toEqual(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES);
+    expect(
+      schema.properties.artifacts.allOf?.[0]?.prefixItems?.map((entry) => entry?.const)
+    ).toEqual(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES);
+    expect(schema.properties.schemaContracts.minItems).toBe(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES.length);
+    expect(schema.properties.schemaContracts.maxItems).toBe(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES.length);
     expect(schema.properties.schemaContracts.items.properties.artifactName.enum).toEqual(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES);
+    expect(
+      schema.properties.schemaContracts.allOf?.[0]?.prefixItems?.map((entry) => (
+        entry?.properties?.artifactName?.const
+      ))
+    ).toEqual(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES);
     const okBranch = schema.allOf.find(
       (entry) => entry?.if?.properties?.status?.const === 'ok'
     )?.then;
     for (const artifactName of REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES) {
       const expectedVersionField = REQUIRED_COMPAT_ARTIFACT_BUNDLE_VERSION_FIELDS[artifactName];
       const expectedArtifactFile = REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_FILES[artifactName];
+      const orderedSchemaContractEntry = schema.properties.schemaContracts.allOf?.[0]?.prefixItems?.find(
+        (entry) => entry?.properties?.artifactName?.const === artifactName
+      );
+      expect(orderedSchemaContractEntry?.properties?.artifactFile?.const).toBe(expectedArtifactFile);
+      expect(orderedSchemaContractEntry?.properties?.versionField?.const).toBe(expectedVersionField);
       expect(
         okBranch?.allOf?.some((entry) => entry?.properties?.artifacts?.contains?.const === artifactName)
       ).toBe(true);

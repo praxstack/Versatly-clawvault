@@ -25,6 +25,19 @@
       "type": "array",
       "minItems": 6,
       "maxItems": 6,
+      "allOf": [
+        {
+          "prefixItems": [
+            { "const": "summary.json" },
+            { "const": "report-schema-validator-result.json" },
+            { "const": "validator-result.json" },
+            { "const": "schema-validator-result.json" },
+            { "const": "validator-result-verifier-result.json" },
+            { "const": "artifact-bundle-manifest-validator-result.json" }
+          ],
+          "items": false
+        }
+      ],
       "items": {
         "type": "string",
         "enum": [
@@ -40,6 +53,69 @@
     },
     "schemaContracts": {
       "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "allOf": [
+        {
+          "prefixItems": [
+            {
+              "type": "object",
+              "properties": {
+                "artifactName": { "const": "summary.json" },
+                "artifactFile": { "const": "summary.json" },
+                "versionField": { "const": "summarySchemaVersion" }
+              },
+              "required": ["artifactName", "artifactFile", "versionField"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "artifactName": { "const": "report-schema-validator-result.json" },
+                "artifactFile": { "const": "report-schema-validator-result.json" },
+                "versionField": { "const": "outputSchemaVersion" }
+              },
+              "required": ["artifactName", "artifactFile", "versionField"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "artifactName": { "const": "validator-result.json" },
+                "artifactFile": { "const": "validator-result.json" },
+                "versionField": { "const": "outputSchemaVersion" }
+              },
+              "required": ["artifactName", "artifactFile", "versionField"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "artifactName": { "const": "schema-validator-result.json" },
+                "artifactFile": { "const": "schema-validator-result.json" },
+                "versionField": { "const": "outputSchemaVersion" }
+              },
+              "required": ["artifactName", "artifactFile", "versionField"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "artifactName": { "const": "validator-result-verifier-result.json" },
+                "artifactFile": { "const": "validator-result-verifier-result.json" },
+                "versionField": { "const": "outputSchemaVersion" }
+              },
+              "required": ["artifactName", "artifactFile", "versionField"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "artifactName": { "const": "artifact-bundle-manifest-validator-result.json" },
+                "artifactFile": { "const": "artifact-bundle-manifest-validator-result.json" },
+                "versionField": { "const": "outputSchemaVersion" }
+              },
+              "required": ["artifactName", "artifactFile", "versionField"]
+            }
+          ],
+          "items": false
+        }
+      ],
       "items": {
         "type": "object",
         "properties": {

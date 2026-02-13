@@ -80,6 +80,13 @@ export function ensureCompatArtifactBundleManifestValidatorPayloadShape(payload)
         `compat artifact bundle manifest validator payload artifacts contains unsupported artifactName values: ${unsupportedArtifacts.join(', ')}`
       );
     }
+    for (const [index, requiredArtifactName] of REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES.entries()) {
+      if (payload.artifacts[index] !== requiredArtifactName) {
+        throw new Error(
+          'compat artifact bundle manifest validator payload artifacts must follow required canonical artifactName order'
+        );
+      }
+    }
     if (!Array.isArray(payload.schemaContracts)) {
       throw new Error('compat artifact bundle manifest validator payload field "schemaContracts" must be an array');
     }

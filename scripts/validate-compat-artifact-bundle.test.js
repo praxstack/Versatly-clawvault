@@ -299,7 +299,7 @@ describe('validate-compat-artifact-bundle script', () => {
     }
   });
 
-  it('fails when manifest-validator artifact list drifts from active manifest', () => {
+  it('fails when manifest-validator artifact list drifts from canonical order', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'compat-artifact-bundle-'));
     try {
       const validatorResultPath = path.join(root, 'validator-result.json');
@@ -325,7 +325,7 @@ describe('validate-compat-artifact-bundle script', () => {
 
       const result = runArtifactBundleValidator([], { COMPAT_REPORT_DIR: root });
       expect(result.status).toBe(1);
-      expect(result.stderr).toContain('artifact-bundle manifest validator artifacts list does not match active manifest order');
+      expect(result.stderr).toContain('artifacts must follow required canonical artifactName order');
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }

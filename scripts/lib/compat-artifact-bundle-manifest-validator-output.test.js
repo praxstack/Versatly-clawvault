@@ -162,6 +162,17 @@ describe('compat artifact bundle manifest validator output payload contracts', (
         ...REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES.slice(2)
       ],
       schemaContracts: buildRequiredSchemaContracts()
+    })).toThrow('artifacts must follow required canonical artifactName order');
+
+    const reorderedSchemaContracts = buildRequiredSchemaContracts();
+    [reorderedSchemaContracts[0], reorderedSchemaContracts[1]] = [reorderedSchemaContracts[1], reorderedSchemaContracts[0]];
+    expect(() => ensureCompatArtifactBundleManifestValidatorPayloadShape({
+      outputSchemaVersion: COMPAT_ARTIFACT_BUNDLE_MANIFEST_VALIDATOR_OUTPUT_SCHEMA_VERSION,
+      status: 'ok',
+      manifestPath: '/tmp/manifest.json',
+      artifactCount: REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES.length,
+      artifacts: REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES,
+      schemaContracts: reorderedSchemaContracts
     })).toThrow('artifactName order must match artifacts');
 
     expect(() => ensureCompatArtifactBundleManifestValidatorPayloadShape({
