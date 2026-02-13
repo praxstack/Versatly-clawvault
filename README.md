@@ -272,7 +272,7 @@ node scripts/validate-compat-summary.mjs --summary /tmp/summary.json --json
 # success payload includes summary/fixture schema versions for downstream compatibility checks
 # write validator result payload (success/error) to a file
 node scripts/validate-compat-summary.mjs --summary /tmp/summary.json --json --out /tmp/validator-result.json
-# in CI, compat-summary artifacts now include summary.json + report-schema-validator-result.json + validator-result.json + schema-validator-result.json + validator-result-verifier-result.json + artifact-bundle-manifest-validator-result.json + artifact-bundle-validator-result.json
+# in CI, compat-summary artifacts now include summary.json + report-schema-validator-result.json + validator-result.json + schema-validator-result.json + validator-result-verifier-result.json + artifact-bundle-validator-result.json + artifact-bundle-manifest-validator-result.json
 # validator payload schema/validation is centralized in scripts/lib/compat-summary-validator-output.mjs
 # JSON schema artifacts for payload contracts live in /schemas (including json-schema-validator-output)
 # generic schema checker CLI lives at scripts/validate-json-schema.mjs
@@ -315,6 +315,10 @@ node scripts/validate-compat-validator-result.mjs --validator-result /tmp/clawva
 # use --help for verifier usage and path-resolution rules
 # or run fixture generation + standalone summary validation together
 npm run test:compat-summary:fast
+# debug stack wrappers individually when isolating compat contract drift
+npm run test:compat-report-stack:fast
+npm run test:compat-validator-stack:fast
+npm run test:compat-artifact-stack:fast
 # script behavior is covered by dedicated unit tests (success + failure + env fallback)
 # validator exits with a clear error when no summary path/source input is provided
 # summary scripts respect COMPAT_REPORT_DIR (defaults to .compat-reports when unset)

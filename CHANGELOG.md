@@ -24,6 +24,7 @@
   - edge/node type statistics.
 
 ### Changed
+- Added README governance contracts for compatibility automation docs: CI artifact-list documentation is now required to match canonical upload-artifact contract order/domain, and required compatibility stack command references are now drift-checked from centralized script-reference contracts.
 - Dashboard edge diffing now includes edge type/label, enabling reliable live updates when relation type changes.
 - Hook event matching now supports alias payload shapes (`event`, `eventName`, etc.) for better OpenClaw compatibility.
 - `link` and `entities` commands now consistently respect `--vault` without requiring `CLAWVAULT_PATH`.

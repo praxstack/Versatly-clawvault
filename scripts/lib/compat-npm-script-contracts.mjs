@@ -34,10 +34,17 @@ export const REQUIRED_COMPAT_SCRIPT_STACK_CONTRACT_TEST_PATHS = Object.freeze([
   'scripts/lib/compat-npm-script-contracts.test.js',
   'scripts/lib/compat-npm-script-graph-utils.test.js',
   'scripts/lib/compat-npm-script-stack-contract.test.js',
+  'scripts/lib/compat-readme-contract.test.js',
   'scripts/lib/compat-ci-workflow-test-utils.test.js',
   'scripts/lib/compat-ci-workflow-contracts.test.js',
   'scripts/lib/compat-ci-workflow-contract.test.js'
 ]);
+
+export const REQUIRED_COMPAT_README_PATH = 'README.md';
+export const REQUIRED_COMPAT_README_CI_ARTIFACTS_LINE_PREFIX = '# in CI, compat-summary artifacts now include ';
+export const REQUIRED_COMPAT_README_SCRIPT_REFERENCE_COMMANDS = Object.freeze(
+  REQUIRED_COMPAT_SCRIPT_REFERENCE_SOURCES.map((scriptName) => `npm run ${scriptName}`)
+);
 
 const REQUIRED_COMPAT_CI_UPLOAD_ARTIFACT_DEFINITION_FILES = REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_DEFINITIONS
   .map((definition) => definition.artifactFile)
