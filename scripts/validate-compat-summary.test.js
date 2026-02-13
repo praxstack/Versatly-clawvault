@@ -143,10 +143,12 @@ describe('validate-compat-summary script', () => {
       const jsonResult = runSummaryValidator(['--summary', summaryPath, '--report-dir', reportRoot, '--json']);
       expect(jsonResult.status).toBe(0);
       expect(parseJsonLine(jsonResult.stdout)).toEqual({
+        outputSchemaVersion: 1,
         status: 'ok',
         mode: 'fixtures',
         selectedTotal: 1,
         resultCount: 1,
+        summaryPath,
         reportDir: reportRoot,
         caseReportMode: 'validated-case-reports'
       });
@@ -172,6 +174,14 @@ describe('validate-compat-summary script', () => {
     const missingReportDirResult = runSummaryValidator(['--report-dir']);
     expect(missingReportDirResult.status).toBe(1);
     expect(missingReportDirResult.stderr).toContain('Missing value for --report-dir');
+
+    const jsonMissingValueResult = runSummaryValidator(['--json', '--report-dir']);
+    expect(jsonMissingValueResult.status).toBe(1);
+    expect(parseJsonLine(jsonMissingValueResult.stdout)).toEqual({
+      outputSchemaVersion: 1,
+      status: 'error',
+      error: 'Missing value for --report-dir'
+    });
   });
 
   it('prints usage help and exits successfully for --help', () => {

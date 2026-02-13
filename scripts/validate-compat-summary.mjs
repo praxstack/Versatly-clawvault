@@ -4,6 +4,8 @@ import {
   validateCompatSummaryCaseReports
 } from './lib/compat-fixture-runner.mjs';
 
+const COMPAT_SUMMARY_VALIDATION_OUTPUT_SCHEMA_VERSION = 1;
+
 function parseCliArgs(argv) {
   const parsed = {
     summaryPath: '',
@@ -57,6 +59,10 @@ function parseCliArgs(argv) {
   }
 
   return parsed;
+}
+
+function isJsonModeRequestedFromArgv(argv) {
+  return argv.includes('--json');
 }
 
 function printHelp() {
@@ -123,10 +129,12 @@ function main() {
   const caseReportMode = args.allowMissingCaseReports ? 'skipped-case-reports' : 'validated-case-reports';
   if (args.json) {
     console.log(JSON.stringify({
+      outputSchemaVersion: COMPAT_SUMMARY_VALIDATION_OUTPUT_SCHEMA_VERSION,
       status: 'ok',
       mode: summary.mode,
       selectedTotal: summary.selectedTotal,
       resultCount,
+      summaryPath,
       reportDir,
       caseReportMode
     }));
@@ -139,6 +147,15 @@ function main() {
 try {
   main();
 } catch (err) {
-  console.error(err?.message || String(err));
+  const message = err?.message || String(err);
+  if (isJsonModeRequestedFromArgv(process.argv.slice(2))) {
+    console.log(JSON.stringify({
+      outputSchemaVersion: COMPAT_SUMMARY_VALIDATION_OUTPUT_SCHEMA_VERSION,
+      status: 'error',
+      error: message
+    }));
+  } else {
+    console.error(message);
+  }
   process.exit(1);
 }
