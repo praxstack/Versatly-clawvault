@@ -71,6 +71,16 @@ steps:
     run: echo beta
 `.trim();
 
+const LIST_STYLE_UPLOAD_STEP_SNIPPET = `
+- name: Upload
+  uses: actions/upload-artifact@v4
+  with:
+    path:
+      - \${{ runner.temp }}/reports/a.json
+      - \${{ runner.temp }}/reports/b.json
+    if-no-files-found: ignore
+`.trim();
+
 const MATRIX_WORKFLOW_YAML = `
 name: Matrix CI
 on:
@@ -311,6 +321,13 @@ describe('compat ci workflow test utils', () => {
     expect(extractNestedSectionScalarFieldValue(uploadStepBlock, 'with', 'if-no-files-found')).toBe('ignore');
     expect(extractScalarField(uploadStepBlock, 'if-no-files-found')).toBe('ignore');
     expect(extractUploadArtifactPaths(uploadStepBlock)).toEqual([
+      '${{ runner.temp }}/reports/a.json',
+      '${{ runner.temp }}/reports/b.json'
+    ]);
+  });
+
+  it('extracts upload artifact paths from list-style path blocks', () => {
+    expect(extractUploadArtifactPaths(LIST_STYLE_UPLOAD_STEP_SNIPPET)).toEqual([
       '${{ runner.temp }}/reports/a.json',
       '${{ runner.temp }}/reports/b.json'
     ]);

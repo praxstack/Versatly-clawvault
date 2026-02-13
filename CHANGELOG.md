@@ -31,6 +31,7 @@
 - Workflow job snapshot utilities now auto-discover top-level job names when explicit job lists are omitted, with regression coverage to keep multi-job contract extraction reusable for future CI topology expansion.
 - CI workflow contract suites now exercise discovered-job snapshot extraction directly against the live workflow file, ensuring auto-discovery remains aligned with canonical required job domains.
 - CI workflow parser utility coverage now includes synthetic matrix-style multi-job fixtures (`strategy.matrix`, cross-job `needs`, and mixed step field domains), hardening future CI topology expansion before real workflow changes land.
+- Upload-artifact path extraction helpers now support both multiline scalar and YAML list-style `with.path` forms, with regression tests to prevent parser drift across equivalent workflow encodings.
 - Dashboard edge diffing now includes edge type/label, enabling reliable live updates when relation type changes.
 - Hook event matching now supports alias payload shapes (`event`, `eventName`, etc.) for better OpenClaw compatibility.
 - `link` and `entities` commands now consistently respect `--vault` without requiring `CLAWVAULT_PATH`.

@@ -397,24 +397,27 @@ export function extractUsesField(stepBlock) {
 }
 
 export function extractUploadArtifactPaths(stepBlock) {
-  const lines = stepBlock.split('\n').map((line) => line.trim());
-  const pathLineIndex = lines.findIndex((line) => line === 'path:' || line === 'path: |');
+  const lines = stepBlock.split('\n');
+  const pathLineIndex = lines.findIndex((line) => {
+    const trimmedLine = line.trim();
+    return trimmedLine === 'path:' || trimmedLine === 'path: |';
+  });
   if (pathLineIndex < 0) {
     return null;
   }
+  const pathIndent = countLeadingSpaces(lines[pathLineIndex]);
   const pathLines = [];
   for (let index = pathLineIndex + 1; index < lines.length; index += 1) {
     const line = lines[index];
-    if (!line) {
+    const trimmedLine = line.trim();
+    if (!trimmedLine) {
       continue;
     }
-    if (line.startsWith('if-no-files-found:')) {
+    const lineIndent = countLeadingSpaces(line);
+    if (lineIndent <= pathIndent) {
       break;
     }
-    if (line.includes(':') && !line.startsWith('${{')) {
-      break;
-    }
-    pathLines.push(line);
+    pathLines.push(trimmedLine.startsWith('- ') ? trimmedLine.slice(2).trim() : trimmedLine);
   }
   return pathLines;
 }
