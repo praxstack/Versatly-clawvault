@@ -552,13 +552,36 @@ describe('compat fixture runner utilities', () => {
   it('validates compatibility report shape and parsing', () => {
     const report = {
       generatedAt: new Date().toISOString(),
-      checks: [],
-      warnings: 0,
-      errors: 0
+      checks: [
+        { label: 'openclaw CLI available', status: 'warn', detail: 'test', hint: 'fix path' },
+        { label: 'hook manifest events', status: 'error', detail: 'missing required events' },
+        { label: 'skill metadata', status: 'ok' }
+      ],
+      warnings: 1,
+      errors: 1
     };
     expect(() => ensureCompatReportShape(report, 'healthy')).not.toThrow();
     expect(parseCompatReport(JSON.stringify(report), 'healthy')).toEqual(report);
     expect(() => parseCompatReport('{}', 'bad')).toThrow('invalid JSON report');
+    expect(() => ensureCompatReportShape({
+      ...report,
+      warnings: 0
+    }, 'bad-counts')).toThrow('warnings count mismatch');
+    expect(() => ensureCompatReportShape({
+      ...report,
+      checks: [{ label: 'openclaw CLI available', status: 'invalid' }],
+      warnings: 0,
+      errors: 0
+    }, 'bad-status')).toThrow('invalid status');
+    expect(() => ensureCompatReportShape({
+      ...report,
+      checks: [
+        { label: 'openclaw CLI available', status: 'ok' },
+        { label: 'openclaw CLI available', status: 'ok' }
+      ],
+      warnings: 0,
+      errors: 0
+    }, 'duplicate-label')).toThrow('duplicate check label');
   });
 
   it('validates expected check labels against available report labels', () => {

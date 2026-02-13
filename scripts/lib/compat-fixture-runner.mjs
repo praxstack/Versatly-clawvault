@@ -223,14 +223,50 @@ export function ensureCompatReportShape(report, caseName) {
   if (!report || typeof report !== 'object') {
     throw new Error(`fixture=${caseName} emitted non-object JSON report`);
   }
-  if (typeof report.generatedAt !== 'string') {
+  if (typeof report.generatedAt !== 'string' || report.generatedAt.length === 0) {
     throw new Error(`fixture=${caseName} report missing generatedAt`);
   }
   if (!Array.isArray(report.checks)) {
     throw new Error(`fixture=${caseName} report missing checks[]`);
   }
-  if (typeof report.warnings !== 'number' || typeof report.errors !== 'number') {
+  if (!Number.isInteger(report.warnings) || report.warnings < 0 || !Number.isInteger(report.errors) || report.errors < 0) {
     throw new Error(`fixture=${caseName} report missing warnings/errors counts`);
+  }
+
+  const labels = new Set();
+  let warningCount = 0;
+  let errorCount = 0;
+  for (const [index, check] of report.checks.entries()) {
+    if (!check || typeof check !== 'object' || Array.isArray(check)) {
+      throw new Error(`fixture=${caseName} report check[${index}] must be an object`);
+    }
+    if (typeof check.label !== 'string' || check.label.length === 0) {
+      throw new Error(`fixture=${caseName} report check[${index}] missing label`);
+    }
+    if (labels.has(check.label)) {
+      throw new Error(`fixture=${caseName} report has duplicate check label: ${check.label}`);
+    }
+    labels.add(check.label);
+
+    if (!VALID_CHECK_STATUSES.has(check.status)) {
+      throw new Error(`fixture=${caseName} report check[${index}] has invalid status`);
+    }
+    if (check.detail !== undefined && (typeof check.detail !== 'string' || check.detail.length === 0)) {
+      throw new Error(`fixture=${caseName} report check[${index}] has invalid detail`);
+    }
+    if (check.hint !== undefined && (typeof check.hint !== 'string' || check.hint.length === 0)) {
+      throw new Error(`fixture=${caseName} report check[${index}] has invalid hint`);
+    }
+
+    if (check.status === 'warn') warningCount += 1;
+    if (check.status === 'error') errorCount += 1;
+  }
+
+  if (report.warnings !== warningCount) {
+    throw new Error(`fixture=${caseName} report warnings count mismatch`);
+  }
+  if (report.errors !== errorCount) {
+    throw new Error(`fixture=${caseName} report errors count mismatch`);
   }
 }
 
