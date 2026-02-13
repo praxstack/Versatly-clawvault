@@ -1,5 +1,7 @@
 import * as fs from 'fs';
 import {
+  REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_COUNT,
+  REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES,
   REQUIRED_COMPAT_ARTIFACT_BUNDLE_PATH_FIELDS,
   REQUIRED_COMPAT_ARTIFACT_BUNDLE_VERSION_FIELDS
 } from './compat-artifact-bundle-contracts.mjs';
@@ -8,6 +10,7 @@ export const COMPAT_ARTIFACT_BUNDLE_VALIDATOR_OUTPUT_SCHEMA_VERSION = 1;
 
 const VALID_SUMMARY_MODES = new Set(['contract', 'fixtures']);
 const VALID_VERSION_FIELDS = new Set(['summarySchemaVersion', 'outputSchemaVersion']);
+const REQUIRED_ARTIFACT_NAME_SET = new Set(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES);
 
 function assertNonEmptyString(value, fieldName) {
   if (typeof value !== 'string' || value.length === 0) {
@@ -89,10 +92,21 @@ export function ensureCompatArtifactBundleValidatorPayloadShape(payload) {
     if (!Array.isArray(payload.artifactContracts) || payload.artifactContracts.length === 0) {
       throw new Error('compat artifact bundle validator payload field "artifactContracts" must be a non-empty array');
     }
+    if (payload.artifactContracts.length !== REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_COUNT) {
+      throw new Error(
+        `compat artifact bundle validator payload artifactContracts must contain exactly ${REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_COUNT} entries`
+      );
+    }
     for (const [index, entry] of payload.artifactContracts.entries()) {
       ensureArtifactContractShape(entry, index);
     }
     const artifactNames = payload.artifactContracts.map((entry) => entry.artifactName);
+    const unsupportedArtifactNames = artifactNames.filter((artifactName) => !REQUIRED_ARTIFACT_NAME_SET.has(artifactName));
+    if (unsupportedArtifactNames.length > 0) {
+      throw new Error(
+        `compat artifact bundle validator payload artifactContracts contains unsupported artifactName values: ${unsupportedArtifactNames.join(', ')}`
+      );
+    }
     const duplicateArtifactNames = artifactNames
       .filter((value, index, allValues) => allValues.indexOf(value) !== index)
       .filter((value, index, allValues) => allValues.indexOf(value) === index);
@@ -101,6 +115,12 @@ export function ensureCompatArtifactBundleValidatorPayloadShape(payload) {
     }
     if (payload.verifiedArtifacts.length !== payload.artifactContracts.length) {
       throw new Error('compat artifact bundle validator payload verifiedArtifacts must have one entry per artifactContracts item');
+    }
+    const unsupportedVerifiedArtifactNames = payload.verifiedArtifacts.filter((artifactName) => !REQUIRED_ARTIFACT_NAME_SET.has(artifactName));
+    if (unsupportedVerifiedArtifactNames.length > 0) {
+      throw new Error(
+        `compat artifact bundle validator payload verifiedArtifacts contains unsupported artifactName values: ${unsupportedVerifiedArtifactNames.join(', ')}`
+      );
     }
     if (payload.verifiedArtifacts.some((value, index) => value !== payload.artifactContracts[index].artifactName)) {
       throw new Error('compat artifact bundle validator payload verifiedArtifacts must match artifactContracts artifactName order');
