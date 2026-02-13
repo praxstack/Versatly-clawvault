@@ -14,7 +14,9 @@ JSON mode now emits schema-versioned payloads for both success and failure outco
 Success JSON payloads include both summary and fixture schema version fields for explicit downstream contract gating.
 Use `--out <file>` to persist the validator result payload (success or error) for artifact/audit workflows.
 Use `npm run test:compat-validator-result:verify -- <path-to-validator-result.json>` to validate a pre-existing validator-result payload artifact directly.
+Use `npm run test:compat-validator-result:schema` to validate the emitted `validator-result.json` against its JSON schema contract.
 The validator-result verifier also supports explicit CLI options (`--validator-result`, `--json`, `--out`, `--help`) with structured output contracts and tests.
+Generic schema-validation CLI is available via `scripts/validate-json-schema.mjs` for arbitrary schema/data checks.
 Use `--require-ok` when verifier workflows must fail on `validator-result` payloads with `status: "error"`.
 The npm verifier wrapper uses `--require-ok` by default for stricter CI/local gating.
 Use `npm run test:compat-summary:verify -- <path-to-summary.json>` to validate existing summary artifacts without re-running fixture generation.

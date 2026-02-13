@@ -136,6 +136,7 @@
 - Validator-result verifier now supports `--require-ok` to enforce success-only payload status in strict automation pipelines.
 - `test:compat-validator-result:verify` now enforces `--require-ok` by default, hardening local/CI artifact verification semantics.
 - Added versioned JSON schema artifacts for validator payload outputs (`schemas/compat-summary-validator-output.schema.json`, `schemas/compat-validator-result-verifier-output.schema.json`) with schema-version contract tests.
+- Added generic JSON schema validation CLI (`scripts/validate-json-schema.mjs`) and integrated `test:compat-validator-result:schema` into fast summary workflows to validate emitted validator-result artifacts against versioned schema contracts.
 
 ## [1.11.2] - 2026-02-12
 
