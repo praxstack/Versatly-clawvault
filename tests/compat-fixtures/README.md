@@ -17,3 +17,4 @@ Current fixture scenarios:
 - `non-auto-profile` — warning for missing `--profile auto` delegation.
 - `missing-events` — error for missing required hook events.
 - `missing-package-hook` — error for missing `openclaw.hooks` registration.
+- `missing-skill-openclaw` — warning for missing `metadata.openclaw` in `SKILL.md`.
