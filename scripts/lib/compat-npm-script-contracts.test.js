@@ -29,6 +29,9 @@ import {
   REQUIRED_COMPAT_CI_SETUP_NODE_STEP_NAME,
   REQUIRED_COMPAT_CI_SETUP_NODE_USES,
   REQUIRED_COMPAT_CI_SETUP_NODE_VERSION,
+  REQUIRED_COMPAT_CI_STEP_ENV_SCALAR_VALUE_CONTRACTS,
+  REQUIRED_COMPAT_CI_STEP_TOP_LEVEL_SCALAR_VALUE_CONTRACTS,
+  REQUIRED_COMPAT_CI_STEP_WITH_SCALAR_VALUE_CONTRACTS,
   REQUIRED_COMPAT_CI_STEP_ENV_FIELD_NAME_SEQUENCES,
   REQUIRED_COMPAT_CI_STEP_WITH_FIELD_NAME_SEQUENCES,
   REQUIRED_COMPAT_CI_STEP_FIELD_NAME_SEQUENCES,
@@ -186,6 +189,36 @@ describe('compat npm script contracts constants', () => {
     for (const [stepName, fieldNameSequence] of Object.entries(REQUIRED_COMPAT_CI_STEP_ENV_FIELD_NAME_SEQUENCES)) {
       expect(REQUIRED_COMPAT_CI_STEP_NAMES).toContain(stepName);
       expectNonEmptyUniqueStringArray(fieldNameSequence, `REQUIRED_COMPAT_CI_STEP_ENV_FIELD_NAME_SEQUENCES[${stepName}]`);
+    }
+    for (const [stepName, scalarValueContracts] of Object.entries(REQUIRED_COMPAT_CI_STEP_TOP_LEVEL_SCALAR_VALUE_CONTRACTS)) {
+      expect(REQUIRED_COMPAT_CI_STEP_NAMES).toContain(stepName);
+      expect(typeof scalarValueContracts).toBe('object');
+      expect(scalarValueContracts).toBeTruthy();
+      for (const [fieldName, fieldValue] of Object.entries(scalarValueContracts)) {
+        expect(fieldName.length).toBeGreaterThan(0);
+        expect(typeof fieldValue).toBe('string');
+        expect(fieldValue.length).toBeGreaterThan(0);
+      }
+    }
+    for (const [stepName, scalarValueContracts] of Object.entries(REQUIRED_COMPAT_CI_STEP_WITH_SCALAR_VALUE_CONTRACTS)) {
+      expect(REQUIRED_COMPAT_CI_STEP_NAMES).toContain(stepName);
+      expect(typeof scalarValueContracts).toBe('object');
+      expect(scalarValueContracts).toBeTruthy();
+      for (const [fieldName, fieldValue] of Object.entries(scalarValueContracts)) {
+        expect(fieldName.length).toBeGreaterThan(0);
+        expect(typeof fieldValue).toBe('string');
+        expect(fieldValue.length).toBeGreaterThan(0);
+      }
+    }
+    for (const [stepName, scalarValueContracts] of Object.entries(REQUIRED_COMPAT_CI_STEP_ENV_SCALAR_VALUE_CONTRACTS)) {
+      expect(REQUIRED_COMPAT_CI_STEP_NAMES).toContain(stepName);
+      expect(typeof scalarValueContracts).toBe('object');
+      expect(scalarValueContracts).toBeTruthy();
+      for (const [fieldName, fieldValue] of Object.entries(scalarValueContracts)) {
+        expect(fieldName.length).toBeGreaterThan(0);
+        expect(typeof fieldValue).toBe('string');
+        expect(fieldValue.length).toBeGreaterThan(0);
+      }
     }
     expect(typeof REQUIRED_COMPAT_CI_REPORT_DIR_ENV_KEY).toBe('string');
     expect(REQUIRED_COMPAT_CI_REPORT_DIR_ENV_KEY.length).toBeGreaterThan(0);

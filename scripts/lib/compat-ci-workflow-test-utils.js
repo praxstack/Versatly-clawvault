@@ -192,6 +192,33 @@ export function extractNestedSectionFieldNames(stepBlock, sectionName) {
   return sectionFieldNames;
 }
 
+export function extractNestedSectionScalarFieldValue(stepBlock, sectionName, fieldName) {
+  const lines = stepBlock.split('\n');
+  const sectionLineIndex = lines.findIndex((line) => {
+    const trimmedLine = line.trim();
+    return trimmedLine === `${sectionName}:` || trimmedLine === `${sectionName}: |`;
+  });
+  if (sectionLineIndex < 0) {
+    return null;
+  }
+  const sectionIndent = countLeadingSpaces(lines[sectionLineIndex]);
+  for (let index = sectionLineIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!line.trim()) {
+      continue;
+    }
+    const lineIndent = countLeadingSpaces(line);
+    if (lineIndent <= sectionIndent) {
+      break;
+    }
+    const fieldMatch = /^\s*([A-Za-z0-9_-]+):\s*(.*)$/.exec(line.trim());
+    if (fieldMatch && fieldMatch[1] === fieldName) {
+      return fieldMatch[2].trim();
+    }
+  }
+  return null;
+}
+
 export function countScalarFieldOccurrences(block, fieldName) {
   const fieldPattern = new RegExp(`\\n\\s*${escapeRegex(fieldName)}:\\s*`, 'g');
   return [...block.matchAll(fieldPattern)].length;

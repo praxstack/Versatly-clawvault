@@ -31,6 +31,9 @@ import {
   REQUIRED_COMPAT_CI_SETUP_NODE_STEP_NAME,
   REQUIRED_COMPAT_CI_SETUP_NODE_USES,
   REQUIRED_COMPAT_CI_SETUP_NODE_VERSION,
+  REQUIRED_COMPAT_CI_STEP_ENV_SCALAR_VALUE_CONTRACTS,
+  REQUIRED_COMPAT_CI_STEP_TOP_LEVEL_SCALAR_VALUE_CONTRACTS,
+  REQUIRED_COMPAT_CI_STEP_WITH_SCALAR_VALUE_CONTRACTS,
   REQUIRED_COMPAT_CI_STEP_ENV_FIELD_NAME_SEQUENCES,
   REQUIRED_COMPAT_CI_STEP_WITH_FIELD_NAME_SEQUENCES,
   REQUIRED_COMPAT_CI_STEP_FIELD_NAME_SEQUENCES,
@@ -63,6 +66,7 @@ import {
   extractTopLevelFieldNames,
   extractOnTriggerNames,
   extractNestedSectionFieldNames,
+  extractNestedSectionScalarFieldValue,
   extractStepNames,
   extractUploadArtifactPaths,
   extractUsesField,
@@ -235,6 +239,45 @@ describe('compat ci workflow contract', () => {
       const stepBlock = extractStepBlock(ciJobBlock, stepName);
       expect(stepBlock, `missing CI workflow step: ${stepName}`).toBeTruthy();
       expect(extractNestedSectionFieldNames(stepBlock, 'env')).toEqual(expectedEnvFieldNames);
+    }
+  });
+
+  it('keeps canonical scalar value contracts for top-level and nested step fields', () => {
+    const workflowYaml = loadCiWorkflowYaml();
+    const ciJobBlock = extractJobBlock(workflowYaml, REQUIRED_COMPAT_CI_JOB_NAME);
+    expect(ciJobBlock, `missing CI workflow job: ${REQUIRED_COMPAT_CI_JOB_NAME}`).toBeTruthy();
+
+    for (const [stepName, scalarValueContracts] of Object.entries(REQUIRED_COMPAT_CI_STEP_TOP_LEVEL_SCALAR_VALUE_CONTRACTS)) {
+      const stepBlock = extractStepBlock(ciJobBlock, stepName);
+      expect(stepBlock, `missing CI workflow step: ${stepName}`).toBeTruthy();
+      for (const [fieldName, expectedValue] of Object.entries(scalarValueContracts)) {
+        expect(
+          extractScalarField(stepBlock, fieldName),
+          `unexpected top-level scalar field value for step=${stepName} field=${fieldName}`
+        ).toBe(expectedValue);
+      }
+    }
+
+    for (const [stepName, scalarValueContracts] of Object.entries(REQUIRED_COMPAT_CI_STEP_WITH_SCALAR_VALUE_CONTRACTS)) {
+      const stepBlock = extractStepBlock(ciJobBlock, stepName);
+      expect(stepBlock, `missing CI workflow step: ${stepName}`).toBeTruthy();
+      for (const [fieldName, expectedValue] of Object.entries(scalarValueContracts)) {
+        expect(
+          extractNestedSectionScalarFieldValue(stepBlock, 'with', fieldName),
+          `unexpected nested with-field value for step=${stepName} field=${fieldName}`
+        ).toBe(expectedValue);
+      }
+    }
+
+    for (const [stepName, scalarValueContracts] of Object.entries(REQUIRED_COMPAT_CI_STEP_ENV_SCALAR_VALUE_CONTRACTS)) {
+      const stepBlock = extractStepBlock(ciJobBlock, stepName);
+      expect(stepBlock, `missing CI workflow step: ${stepName}`).toBeTruthy();
+      for (const [fieldName, expectedValue] of Object.entries(scalarValueContracts)) {
+        expect(
+          extractNestedSectionScalarFieldValue(stepBlock, 'env', fieldName),
+          `unexpected nested env-field value for step=${stepName} field=${fieldName}`
+        ).toBe(expectedValue);
+      }
     }
   });
 

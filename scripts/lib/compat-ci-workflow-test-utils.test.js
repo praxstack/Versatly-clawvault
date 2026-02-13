@@ -12,6 +12,7 @@ import {
   extractJobMetadata,
   extractPushBranches,
   extractNestedSectionFieldNames,
+  extractNestedSectionScalarFieldValue,
   extractTopLevelFieldNames,
   extractTopLevelJobNames,
   extractRunCommand,
@@ -124,6 +125,7 @@ describe('compat ci workflow test utils', () => {
     expect(extractStepNames(`\n${SAMPLE_WORKFLOW_YAML}\n`)).toEqual(['First Step', 'Build', 'Upload', 'Done']);
     expect(extractStepFieldNames(metadata.block)).toEqual(['name', 'run', 'env']);
     expect(extractNestedSectionFieldNames(metadata.block, 'env')).toEqual(['SAMPLE_ENV']);
+    expect(extractNestedSectionScalarFieldValue(metadata.block, 'env', 'SAMPLE_ENV')).toBe('hello');
     expect(countStepFieldOccurrences(metadata.block, 'run')).toBe(1);
     expect(countStepFieldOccurrences(metadata.block, 'missing')).toBe(0);
   });
@@ -139,6 +141,8 @@ describe('compat ci workflow test utils', () => {
       'path',
       'if-no-files-found'
     ]);
+    expect(extractNestedSectionScalarFieldValue(uploadStepBlock, 'with', 'name')).toBe('sample-artifact');
+    expect(extractNestedSectionScalarFieldValue(uploadStepBlock, 'with', 'if-no-files-found')).toBe('ignore');
     expect(extractScalarField(uploadStepBlock, 'if-no-files-found')).toBe('ignore');
     expect(extractUploadArtifactPaths(uploadStepBlock)).toEqual([
       '${{ runner.temp }}/reports/a.json',
@@ -155,6 +159,7 @@ describe('compat ci workflow test utils', () => {
     expect(extractScalarField('run: npm test', 'missing')).toBe(null);
     expect(extractStepFieldNames('run: npm test')).toBe(null);
     expect(extractNestedSectionFieldNames('run: npm test', 'env')).toBe(null);
+    expect(extractNestedSectionScalarFieldValue('run: npm test', 'env', 'SAMPLE_ENV')).toBe(null);
     expect(extractUploadArtifactPaths('- name: Upload\n  uses: actions/upload-artifact@v4')).toBe(null);
     expect(countScalarFieldOccurrences('run: npm test', 'missing')).toBe(0);
     expect(extractWorkflowName('jobs:\n  test:\n    runs-on: ubuntu-latest')).toBe(null);
