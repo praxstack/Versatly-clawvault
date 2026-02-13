@@ -72,6 +72,7 @@ import {
 import {
   expectArrayOfRecordsWithRequiredStringFields,
   expectDistinctStringFieldsPerRecord,
+  expectKeyedStringArrayDomains,
   expectNonEmptyString,
   expectNonEmptyStringRecord,
   expectObjectKeyDomainParity,
@@ -164,37 +165,26 @@ describe('compat npm script contracts constants', () => {
       'push',
       'pull_request'
     ]));
-    expectObjectKeyDomainParity(
+    expectKeyedStringArrayDomains(
       REQUIRED_COMPAT_CI_TRIGGER_SECTION_FIELD_NAME_SEQUENCES,
       REQUIRED_COMPAT_CI_TRIGGER_NAMES,
-      'REQUIRED_COMPAT_CI_TRIGGER_SECTION_FIELD_NAME_SEQUENCES'
+      'REQUIRED_COMPAT_CI_TRIGGER_SECTION_FIELD_NAME_SEQUENCES',
+      { requireExactKeyDomain: true, allowEmptyKeys: ['pull_request'] }
     );
-    for (const [triggerName, fieldNames] of Object.entries(REQUIRED_COMPAT_CI_TRIGGER_SECTION_FIELD_NAME_SEQUENCES)) {
-      expect(REQUIRED_COMPAT_CI_TRIGGER_NAMES).toContain(triggerName);
-      expectNonEmptyUniqueStringArray(fieldNames, `REQUIRED_COMPAT_CI_TRIGGER_SECTION_FIELD_NAME_SEQUENCES[${triggerName}]`, {
-        requireNonEmpty: false
-      });
-    }
     expectNonEmptyUniqueStringArray(REQUIRED_COMPAT_CI_JOB_NAMES, 'REQUIRED_COMPAT_CI_JOB_NAMES');
     expect(REQUIRED_COMPAT_CI_JOB_NAMES).toContain(REQUIRED_COMPAT_CI_JOB_NAME);
-    expectObjectKeyDomainParity(
+    expectKeyedStringArrayDomains(
       REQUIRED_COMPAT_CI_JOB_UNIQUE_FIELD_NAME_SEQUENCES,
       REQUIRED_COMPAT_CI_JOB_NAMES,
-      'REQUIRED_COMPAT_CI_JOB_UNIQUE_FIELD_NAME_SEQUENCES'
+      'REQUIRED_COMPAT_CI_JOB_UNIQUE_FIELD_NAME_SEQUENCES',
+      { requireExactKeyDomain: true }
     );
-    for (const [jobName, fieldNames] of Object.entries(REQUIRED_COMPAT_CI_JOB_UNIQUE_FIELD_NAME_SEQUENCES)) {
-      expect(REQUIRED_COMPAT_CI_JOB_NAMES).toContain(jobName);
-      expectNonEmptyUniqueStringArray(fieldNames, `REQUIRED_COMPAT_CI_JOB_UNIQUE_FIELD_NAME_SEQUENCES[${jobName}]`);
-    }
-    expectObjectKeyDomainParity(
+    expectKeyedStringArrayDomains(
       REQUIRED_COMPAT_CI_JOB_FIELD_NAME_SEQUENCES,
       REQUIRED_COMPAT_CI_JOB_NAMES,
-      'REQUIRED_COMPAT_CI_JOB_FIELD_NAME_SEQUENCES'
+      'REQUIRED_COMPAT_CI_JOB_FIELD_NAME_SEQUENCES',
+      { requireExactKeyDomain: true }
     );
-    for (const [jobName, fieldNames] of Object.entries(REQUIRED_COMPAT_CI_JOB_FIELD_NAME_SEQUENCES)) {
-      expect(REQUIRED_COMPAT_CI_JOB_NAMES).toContain(jobName);
-      expectNonEmptyUniqueStringArray(fieldNames, `REQUIRED_COMPAT_CI_JOB_FIELD_NAME_SEQUENCES[${jobName}]`);
-    }
     expectObjectKeyDomainParity(
       REQUIRED_COMPAT_CI_JOB_TOP_LEVEL_SCALAR_VALUE_CONTRACTS,
       REQUIRED_COMPAT_CI_JOB_NAMES,
@@ -228,33 +218,33 @@ describe('compat npm script contracts constants', () => {
     ]));
     expectNonEmptyUniqueStringArray(REQUIRED_COMPAT_CI_STEP_NAMES, 'REQUIRED_COMPAT_CI_STEP_NAMES');
     expect(REQUIRED_COMPAT_CI_STEP_NAMES).toEqual(REQUIRED_COMPAT_CI_STEP_SEQUENCE);
-    expectObjectKeyDomainParity(
+    expectKeyedStringArrayDomains(
       REQUIRED_COMPAT_CI_JOB_STEP_NAME_SEQUENCES,
       REQUIRED_COMPAT_CI_JOB_NAMES,
-      'REQUIRED_COMPAT_CI_JOB_STEP_NAME_SEQUENCES'
+      'REQUIRED_COMPAT_CI_JOB_STEP_NAME_SEQUENCES',
+      { requireExactKeyDomain: true }
     );
-    for (const [jobName, stepNames] of Object.entries(REQUIRED_COMPAT_CI_JOB_STEP_NAME_SEQUENCES)) {
-      expect(REQUIRED_COMPAT_CI_JOB_NAMES).toContain(jobName);
-      expectNonEmptyUniqueStringArray(stepNames, `REQUIRED_COMPAT_CI_JOB_STEP_NAME_SEQUENCES[${jobName}]`);
-    }
-    expectObjectKeyDomainParity(
+    expectKeyedStringArrayDomains(
       REQUIRED_COMPAT_CI_STEP_FIELD_NAME_SEQUENCES,
       REQUIRED_COMPAT_CI_STEP_NAMES,
-      'REQUIRED_COMPAT_CI_STEP_FIELD_NAME_SEQUENCES'
+      'REQUIRED_COMPAT_CI_STEP_FIELD_NAME_SEQUENCES',
+      { requireExactKeyDomain: true }
     );
     for (const [stepName, fieldNameSequence] of Object.entries(REQUIRED_COMPAT_CI_STEP_FIELD_NAME_SEQUENCES)) {
       expect(stepName.length).toBeGreaterThan(0);
       expectNonEmptyUniqueStringArray(fieldNameSequence, `REQUIRED_COMPAT_CI_STEP_FIELD_NAME_SEQUENCES[${stepName}]`);
       expect(fieldNameSequence[0]).toBe('name');
     }
-    for (const [stepName, fieldNameSequence] of Object.entries(REQUIRED_COMPAT_CI_STEP_WITH_FIELD_NAME_SEQUENCES)) {
-      expect(REQUIRED_COMPAT_CI_STEP_NAMES).toContain(stepName);
-      expectNonEmptyUniqueStringArray(fieldNameSequence, `REQUIRED_COMPAT_CI_STEP_WITH_FIELD_NAME_SEQUENCES[${stepName}]`);
-    }
-    for (const [stepName, fieldNameSequence] of Object.entries(REQUIRED_COMPAT_CI_STEP_ENV_FIELD_NAME_SEQUENCES)) {
-      expect(REQUIRED_COMPAT_CI_STEP_NAMES).toContain(stepName);
-      expectNonEmptyUniqueStringArray(fieldNameSequence, `REQUIRED_COMPAT_CI_STEP_ENV_FIELD_NAME_SEQUENCES[${stepName}]`);
-    }
+    expectKeyedStringArrayDomains(
+      REQUIRED_COMPAT_CI_STEP_WITH_FIELD_NAME_SEQUENCES,
+      REQUIRED_COMPAT_CI_STEP_NAMES,
+      'REQUIRED_COMPAT_CI_STEP_WITH_FIELD_NAME_SEQUENCES'
+    );
+    expectKeyedStringArrayDomains(
+      REQUIRED_COMPAT_CI_STEP_ENV_FIELD_NAME_SEQUENCES,
+      REQUIRED_COMPAT_CI_STEP_NAMES,
+      'REQUIRED_COMPAT_CI_STEP_ENV_FIELD_NAME_SEQUENCES'
+    );
     for (const [stepName, scalarValueContracts] of Object.entries(REQUIRED_COMPAT_CI_STEP_TOP_LEVEL_SCALAR_VALUE_CONTRACTS)) {
       expect(REQUIRED_COMPAT_CI_STEP_NAMES).toContain(stepName);
       expectNonEmptyStringRecord(scalarValueContracts, `REQUIRED_COMPAT_CI_STEP_TOP_LEVEL_SCALAR_VALUE_CONTRACTS[${stepName}]`);

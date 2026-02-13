@@ -3,6 +3,7 @@ import {
   expectArrayOfRecordsWithRequiredStringFields,
   expectDistinctStringFieldsPerRecord,
   expectEachDomainValueOccursExactlyOnce,
+  expectKeyedStringArrayDomains,
   expectNonEmptyString,
   expectNonEmptyStringRecord,
   expectNonEmptyUniqueStringArray,
@@ -226,6 +227,59 @@ describe('compat contract assertion test utils', () => {
         },
         ['alpha', 'beta'],
         'mismatched object key-domain parity'
+      );
+    }).toThrow();
+  });
+
+  it('asserts keyed string-array domains with optional exact key parity', () => {
+    expectKeyedStringArrayDomains(
+      {
+        alpha: ['a1'],
+        beta: ['b1', 'b2']
+      },
+      ['alpha', 'beta'],
+      'keyed string-array domain',
+      { requireExactKeyDomain: true }
+    );
+    expectKeyedStringArrayDomains(
+      {
+        alpha: ['a1'],
+        beta: []
+      },
+      ['alpha', 'beta', 'gamma'],
+      'keyed string-array optional-empty domain',
+      { allowEmptyKeys: ['beta'] }
+    );
+  });
+
+  it('throws when keyed string-array domains violate key-domain or value constraints', () => {
+    expect(() => {
+      expectKeyedStringArrayDomains(
+        {
+          alpha: ['a1'],
+          delta: ['d1']
+        },
+        ['alpha', 'beta'],
+        'unexpected-key keyed string-array domain'
+      );
+    }).toThrow();
+    expect(() => {
+      expectKeyedStringArrayDomains(
+        {
+          alpha: []
+        },
+        ['alpha'],
+        'empty-not-allowed keyed string-array domain'
+      );
+    }).toThrow();
+    expect(() => {
+      expectKeyedStringArrayDomains(
+        {
+          alpha: []
+        },
+        ['alpha'],
+        'invalid allow-empty domain',
+        { allowEmptyKeys: ['beta'] }
       );
     }).toThrow();
   });

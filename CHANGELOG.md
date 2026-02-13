@@ -55,6 +55,7 @@
 - Added reusable array-of-record string-field assertion helper (`expectArrayOfRecordsWithRequiredStringFields`, with optional empty-array allowance) and refactored compatibility contract suites to validate producer/consumer contracts plus artifact-definition/path-field records via shared structured-record semantics.
 - Added reusable cross-record string-field invariant helpers (`expectUniqueStringFieldAcrossRecords`, `expectDistinctStringFieldsPerRecord`) and refactored compatibility contract suites to enforce unique field domains and producer/consumer segment distinctness through shared assertion semantics.
 - Added reusable non-empty string scalar assertion helper (`expectNonEmptyString`) and refactored compatibility contract constant suites to assert scalar string domains through shared semantics instead of repeated `typeof`/`length` assertion pairs.
+- Added reusable keyed string-array domain assertion helper (`expectKeyedStringArrayDomains`, with exact-key-domain and allow-empty-key options) and refactored compatibility contract suites to centralize key-membership + array-domain checks for trigger/job/step sequence maps.
 - Dashboard edge diffing now includes edge type/label, enabling reliable live updates when relation type changes.
 - Hook event matching now supports alias payload shapes (`event`, `eventName`, etc.) for better OpenClaw compatibility.
 - `link` and `entities` commands now consistently respect `--vault` without requiring `CLAWVAULT_PATH`.
