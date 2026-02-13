@@ -48,6 +48,7 @@
 - Compatibility unit tests now assert command diagnostics against the declarative fixture expectations to keep CLI and fixture runner semantics aligned.
 - Fixture matrix runner now validates required fixture file layout before execution to fail fast on malformed compatibility fixtures.
 - Fixture matrix runner now supports `COMPAT_CASES` filtering for targeted local debugging of specific compatibility drift scenarios.
+- Fixture matrix runner can now emit per-case JSON reports (`COMPAT_REPORT_DIR`) for CI failure triage and artifact upload.
 
 ## [1.11.2] - 2026-02-12
 
