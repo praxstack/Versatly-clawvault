@@ -10,7 +10,7 @@ import {
   REQUIRED_COMPAT_CI_JOB_RUNS_ON,
   REQUIRED_COMPAT_CI_JOB_TIMEOUT_MINUTES,
   REQUIRED_COMPAT_CI_JOB_FIELD_NAMES,
-  REQUIRED_COMPAT_CI_JOB_UNIQUE_FIELD_NAMES,
+  REQUIRED_COMPAT_CI_JOB_UNIQUE_FIELD_NAME_SEQUENCES,
   REQUIRED_COMPAT_CI_CHECKOUT_STEP_NAME,
   REQUIRED_COMPAT_CI_CHECKOUT_USES,
   REQUIRED_COMPAT_CI_FAILURE_UPLOAD_ARTIFACT_NAME,
@@ -42,7 +42,6 @@ import {
   REQUIRED_COMPAT_CI_STEP_WITH_FIELD_NAME_SEQUENCES,
   REQUIRED_COMPAT_CI_STEP_FIELD_NAME_SEQUENCES,
   REQUIRED_COMPAT_CI_STEP_NAMES,
-  REQUIRED_COMPAT_CI_STEP_SEQUENCE,
   REQUIRED_COMPAT_CI_UPLOAD_ARTIFACT_NAME,
   REQUIRED_COMPAT_CI_UPLOAD_CONDITION,
   REQUIRED_COMPAT_CI_UPLOAD_ARTIFACT_FILES,
@@ -220,13 +219,15 @@ describe('compat ci workflow contract', () => {
     });
   });
 
-  it('keeps compat job declaration unique in workflow', () => {
+  it('keeps required CI job declarations unique in workflow', () => {
     const workflowYaml = loadCiWorkflowYaml();
     expect(extractTopLevelJobNames(workflowYaml)).toEqual(REQUIRED_COMPAT_CI_JOB_NAMES);
-    expect(
-      countJobNameOccurrences(workflowYaml, REQUIRED_COMPAT_CI_JOB_NAME),
-      `required CI job "${REQUIRED_COMPAT_CI_JOB_NAME}" must appear exactly once`
-    ).toBe(1);
+    for (const jobName of REQUIRED_COMPAT_CI_JOB_NAMES) {
+      expect(
+        countJobNameOccurrences(workflowYaml, jobName),
+        `required CI job "${jobName}" must appear exactly once`
+      ).toBe(1);
+    }
   });
 
   it('keeps CI job identity and runtime envelope aligned with contracts', () => {
@@ -238,44 +239,50 @@ describe('compat ci workflow contract', () => {
     expect(extractScalarField(ciJobBlock, 'timeout-minutes')).toBe(REQUIRED_COMPAT_CI_JOB_TIMEOUT_MINUTES);
   });
 
-  it('keeps required job-level fields unique within compat job', () => {
+  it('keeps required job-level fields unique within each required CI job', () => {
     const workflowYaml = loadCiWorkflowYaml();
-    const ciJobBlock = extractJobBlock(workflowYaml, REQUIRED_COMPAT_CI_JOB_NAME);
-    expect(ciJobBlock, `missing CI workflow job: ${REQUIRED_COMPAT_CI_JOB_NAME}`).toBeTruthy();
-    for (const fieldName of REQUIRED_COMPAT_CI_JOB_UNIQUE_FIELD_NAMES) {
-      expect(
-        countScalarFieldOccurrences(ciJobBlock, fieldName),
-        `required job field "${fieldName}" must appear exactly once in ${REQUIRED_COMPAT_CI_JOB_NAME}`
-      ).toBe(1);
+    for (const [jobName, uniqueFieldNames] of Object.entries(REQUIRED_COMPAT_CI_JOB_UNIQUE_FIELD_NAME_SEQUENCES)) {
+      const jobBlock = extractJobBlock(workflowYaml, jobName);
+      expect(jobBlock, `missing CI workflow job: ${jobName}`).toBeTruthy();
+      for (const fieldName of uniqueFieldNames) {
+        expect(
+          countScalarFieldOccurrences(jobBlock, fieldName),
+          `required job field "${fieldName}" must appear exactly once in ${jobName}`
+        ).toBe(1);
+      }
     }
   });
 
-  it('keeps core CI step sequence ordered', () => {
+  it('keeps required CI step sequences ordered within each required job', () => {
     const workflowYaml = loadCiWorkflowYaml();
-    const ciJobBlock = extractJobBlock(workflowYaml, REQUIRED_COMPAT_CI_JOB_NAME);
-    expect(ciJobBlock, `missing CI workflow job: ${REQUIRED_COMPAT_CI_JOB_NAME}`).toBeTruthy();
-    let previousStepStartIndex = -1;
-    for (const stepName of REQUIRED_COMPAT_CI_STEP_SEQUENCE) {
-      const stepMetadata = extractStepMetadata(ciJobBlock, stepName);
-      expect(stepMetadata, `missing CI workflow step: ${stepName}`).toBeTruthy();
-      const { startIndex } = stepMetadata;
-      expect(
-        startIndex,
-        `step "${stepName}" appears before previous required CI step in sequence`
-      ).toBeGreaterThan(previousStepStartIndex);
-      previousStepStartIndex = startIndex;
+    for (const [jobName, requiredStepNames] of Object.entries(REQUIRED_COMPAT_CI_JOB_STEP_NAME_SEQUENCES)) {
+      const jobBlock = extractJobBlock(workflowYaml, jobName);
+      expect(jobBlock, `missing CI workflow job: ${jobName}`).toBeTruthy();
+      let previousStepStartIndex = -1;
+      for (const stepName of requiredStepNames) {
+        const stepMetadata = extractStepMetadata(jobBlock, stepName);
+        expect(stepMetadata, `missing CI workflow step: ${stepName} in ${jobName}`).toBeTruthy();
+        const { startIndex } = stepMetadata;
+        expect(
+          startIndex,
+          `step "${stepName}" appears before previous required CI step in sequence for ${jobName}`
+        ).toBeGreaterThan(previousStepStartIndex);
+        previousStepStartIndex = startIndex;
+      }
     }
   });
 
-  it('keeps required CI steps unique within compat job', () => {
+  it('keeps required CI steps unique within each required job', () => {
     const workflowYaml = loadCiWorkflowYaml();
-    const ciJobBlock = extractJobBlock(workflowYaml, REQUIRED_COMPAT_CI_JOB_NAME);
-    expect(ciJobBlock, `missing CI workflow job: ${REQUIRED_COMPAT_CI_JOB_NAME}`).toBeTruthy();
-    for (const stepName of REQUIRED_COMPAT_CI_STEP_SEQUENCE) {
-      expect(
-        countStepNameOccurrences(ciJobBlock, stepName),
-        `required CI step "${stepName}" must appear exactly once in ${REQUIRED_COMPAT_CI_JOB_NAME}`
-      ).toBe(1);
+    for (const [jobName, requiredStepNames] of Object.entries(REQUIRED_COMPAT_CI_JOB_STEP_NAME_SEQUENCES)) {
+      const jobBlock = extractJobBlock(workflowYaml, jobName);
+      expect(jobBlock, `missing CI workflow job: ${jobName}`).toBeTruthy();
+      for (const stepName of requiredStepNames) {
+        expect(
+          countStepNameOccurrences(jobBlock, stepName),
+          `required CI step "${stepName}" must appear exactly once in ${jobName}`
+        ).toBe(1);
+      }
     }
   });
 

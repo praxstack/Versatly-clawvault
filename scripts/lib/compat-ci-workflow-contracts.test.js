@@ -5,6 +5,7 @@ import {
   REQUIRED_COMPAT_CI_JOB_FIELD_NAME_SEQUENCES,
   REQUIRED_COMPAT_CI_JOB_TOP_LEVEL_SCALAR_VALUE_CONTRACTS,
   REQUIRED_COMPAT_CI_JOB_STEP_NAME_SEQUENCES,
+  REQUIRED_COMPAT_CI_JOB_UNIQUE_FIELD_NAME_SEQUENCES,
   REQUIRED_COMPAT_CI_JOB_RUNS_ON,
   REQUIRED_COMPAT_CI_JOB_TIMEOUT_MINUTES,
   REQUIRED_COMPAT_CI_JOB_FIELD_NAMES,
@@ -117,6 +118,15 @@ describe('compat ci workflow contracts constants', () => {
     expect(REQUIRED_COMPAT_CI_JOB_NAMES.length).toBeGreaterThan(0);
     expect(new Set(REQUIRED_COMPAT_CI_JOB_NAMES).size).toBe(REQUIRED_COMPAT_CI_JOB_NAMES.length);
     expect(REQUIRED_COMPAT_CI_JOB_NAMES).toContain(REQUIRED_COMPAT_CI_JOB_NAME);
+    expect(Object.keys(REQUIRED_COMPAT_CI_JOB_UNIQUE_FIELD_NAME_SEQUENCES).sort()).toEqual(
+      [...REQUIRED_COMPAT_CI_JOB_NAMES].sort()
+    );
+    for (const [jobName, fieldNames] of Object.entries(REQUIRED_COMPAT_CI_JOB_UNIQUE_FIELD_NAME_SEQUENCES)) {
+      expect(REQUIRED_COMPAT_CI_JOB_NAMES).toContain(jobName);
+      expect(Array.isArray(fieldNames)).toBe(true);
+      expect(fieldNames.length).toBeGreaterThan(0);
+      expect(new Set(fieldNames).size).toBe(fieldNames.length);
+    }
     expect(Object.keys(REQUIRED_COMPAT_CI_JOB_FIELD_NAME_SEQUENCES).sort()).toEqual(
       [...REQUIRED_COMPAT_CI_JOB_NAMES].sort()
     );
