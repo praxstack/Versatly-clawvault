@@ -146,9 +146,10 @@
                   "type": "object",
                   "properties": {
                     "artifactName": { "const": "summary.json" },
+                    "artifactFile": { "const": "summary.json" },
                     "versionField": { "const": "summarySchemaVersion" }
                   },
-                  "required": ["artifactName", "versionField"]
+                  "required": ["artifactName", "artifactFile", "versionField"]
                 }
               }
             }
@@ -160,9 +161,10 @@
                   "type": "object",
                   "properties": {
                     "artifactName": { "const": "report-schema-validator-result.json" },
+                    "artifactFile": { "const": "report-schema-validator-result.json" },
                     "versionField": { "const": "outputSchemaVersion" }
                   },
-                  "required": ["artifactName", "versionField"]
+                  "required": ["artifactName", "artifactFile", "versionField"]
                 }
               }
             }
@@ -174,9 +176,10 @@
                   "type": "object",
                   "properties": {
                     "artifactName": { "const": "validator-result.json" },
+                    "artifactFile": { "const": "validator-result.json" },
                     "versionField": { "const": "outputSchemaVersion" }
                   },
-                  "required": ["artifactName", "versionField"]
+                  "required": ["artifactName", "artifactFile", "versionField"]
                 }
               }
             }
@@ -188,9 +191,10 @@
                   "type": "object",
                   "properties": {
                     "artifactName": { "const": "schema-validator-result.json" },
+                    "artifactFile": { "const": "schema-validator-result.json" },
                     "versionField": { "const": "outputSchemaVersion" }
                   },
-                  "required": ["artifactName", "versionField"]
+                  "required": ["artifactName", "artifactFile", "versionField"]
                 }
               }
             }
@@ -202,9 +206,10 @@
                   "type": "object",
                   "properties": {
                     "artifactName": { "const": "validator-result-verifier-result.json" },
+                    "artifactFile": { "const": "validator-result-verifier-result.json" },
                     "versionField": { "const": "outputSchemaVersion" }
                   },
-                  "required": ["artifactName", "versionField"]
+                  "required": ["artifactName", "artifactFile", "versionField"]
                 }
               }
             }
@@ -216,9 +221,10 @@
                   "type": "object",
                   "properties": {
                     "artifactName": { "const": "artifact-bundle-manifest-validator-result.json" },
+                    "artifactFile": { "const": "artifact-bundle-manifest-validator-result.json" },
                     "versionField": { "const": "outputSchemaVersion" }
                   },
-                  "required": ["artifactName", "versionField"]
+                  "required": ["artifactName", "artifactFile", "versionField"]
                 }
               }
             }

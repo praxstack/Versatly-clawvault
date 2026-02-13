@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import {
+  REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_FILES,
   REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_COUNT,
   REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES,
   REQUIRED_COMPAT_ARTIFACT_BUNDLE_VERSION_FIELDS
@@ -131,6 +132,13 @@ export function ensureCompatArtifactBundleManifestValidatorPayloadShape(payload)
       if (!schemaContractArtifactNames.includes(requiredArtifactName)) {
         throw new Error(
           `compat artifact bundle manifest validator payload schemaContracts is missing required artifactName: ${requiredArtifactName}`
+        );
+      }
+      const expectedArtifactFile = REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_FILES[requiredArtifactName];
+      if (schemaContractsByArtifactName.get(requiredArtifactName)?.artifactFile !== expectedArtifactFile) {
+        throw new Error(
+          `compat artifact bundle manifest validator payload schemaContracts entry for ${requiredArtifactName} `
+          + `must use artifactFile=${expectedArtifactFile}`
         );
       }
       const expectedVersionField = REQUIRED_COMPAT_ARTIFACT_BUNDLE_VERSION_FIELDS[requiredArtifactName];

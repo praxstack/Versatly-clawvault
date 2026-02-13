@@ -9,6 +9,12 @@ export const REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES = Object.freeze([
 
 export const REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_COUNT = REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES.length;
 
+export const REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_FILES = Object.freeze(
+  Object.fromEntries(
+    REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES.map((artifactName) => [artifactName, artifactName])
+  )
+);
+
 export const REQUIRED_COMPAT_ARTIFACT_BUNDLE_VERSION_FIELDS = Object.freeze({
   'summary.json': 'summarySchemaVersion',
   'report-schema-validator-result.json': 'outputSchemaVersion',

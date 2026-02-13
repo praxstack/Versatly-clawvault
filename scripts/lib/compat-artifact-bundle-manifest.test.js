@@ -85,6 +85,16 @@ describe('compat artifact bundle manifest contracts', () => {
       artifacts: versionFieldDriftArtifacts
     })).toThrow('required artifact summary.json must use versionField=summarySchemaVersion');
 
+    const artifactFileDriftArtifacts = buildRequiredManifestArtifacts().map((entry) => (
+      entry.artifactName === 'summary.json'
+        ? { ...entry, artifactFile: 'summary-v2.json' }
+        : entry
+    ));
+    expect(() => ensureCompatArtifactBundleManifestShape({
+      schemaVersion: COMPAT_ARTIFACT_BUNDLE_MANIFEST_SCHEMA_VERSION,
+      artifacts: artifactFileDriftArtifacts
+    })).toThrow('required artifact summary.json must use artifactFile=summary.json');
+
     expect(() => ensureCompatArtifactBundleManifestShape({
       schemaVersion: COMPAT_ARTIFACT_BUNDLE_MANIFEST_SCHEMA_VERSION,
       artifacts: [

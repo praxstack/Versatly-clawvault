@@ -168,6 +168,7 @@
 - `compat-artifact-bundle.manifest.schema.json` now also encodes required artifact-name presence via `contains` constraints, tightening standalone schema-validation guarantees for manifest completeness.
 - `compat-artifact-bundle-manifest-validator-output` runtime/schema contracts now both encode required artifact-name presence (`artifacts` + `schemaContracts`), strengthening standalone validation guarantees for emitted manifest-validator artifacts.
 - Manifest and manifest-validator output contracts now also pin per-artifact `versionField` expectations for required artifacts (`summary.json` → `summarySchemaVersion`, all others → `outputSchemaVersion`) across both runtime shape guards and JSON-schema constraints.
+- Manifest and manifest-validator output contracts now also pin required per-artifact `artifactFile` mappings (`artifactFile === artifactName`) across runtime and JSON-schema validation, tightening deterministic artifact-bundle contract semantics.
 - Artifact-bundle validator output runtime/schema contracts now also pin required per-artifact `versionField` expectations in `artifactContracts`, tightening downstream payload tamper/drift detection.
 - Bundle-validator required artifact-name coverage checks now rely on manifest-load guarantees; obsolete duplicate runtime helper logic was removed to reduce dead code and maintenance overhead.
 - Manifest-validator CLI coverage now includes explicit missing-required-artifact manifest scenarios, locking in structured error semantics for incomplete manifest contracts.

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_COUNT,
+  REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_FILES,
   REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES,
   REQUIRED_COMPAT_ARTIFACT_BUNDLE_PATH_FIELDS,
   REQUIRED_COMPAT_ARTIFACT_BUNDLE_VERSION_FIELDS
@@ -32,6 +33,15 @@ describe('compat artifact bundle contracts constants', () => {
     expect(REQUIRED_COMPAT_ARTIFACT_BUNDLE_VERSION_FIELDS['summary.json']).toBe('summarySchemaVersion');
     for (const artifactName of REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES.filter((name) => name !== 'summary.json')) {
       expect(REQUIRED_COMPAT_ARTIFACT_BUNDLE_VERSION_FIELDS[artifactName]).toBe('outputSchemaVersion');
+    }
+  });
+
+  it('keeps required artifact-file bindings aligned with required artifact set', () => {
+    expect(Object.keys(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_FILES).sort()).toEqual(
+      [...REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES].sort()
+    );
+    for (const artifactName of REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES) {
+      expect(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_FILES[artifactName]).toBe(artifactName);
     }
   });
 });
