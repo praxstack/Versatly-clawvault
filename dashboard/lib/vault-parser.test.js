@@ -123,4 +123,69 @@ Decision details`
       fs.rmSync(vaultPath, { recursive: true, force: true });
     }
   });
+
+  it('loads graph data from memory graph index when present', async () => {
+    const vaultPath = makeTempVault();
+    try {
+      const indexPath = path.join(vaultPath, '.clawvault', 'graph-index.json');
+      fs.mkdirSync(path.dirname(indexPath), { recursive: true });
+      fs.writeFileSync(
+        indexPath,
+        JSON.stringify({
+          schemaVersion: 1,
+          files: {
+            'decisions/use-clawvault.md': { relativePath: 'decisions/use-clawvault.md' }
+          },
+          graph: {
+            nodes: [
+              {
+                id: 'note:decisions/use-clawvault',
+                title: 'Use ClawVault',
+                type: 'decision',
+                category: 'decisions',
+                tags: ['architecture'],
+                path: 'decisions/use-clawvault.md',
+                missing: false,
+                degree: 1
+              },
+              {
+                id: 'note:projects/clawvault',
+                title: 'ClawVault Project',
+                type: 'project',
+                category: 'projects',
+                tags: [],
+                path: 'projects/clawvault.md',
+                missing: false,
+                degree: 1
+              }
+            ],
+            edges: [
+              {
+                source: 'note:decisions/use-clawvault',
+                target: 'note:projects/clawvault',
+                type: 'frontmatter_relation',
+                label: 'related'
+              }
+            ],
+            stats: { generatedAt: '2026-02-13T00:00:00.000Z' }
+          }
+        }),
+        'utf8'
+      );
+
+      const graph = await buildVaultGraph(vaultPath);
+      expect(graph.nodes.find((node) => node.id === 'decisions/use-clawvault')).toBeTruthy();
+      expect(graph.edges).toEqual([
+        {
+          source: 'decisions/use-clawvault',
+          target: 'projects/clawvault',
+          type: 'frontmatter_relation',
+          label: 'related'
+        }
+      ]);
+      expect(graph.stats.fileCount).toBe(1);
+    } finally {
+      fs.rmSync(vaultPath, { recursive: true, force: true });
+    }
+  });
 });

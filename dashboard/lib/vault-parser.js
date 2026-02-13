@@ -4,6 +4,7 @@ import matter from 'gray-matter';
 
 export const WIKI_LINK_REGEX = /\[\[([^\]|]+)(\|[^\]]+)?\]\]/g;
 const HASH_TAG_REGEX = /(^|\s)#([\w-]+)/g;
+const MEMORY_GRAPH_INDEX_PATH = ['.clawvault', 'graph-index.json'];
 
 const MARKDOWN_EXT = '.md';
 const IGNORED_DIRECTORIES = new Set([
@@ -32,6 +33,15 @@ const FRONTMATTER_RELATION_FIELDS = [
 export async function buildVaultGraph(vaultPath, options = {}) {
   const includeDangling = options.includeDangling !== false;
   const root = path.resolve(vaultPath);
+  const preferIndex = options.preferIndex !== false;
+
+  if (preferIndex) {
+    const indexedGraph = await loadGraphFromMemoryIndex(root, { includeDangling });
+    if (indexedGraph) {
+      return indexedGraph;
+    }
+  }
+
   const markdownFiles = await collectMarkdownFiles(root);
 
   const nodesById = new Map();
@@ -196,6 +206,101 @@ export async function buildVaultGraph(vaultPath, options = {}) {
   };
 }
 
+async function loadGraphFromMemoryIndex(root, options = {}) {
+  const includeDangling = options.includeDangling !== false;
+  const indexPath = path.join(root, ...MEMORY_GRAPH_INDEX_PATH);
+
+  let parsed;
+  try {
+    const raw = await fs.readFile(indexPath, 'utf8');
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+
+  const graph = parsed?.graph;
+  if (!graph || !Array.isArray(graph.nodes) || !Array.isArray(graph.edges)) {
+    return null;
+  }
+
+  const nodeById = new Map();
+  for (const node of graph.nodes) {
+    const mappedId = fromIndexedNodeId(node?.id, node?.type);
+    if (!mappedId) continue;
+    if (node?.missing && !includeDangling) continue;
+
+    nodeById.set(mappedId, {
+      id: mappedId,
+      title: normalizeString(node?.title) || toDisplayTitle(mappedId),
+      category: normalizeString(node?.category) || 'root',
+      type: normalizeString(node?.type) || 'note',
+      tags: normalizeTags(node?.tags),
+      path: typeof node?.path === 'string' ? toPosixPath(node.path) : null,
+      missing: Boolean(node?.missing),
+      degree: Number(node?.degree ?? 0)
+    });
+  }
+
+  const edges = [];
+  for (const edge of graph.edges) {
+    const source = fromIndexedNodeId(edge?.source);
+    const target = fromIndexedNodeId(edge?.target);
+    if (!source || !target) continue;
+    if (!nodeById.has(source) || !nodeById.has(target)) continue;
+    edges.push({
+      source,
+      target,
+      type: normalizeString(edge?.type) || 'wiki_link',
+      label: normalizeString(edge?.label) || undefined
+    });
+  }
+
+  const degreeByNodeId = new Map();
+  for (const edge of edges) {
+    degreeByNodeId.set(edge.source, (degreeByNodeId.get(edge.source) ?? 0) + 1);
+    degreeByNodeId.set(edge.target, (degreeByNodeId.get(edge.target) ?? 0) + 1);
+  }
+
+  const nodeTypeCounts = {};
+  const nodes = Array.from(nodeById.values())
+    .map((node) => {
+      node.degree = degreeByNodeId.get(node.id) ?? 0;
+      nodeTypeCounts[node.type] = (nodeTypeCounts[node.type] ?? 0) + 1;
+      return node;
+    })
+    .sort((a, b) => a.id.localeCompare(b.id));
+
+  const edgeTypeCounts = {};
+  for (const edge of edges) {
+    edgeTypeCounts[edge.type] = (edgeTypeCounts[edge.type] ?? 0) + 1;
+  }
+
+  edges.sort((a, b) => {
+    const sourceSort = String(a.source).localeCompare(String(b.source));
+    if (sourceSort !== 0) return sourceSort;
+    const targetSort = String(a.target).localeCompare(String(b.target));
+    if (targetSort !== 0) return targetSort;
+    const typeSort = String(a.type || '').localeCompare(String(b.type || ''));
+    if (typeSort !== 0) return typeSort;
+    return String(a.label || '').localeCompare(String(b.label || ''));
+  });
+
+  return {
+    nodes,
+    edges,
+    stats: {
+      generatedAt: normalizeString(graph?.stats?.generatedAt) || new Date().toISOString(),
+      nodeCount: nodes.length,
+      edgeCount: edges.length,
+      fileCount: Number.isFinite(Number(parsed?.files ? Object.keys(parsed.files).length : graph?.stats?.fileCount))
+        ? Number(parsed?.files ? Object.keys(parsed.files).length : graph?.stats?.fileCount)
+        : 0,
+      nodeTypeCounts,
+      edgeTypeCounts
+    }
+  };
+}
+
 async function collectMarkdownFiles(root) {
   const pending = [root];
   const files = [];
@@ -319,6 +424,24 @@ function normalizeWikiTarget(target) {
   }
 
   return normalizeString(value);
+}
+
+function fromIndexedNodeId(value, nodeType = '') {
+  const raw = normalizeString(value);
+  if (!raw) return '';
+  if (raw.startsWith('note:')) {
+    return raw.slice(5);
+  }
+  if (raw.startsWith('tag:')) {
+    return raw;
+  }
+  if (raw.startsWith('unresolved:')) {
+    return raw.slice('unresolved:'.length) || raw;
+  }
+  if (normalizeString(nodeType).toLowerCase() === 'tag') {
+    return raw.startsWith('tag:') ? raw : `tag:${raw}`;
+  }
+  return raw;
 }
 
 function toNodeId(relativePath) {
