@@ -207,11 +207,15 @@ function checkHookHandlerSafety(options: CompatOptions): CompatCheck {
 
   const usesExecFileSync = handlerRaw.includes('execFileSync');
   const usesExecSync = /\bexecSync\b/.test(handlerRaw);
+  const enablesShell = /\bshell\s*:\s*true\b/.test(handlerRaw);
   const delegatesAutoProfile = /['"]--profile['"]\s*,\s*['"]auto['"]/.test(handlerRaw);
 
   const violations: string[] = [];
   if (!usesExecFileSync || usesExecSync) {
     violations.push('execFileSync-only execution path');
+  }
+  if (enablesShell) {
+    violations.push('shell:false execution option');
   }
   if (!delegatesAutoProfile) {
     violations.push('shared context profile delegation (--profile auto)');

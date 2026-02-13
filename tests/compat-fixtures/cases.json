@@ -166,6 +166,22 @@
     }
   },
   {
+    "name": "unsafe-shell-handler",
+    "description": "warning for shell-enabled hook execution options.",
+    "expectedExitCode": 1,
+    "expectedWarnings": 1,
+    "expectedErrors": 0,
+    "expectedCheckStatuses": {
+      "hook handler safety": "warn"
+    },
+    "expectedDetailIncludes": {
+      "hook handler safety": "shell:false execution option"
+    },
+    "expectedHintIncludes": {
+      "hook handler safety": "no shell"
+    }
+  },
+  {
     "name": "missing-skill-file",
     "description": "warning for missing SKILL.md file entirely.",
     "expectedExitCode": 1,

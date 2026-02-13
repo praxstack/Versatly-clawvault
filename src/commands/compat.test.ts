@@ -143,6 +143,26 @@ describe('checkOpenClawCompatibility', () => {
     }
   });
 
+  it('flags shell-enabled hook handler execution path', async () => {
+    spawnSyncMock.mockReturnValue({ error: undefined });
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'clawvault-compat-'));
+    try {
+      writeProjectFixture(root);
+      fs.writeFileSync(
+        path.join(root, 'hooks', 'clawvault', 'handler.js'),
+        "import { execFileSync } from 'child_process';\nexecFileSync('clawvault', ['context', 'task', '--profile', 'auto'], { shell: true });\n",
+        'utf-8'
+      );
+      const { checkOpenClawCompatibility } = await loadCompatModule();
+      const report = checkOpenClawCompatibility({ baseDir: root });
+      const handlerCheck = report.checks.find((check) => check.label === 'hook handler safety');
+      expect(handlerCheck?.status).toBe('warn');
+      expect(handlerCheck?.detail).toContain('shell:false execution option');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('flags missing hook manifest required bin', async () => {
     spawnSyncMock.mockReturnValue({ error: undefined });
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'clawvault-compat-'));
