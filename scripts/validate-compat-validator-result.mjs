@@ -1,4 +1,3 @@
-import * as fs from 'fs';
 import * as path from 'path';
 import {
   loadSummaryValidatorPayload
@@ -8,6 +7,11 @@ import {
   buildValidatorResultVerifierSuccessPayload,
   ensureValidatorResultVerifierPayloadShape
 } from './lib/compat-validator-result-verifier-output.mjs';
+import {
+  bestEffortOutPath,
+  isJsonModeRequestedFromArgv,
+  writeValidatedJsonPayload
+} from './lib/validator-cli-utils.mjs';
 
 function parseCliArgs(argv) {
   const parsed = {
@@ -75,23 +79,8 @@ function printHelp() {
   console.log('                        --require-ok (fail when payload.status is "error")');
 }
 
-function isJsonModeRequestedFromArgv(argv) {
-  return argv.includes('--json');
-}
-
-function bestEffortOutPath(argv) {
-  const index = argv.indexOf('--out');
-  if (index === -1) return '';
-  const value = argv[index + 1];
-  if (!value || value.startsWith('--')) return '';
-  return value;
-}
-
 function writeResultPayload(outPath, payload) {
-  ensureValidatorResultVerifierPayloadShape(payload);
-  const resolvedPath = path.resolve(process.cwd(), outPath);
-  fs.mkdirSync(path.dirname(resolvedPath), { recursive: true });
-  fs.writeFileSync(resolvedPath, JSON.stringify(payload, null, 2), 'utf-8');
+  writeValidatedJsonPayload(outPath, payload, ensureValidatorResultVerifierPayloadShape);
 }
 
 function resolveValidatorResultPath(args) {

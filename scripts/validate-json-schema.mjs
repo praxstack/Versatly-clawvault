@@ -6,6 +6,10 @@ import {
   buildJsonSchemaValidatorSuccessPayload,
   ensureJsonSchemaValidatorPayloadShape
 } from './lib/json-schema-validator-output.mjs';
+import {
+  bestEffortOutPath,
+  writeValidatedJsonPayload
+} from './lib/validator-cli-utils.mjs';
 
 function parseCliArgs(argv) {
   const parsed = {
@@ -70,14 +74,6 @@ function parseCliArgs(argv) {
   return parsed;
 }
 
-function bestEffortOutPath(argv) {
-  const index = argv.indexOf('--out');
-  if (index === -1) return '';
-  const value = argv[index + 1];
-  if (!value || value.startsWith('--')) return '';
-  return value;
-}
-
 function printHelp() {
   console.log('Usage: node scripts/validate-json-schema.mjs --schema <schema.json> --data <payload.json>');
   console.log('       node scripts/validate-json-schema.mjs <schema.json> <payload.json>');
@@ -113,10 +109,7 @@ function normalizeValidationErrors(errors = []) {
 }
 
 function writePayload(outPath, payload) {
-  ensureJsonSchemaValidatorPayloadShape(payload);
-  const resolvedPath = path.resolve(process.cwd(), outPath);
-  fs.mkdirSync(path.dirname(resolvedPath), { recursive: true });
-  fs.writeFileSync(resolvedPath, JSON.stringify(payload, null, 2), 'utf-8');
+  writeValidatedJsonPayload(outPath, payload, ensureJsonSchemaValidatorPayloadShape);
 }
 
 function main() {

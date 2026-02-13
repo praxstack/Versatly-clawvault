@@ -1,4 +1,3 @@
-import * as fs from 'fs';
 import * as path from 'path';
 import {
   loadCompatSummary,
@@ -9,6 +8,11 @@ import {
   buildSummaryValidatorSuccessPayload,
   ensureSummaryValidatorPayloadShape
 } from './lib/compat-summary-validator-output.mjs';
+import {
+  bestEffortOutPath,
+  isJsonModeRequestedFromArgv,
+  writeValidatedJsonPayload
+} from './lib/validator-cli-utils.mjs';
 
 function parseCliArgs(argv) {
   const parsed = {
@@ -75,18 +79,6 @@ function parseCliArgs(argv) {
   return parsed;
 }
 
-function isJsonModeRequestedFromArgv(argv) {
-  return argv.includes('--json');
-}
-
-function bestEffortOutPath(argv) {
-  const index = argv.indexOf('--out');
-  if (index === -1) return '';
-  const value = argv[index + 1];
-  if (!value || value.startsWith('--')) return '';
-  return value;
-}
-
 function printHelp() {
   console.log('Usage: node scripts/validate-compat-summary.mjs [summary.json]');
   console.log('       node scripts/validate-compat-summary.mjs --summary <summary.json> [--report-dir <dir>]');
@@ -138,10 +130,7 @@ function resolvePaths(args) {
 }
 
 function writeResultPayload(outPath, payload) {
-  ensureSummaryValidatorPayloadShape(payload);
-  const resolvedPath = path.resolve(process.cwd(), outPath);
-  fs.mkdirSync(path.dirname(resolvedPath), { recursive: true });
-  fs.writeFileSync(resolvedPath, JSON.stringify(payload, null, 2), 'utf-8');
+  writeValidatedJsonPayload(outPath, payload, ensureSummaryValidatorPayloadShape);
 }
 
 function main() {
