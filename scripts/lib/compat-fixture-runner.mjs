@@ -89,6 +89,7 @@ export function loadCaseManifest(casesPath) {
     if (Object.keys(testCase.expectedCheckStatuses).length === 0) {
       throw new Error(`compat fixture case[${index}] expectedCheckStatuses must include at least one check label`);
     }
+    const statusLabels = new Set(Object.keys(testCase.expectedCheckStatuses));
     for (const [label, status] of Object.entries(testCase.expectedCheckStatuses)) {
       if (typeof label !== 'string' || !label) {
         throw new Error(`compat fixture case[${index}] has invalid status label`);
@@ -106,6 +107,9 @@ export function loadCaseManifest(casesPath) {
         if (typeof label !== 'string' || !label || typeof snippet !== 'string' || !snippet) {
           throw new Error(`compat fixture case[${index}] has invalid detail expectation`);
         }
+        if (!statusLabels.has(label)) {
+          throw new Error(`compat fixture case[${index}] detail expectation references label without expectedCheckStatuses entry: ${label}`);
+        }
       }
     }
 
@@ -116,6 +120,9 @@ export function loadCaseManifest(casesPath) {
       for (const [label, snippet] of Object.entries(testCase.expectedHintIncludes)) {
         if (typeof label !== 'string' || !label || typeof snippet !== 'string' || !snippet) {
           throw new Error(`compat fixture case[${index}] has invalid hint expectation`);
+        }
+        if (!statusLabels.has(label)) {
+          throw new Error(`compat fixture case[${index}] hint expectation references label without expectedCheckStatuses entry: ${label}`);
         }
       }
     }

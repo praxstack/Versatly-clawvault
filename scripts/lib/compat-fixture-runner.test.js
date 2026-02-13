@@ -248,6 +248,48 @@ describe('compat fixture runner utilities', () => {
     }
   });
 
+  it('rejects orphan detail/hint expectations without status entries', () => {
+    const root = makeTempDir('compat-cases-');
+    const file = path.join(root, 'cases.json');
+    try {
+      fs.writeFileSync(file, JSON.stringify({
+        schemaVersion: COMPAT_FIXTURE_SCHEMA_VERSION,
+        expectedCheckLabels: ['hook handler safety'],
+        cases: [
+          {
+            name: 'orphan-detail-label',
+            description: 'detail expectation without expected status label.',
+            expectedExitCode: 1,
+            expectedWarnings: 1,
+            expectedErrors: 0,
+            expectedCheckStatuses: { 'hook handler safety': 'warn' },
+            expectedDetailIncludes: { 'skill metadata': 'metadata.openclaw' }
+          }
+        ]
+      }), 'utf-8');
+      expect(() => loadCases(file)).toThrow('detail expectation references label');
+
+      fs.writeFileSync(file, JSON.stringify({
+        schemaVersion: COMPAT_FIXTURE_SCHEMA_VERSION,
+        expectedCheckLabels: ['hook handler safety'],
+        cases: [
+          {
+            name: 'orphan-hint-label',
+            description: 'hint expectation without expected status label.',
+            expectedExitCode: 1,
+            expectedWarnings: 1,
+            expectedErrors: 0,
+            expectedCheckStatuses: { 'hook handler safety': 'warn' },
+            expectedHintIncludes: { 'skill metadata': 'metadata.openclaw' }
+          }
+        ]
+      }), 'utf-8');
+      expect(() => loadCases(file)).toThrow('hint expectation references label');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('rejects unsupported fixture schema version', () => {
     const root = makeTempDir('compat-cases-');
     const file = path.join(root, 'cases.json');
