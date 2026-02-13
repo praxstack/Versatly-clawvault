@@ -107,6 +107,7 @@
 - Compatibility fixture runner now validates full summary artifact shape/invariants before writing, preventing malformed schema output from leaking into CI/report consumers.
 - Summary validation now enforces mode-specific invariants: contract mode must remain zero-result metadata, while fixtures mode totals must match selected-case counts with bounded slowest-case lists.
 - Compatibility summary validation now enforces fixture result-entry schema and coherence between `results`, pass/fail lists, and selected-case ordering, tightening downstream report contract guarantees.
+- Summary validation now enforces `slowestCases` coherence with fixture results (expected count, descending duration order, and exact per-case duration parity), reducing telemetry drift risk.
 - Fixture manifest validation now requires `expectedCheckStatuses` labels to be declared in `expectedCheckLabels`, tightening declarative contract integrity.
 
 ## [1.11.2] - 2026-02-12
