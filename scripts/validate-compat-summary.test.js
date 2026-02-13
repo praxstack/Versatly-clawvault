@@ -87,6 +87,10 @@ describe('validate-compat-summary script', () => {
       const result = runSummaryValidator([summaryPath]);
       expect(result.status).toBe(1);
       expect(result.stderr).toContain('Missing case report for summary result');
+
+      const allowMissingResult = runSummaryValidator([summaryPath, '--allow-missing-case-reports']);
+      expect(allowMissingResult.status).toBe(0);
+      expect(allowMissingResult.stdout).toContain('skipped-case-reports');
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
@@ -160,5 +164,6 @@ describe('validate-compat-summary script', () => {
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('Usage: node scripts/validate-compat-summary.mjs');
     expect(result.stdout).toContain('--summary <summary.json>');
+    expect(result.stdout).toContain('--allow-missing-case-reports');
   });
 });

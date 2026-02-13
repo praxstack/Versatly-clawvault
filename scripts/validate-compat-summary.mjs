@@ -8,7 +8,8 @@ function parseCliArgs(argv) {
   const parsed = {
     summaryPath: '',
     reportDir: '',
-    help: false
+    help: false,
+    allowMissingCaseReports: false
   };
   const positional = [];
 
@@ -16,6 +17,10 @@ function parseCliArgs(argv) {
     const value = argv[index];
     if (value === '--help' || value === '-h') {
       parsed.help = true;
+      continue;
+    }
+    if (value === '--allow-missing-case-reports') {
+      parsed.allowMissingCaseReports = true;
       continue;
     }
     if (value === '--summary') {
@@ -52,10 +57,12 @@ function parseCliArgs(argv) {
 function printHelp() {
   console.log('Usage: node scripts/validate-compat-summary.mjs [summary.json]');
   console.log('       node scripts/validate-compat-summary.mjs --summary <summary.json> [--report-dir <dir>]');
+  console.log('       node scripts/validate-compat-summary.mjs --summary <summary.json> --allow-missing-case-reports');
   console.log('');
   console.log('Resolution order:');
   console.log('  summary path: --summary | positional arg | COMPAT_SUMMARY_PATH | COMPAT_REPORT_DIR/summary.json');
   console.log('  report dir : --report-dir | COMPAT_REPORT_DIR | dirname(summary path)');
+  console.log('  flags      : --allow-missing-case-reports (skip fixtures case-report file validation)');
 }
 
 function resolvePaths(args) {
@@ -101,11 +108,14 @@ function main() {
   }
   const { summaryPath, reportDir } = resolvePaths(args);
   const summary = loadCompatSummary(summaryPath);
-  validateCompatSummaryCaseReports(summary, reportDir);
+  if (!args.allowMissingCaseReports) {
+    validateCompatSummaryCaseReports(summary, reportDir);
+  }
 
   const resultCount = Array.isArray(summary.results) ? summary.results.length : 0;
+  const caseReportMode = args.allowMissingCaseReports ? 'skipped-case-reports' : 'validated-case-reports';
   console.log(
-    `Compatibility summary validation passed (${summary.mode}) selected=${summary.selectedTotal} results=${resultCount} reportDir=${reportDir}`
+    `Compatibility summary validation passed (${summary.mode}) selected=${summary.selectedTotal} results=${resultCount} reportDir=${reportDir} ${caseReportMode}`
   );
 }
 
