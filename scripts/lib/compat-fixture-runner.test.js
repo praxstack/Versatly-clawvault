@@ -64,6 +64,29 @@ describe('compat fixture runner utilities', () => {
     }
   });
 
+  it('rejects invalid allowMissingFiles metadata', () => {
+    const root = makeTempDir('compat-cases-');
+    const file = path.join(root, 'cases.json');
+    fs.writeFileSync(file, JSON.stringify({
+      schemaVersion: COMPAT_FIXTURE_SCHEMA_VERSION,
+      cases: [
+        {
+          name: 'bad-allow-missing',
+          expectedExitCode: 0,
+          expectedWarnings: 0,
+          expectedErrors: 0,
+          expectedCheckStatuses: { 'hook handler safety': 'ok' },
+          allowMissingFiles: [123]
+        }
+      ]
+    }), 'utf-8');
+    try {
+      expect(() => loadCases(file)).toThrow('allowMissingFiles');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('rejects unsupported fixture schema version', () => {
     const root = makeTempDir('compat-cases-');
     const file = path.join(root, 'cases.json');
@@ -110,6 +133,7 @@ describe('compat fixture runner utilities', () => {
       expect(() => assertFixtureFiles('healthy', root)).not.toThrow();
       fs.rmSync(path.join(root, 'hooks', 'clawvault', 'handler.js'));
       expect(() => assertFixtureFiles('healthy', root)).toThrow('missing required files');
+      expect(() => assertFixtureFiles('healthy', root, undefined, [path.join('hooks', 'clawvault', 'handler.js')])).not.toThrow();
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }

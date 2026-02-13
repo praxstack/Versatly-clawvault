@@ -83,6 +83,21 @@
     "expectedDetailIncludes": {
       "hook handler safety": "execFileSync-only execution path"
     }
+  },
+  {
+    "name": "missing-skill-file",
+    "expectedExitCode": 1,
+    "expectedWarnings": 1,
+    "expectedErrors": 0,
+    "expectedCheckStatuses": {
+      "skill metadata": "warn"
+    },
+    "expectedDetailIncludes": {
+      "skill metadata": "SKILL.md not found"
+    },
+    "allowMissingFiles": [
+      "SKILL.md"
+    ]
   }
   ]
 }

@@ -72,6 +72,12 @@ export function loadCases(casesPath) {
         }
       }
     }
+
+    if (testCase.allowMissingFiles !== undefined) {
+      if (!Array.isArray(testCase.allowMissingFiles) || testCase.allowMissingFiles.some((value) => typeof value !== 'string' || !value)) {
+        throw new Error(`compat fixture case[${index}] allowMissingFiles must be an array of non-empty strings`);
+      }
+    }
   }
 
   return cases;
@@ -121,8 +127,11 @@ export function parseCompatReport(stdout, caseName) {
   }
 }
 
-export function assertFixtureFiles(caseName, fixturePath, requiredPaths = REQUIRED_FIXTURE_FILES) {
-  const missing = requiredPaths.filter((relativePath) => !fs.existsSync(path.join(fixturePath, relativePath)));
+export function assertFixtureFiles(caseName, fixturePath, requiredPaths = REQUIRED_FIXTURE_FILES, allowMissingFiles = []) {
+  const allowedMissing = new Set(allowMissingFiles);
+  const missing = requiredPaths
+    .filter((relativePath) => !allowedMissing.has(relativePath))
+    .filter((relativePath) => !fs.existsSync(path.join(fixturePath, relativePath)));
   if (missing.length > 0) {
     throw new Error(`fixture=${caseName} missing required files: ${missing.join(', ')}`);
   }

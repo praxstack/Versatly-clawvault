@@ -49,7 +49,7 @@ function writeSummaryReport(summary) {
 
 function runCase(testCase, env) {
   const fixturePath = path.join(fixturesRoot, testCase.name);
-  assertFixtureFiles(testCase.name, fixturePath);
+  assertFixtureFiles(testCase.name, fixturePath, undefined, testCase.allowMissingFiles ?? []);
   const result = spawnSync(
     process.execPath,
     ['./bin/clawvault.js', 'compat', '--strict', '--base-dir', fixturePath, '--json'],

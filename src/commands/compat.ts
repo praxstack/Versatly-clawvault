@@ -43,10 +43,10 @@ function readOptionalFile(filePath: string): string | null {
 }
 
 function resolveProjectFile(relativePath: string, baseDir?: string): string {
-  const fromBaseDir = path.resolve(baseDir ?? process.cwd(), relativePath);
-  if (fs.existsSync(fromBaseDir)) {
-    return fromBaseDir;
+  if (baseDir) {
+    return path.resolve(baseDir, relativePath);
   }
+
   const fromCwd = path.resolve(process.cwd(), relativePath);
   if (fs.existsSync(fromCwd)) {
     return fromCwd;
