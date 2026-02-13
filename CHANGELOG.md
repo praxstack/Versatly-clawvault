@@ -174,6 +174,7 @@
 - Artifact-bundle manifest runtime/schema contracts now enforce a strict required artifact set (exact cardinality + no unsupported `artifactName` entries), tightening manifest governance and surfacing unsupported extensions earlier.
 - Artifact-bundle manifest-validator output runtime/schema contracts now enforce strict required artifact-set cardinality and supported `artifactName` domain (including schemaContracts), reducing ambiguous payload acceptance in standalone validator-output checks.
 - Artifact-bundle validator output runtime/schema contracts now enforce strict required artifact-set cardinality/domain and required per-artifact `versionField` mapping across `artifactContracts`, tightening standalone output-contract integrity.
+- Artifact-bundle manifest and validator output runtime contracts now require canonical required-artifact ordering, ensuring deterministic artifact contract arrays and reducing downstream parser drift risk.
 - Compatibility npm workflows are now modularized into composable stack scripts (`test:compat-report-stack:fast`, `test:compat-validator-stack:fast`, `test:compat-artifact-stack:fast`) so `test:compat-summary:fast` remains maintainable as contract gates grow.
 
 ## [1.11.2] - 2026-02-12

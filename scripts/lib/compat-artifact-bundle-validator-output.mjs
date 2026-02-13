@@ -113,6 +113,13 @@ export function ensureCompatArtifactBundleValidatorPayloadShape(payload) {
     if (duplicateArtifactNames.length > 0) {
       throw new Error(`compat artifact bundle validator payload artifactContracts contains duplicates: ${duplicateArtifactNames.join(', ')}`);
     }
+    for (const [index, requiredArtifactName] of REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES.entries()) {
+      if (artifactNames[index] !== requiredArtifactName) {
+        throw new Error(
+          'compat artifact bundle validator payload artifactContracts must follow required canonical artifactName order'
+        );
+      }
+    }
     if (payload.verifiedArtifacts.length !== payload.artifactContracts.length) {
       throw new Error('compat artifact bundle validator payload verifiedArtifacts must have one entry per artifactContracts item');
     }
@@ -124,6 +131,11 @@ export function ensureCompatArtifactBundleValidatorPayloadShape(payload) {
     }
     if (payload.verifiedArtifacts.some((value, index) => value !== payload.artifactContracts[index].artifactName)) {
       throw new Error('compat artifact bundle validator payload verifiedArtifacts must match artifactContracts artifactName order');
+    }
+    for (const [index, requiredArtifactName] of REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES.entries()) {
+      if (payload.verifiedArtifacts[index] !== requiredArtifactName) {
+        throw new Error('compat artifact bundle validator payload verifiedArtifacts must follow required canonical artifactName order');
+      }
     }
     const artifactContractsByName = new Map(payload.artifactContracts.map((entry) => [entry.artifactName, entry]));
     for (const { fieldName, artifactName } of REQUIRED_COMPAT_ARTIFACT_BUNDLE_PATH_FIELDS) {

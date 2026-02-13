@@ -68,6 +68,13 @@ describe('compat artifact bundle manifest contracts', () => {
       artifacts: buildRequiredManifestArtifacts().slice(1)
     })).toThrow('missing required artifactName: summary.json');
 
+    const reorderedArtifacts = buildRequiredManifestArtifacts();
+    [reorderedArtifacts[0], reorderedArtifacts[1]] = [reorderedArtifacts[1], reorderedArtifacts[0]];
+    expect(() => ensureCompatArtifactBundleManifestShape({
+      schemaVersion: COMPAT_ARTIFACT_BUNDLE_MANIFEST_SCHEMA_VERSION,
+      artifacts: reorderedArtifacts
+    })).toThrow('must follow required canonical artifactName order');
+
     const versionFieldDriftArtifacts = buildRequiredManifestArtifacts().map((entry) => (
       entry.artifactName === 'summary.json'
         ? { ...entry, versionField: 'outputSchemaVersion' }

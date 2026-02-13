@@ -72,6 +72,11 @@ export function ensureCompatArtifactBundleManifestShape(manifest) {
       `compat artifact bundle manifest artifacts length must be ${REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES.length}`
     );
   }
+  for (const [index, requiredArtifactName] of REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES.entries()) {
+    if (manifest.artifacts[index]?.artifactName !== requiredArtifactName) {
+      throw new Error('compat artifact bundle manifest artifacts must follow required canonical artifactName order');
+    }
+  }
 }
 
 export function loadCompatArtifactBundleManifest(manifestPath) {

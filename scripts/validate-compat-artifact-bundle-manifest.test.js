@@ -99,6 +99,28 @@ describe('validate-compat-artifact-bundle-manifest script', () => {
     }
   });
 
+  it('fails when manifest artifact order drifts from canonical order', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'compat-artifact-manifest-validator-'));
+    try {
+      const manifestPath = path.join(root, 'manifest.json');
+      const manifest = JSON.parse(
+        fs.readFileSync(path.resolve(process.cwd(), 'schemas', 'compat-artifact-bundle.manifest.json'), 'utf-8')
+      );
+      [manifest.artifacts[0], manifest.artifacts[1]] = [manifest.artifacts[1], manifest.artifacts[0]];
+      fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
+
+      const result = runManifestValidator(['--manifest', manifestPath, '--json']);
+      expect(result.status).toBe(1);
+      expect(parseJsonLine(result.stdout)).toEqual({
+        outputSchemaVersion: COMPAT_ARTIFACT_BUNDLE_MANIFEST_VALIDATOR_OUTPUT_SCHEMA_VERSION,
+        status: 'error',
+        error: `Unable to read compat artifact bundle manifest at ${manifestPath}: compat artifact bundle manifest artifacts must follow required canonical artifactName order`
+      });
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('fails when manifest includes unsupported artifact entries', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'compat-artifact-manifest-validator-'));
     try {
