@@ -145,13 +145,16 @@ describe('checkOpenClawCompatibility', () => {
     const casesPath = path.resolve(process.cwd(), 'tests', 'compat-fixtures', 'cases.json');
     const manifest = JSON.parse(fs.readFileSync(casesPath, 'utf-8')) as {
       schemaVersion: number;
+      expectedCheckLabels: string[];
       cases: Array<{
         name: string;
+        description: string;
         expectedExitCode: number;
         expectedWarnings: number;
         expectedErrors: number;
         expectedCheckStatuses: Record<string, 'ok' | 'warn' | 'error'>;
         expectedDetailIncludes?: Record<string, string>;
+        expectedHintIncludes?: Record<string, string>;
       }>;
     };
     const cases = manifest.cases;
@@ -159,6 +162,7 @@ describe('checkOpenClawCompatibility', () => {
     for (const testCase of cases) {
       const fixtureRoot = path.resolve(process.cwd(), 'tests', 'compat-fixtures', testCase.name);
       const report = checkOpenClawCompatibility({ baseDir: fixtureRoot });
+      expect(report.checks.map((check) => check.label)).toEqual(manifest.expectedCheckLabels);
       expect(report.warnings).toBe(testCase.expectedWarnings);
       expect(report.errors).toBe(testCase.expectedErrors);
       expect(compatibilityExitCode(report, { strict: true })).toBe(testCase.expectedExitCode);
@@ -171,6 +175,11 @@ describe('checkOpenClawCompatibility', () => {
       for (const [label, expectedSnippet] of Object.entries(testCase.expectedDetailIncludes ?? {})) {
         const check = report.checks.find((candidate) => candidate.label === label);
         expect(check?.detail).toContain(expectedSnippet);
+      }
+
+      for (const [label, expectedSnippet] of Object.entries(testCase.expectedHintIncludes ?? {})) {
+        const check = report.checks.find((candidate) => candidate.label === label);
+        expect(check?.hint).toContain(expectedSnippet);
       }
     }
   });
