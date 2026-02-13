@@ -233,6 +233,7 @@ function checkSkillMetadata(options: CompatOptions): CompatCheck {
   }
 
   let hasOpenClawMetadata = false;
+  let parseError: string | undefined;
   try {
     const parsed = matter(skillRaw);
     const frontmatter = (parsed.data ?? {}) as Record<string, unknown>;
@@ -249,6 +250,7 @@ function checkSkillMetadata(options: CompatOptions): CompatCheck {
       || (typeof frontmatter.openclaw === 'object' && frontmatter.openclaw !== null)
     );
   } catch {
+    parseError = 'Unable to parse SKILL.md frontmatter';
     hasOpenClawMetadata = false;
   }
 
@@ -257,10 +259,13 @@ function checkSkillMetadata(options: CompatOptions): CompatCheck {
   }
 
   if (!hasOpenClawMetadata) {
+    const detail = parseError
+      ? `${parseError} (or missing metadata.openclaw)`
+      : 'Missing metadata.openclaw in SKILL.md';
     return {
       label: 'skill metadata',
       status: 'warn',
-      detail: 'Missing metadata.openclaw in SKILL.md',
+      detail,
       hint: 'Add metadata.openclaw to SKILL.md frontmatter for OpenClaw compatibility.'
     };
   }

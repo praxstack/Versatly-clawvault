@@ -154,6 +154,27 @@ describe('checkOpenClawCompatibility', () => {
     }
   });
 
+  it('flags malformed SKILL frontmatter with actionable warning', async () => {
+    spawnSyncMock.mockReturnValue({ error: undefined, status: 0 });
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'clawvault-compat-'));
+    try {
+      writeProjectFixture(root);
+      fs.writeFileSync(
+        path.join(root, 'SKILL.md'),
+        '---\nmetadata: [\n---\ninvalid',
+        'utf-8'
+      );
+      const { checkOpenClawCompatibility } = await loadCompatModule();
+      const report = checkOpenClawCompatibility({ baseDir: root });
+      const skillCheck = report.checks.find((check) => check.label === 'skill metadata');
+      expect(skillCheck?.status).toBe('warn');
+      expect(skillCheck?.detail).toContain('Unable to parse SKILL.md frontmatter');
+      expect(skillCheck?.hint).toContain('metadata.openclaw');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('matches declarative compatibility fixture expectations', async () => {
     spawnSyncMock.mockReturnValue({ error: undefined });
     const { checkOpenClawCompatibility, compatibilityExitCode } = await loadCompatModule();
