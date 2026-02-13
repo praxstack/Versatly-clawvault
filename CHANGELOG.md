@@ -86,6 +86,7 @@
 - Compatibility fixture contracts now support signal-based OpenClaw CLI simulation (`openclawSignal`), with matrix coverage for signal-terminated CLI readiness warnings.
 - Fixture manifest validation now enforces that simulated non-ready OpenClaw CLI cases (`openclawExitCode != 0` or `openclawSignal`) explicitly assert `openclaw CLI available: warn`.
 - Compatibility fixture runner now emits aggregate runtime telemetry (`totalDurationMs`, `averageDurationMs`) in summary artifacts and console output.
+- Fixture manifest validation now rejects orphan detail/hint assertions by requiring `expectedDetailIncludes`/`expectedHintIncludes` labels to also be declared in `expectedCheckStatuses`.
 
 ## [1.11.2] - 2026-02-12
 
