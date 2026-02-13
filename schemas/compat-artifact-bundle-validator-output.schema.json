@@ -44,6 +44,10 @@
       "type": "string",
       "minLength": 1
     },
+    "artifactBundleManifestValidatorResultPath": {
+      "type": "string",
+      "minLength": 1
+    },
     "verifiedArtifacts": {
       "type": "array",
       "items": {
@@ -122,6 +126,7 @@
           "reportSchemaValidatorResultPath",
           "schemaValidatorResultPath",
           "validatorResultVerifierResultPath",
+          "artifactBundleManifestValidatorResultPath",
           "verifiedArtifacts",
           "artifactContracts"
         ]

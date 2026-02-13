@@ -35,6 +35,13 @@
       "schemaPath": "schemas/compat-validator-result-verifier-output.schema.json",
       "schemaId": "https://clawvault.dev/schemas/compat-validator-result-verifier-output.schema.json",
       "versionField": "outputSchemaVersion"
+    },
+    {
+      "artifactName": "artifact-bundle-manifest-validator-result.json",
+      "artifactFile": "artifact-bundle-manifest-validator-result.json",
+      "schemaPath": "schemas/compat-artifact-bundle-manifest-validator-output.schema.json",
+      "schemaId": "https://clawvault.dev/schemas/compat-artifact-bundle-manifest-validator-output.schema.json",
+      "versionField": "outputSchemaVersion"
     }
   ]
 }

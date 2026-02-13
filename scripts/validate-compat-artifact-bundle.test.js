@@ -21,6 +21,9 @@ import {
   buildCompatReportSchemaValidatorSuccessPayload
 } from './lib/compat-report-schema-validator-output.mjs';
 import {
+  buildCompatArtifactBundleManifestValidatorSuccessPayload
+} from './lib/compat-artifact-bundle-manifest-validator-output.mjs';
+import {
   COMPAT_ARTIFACT_BUNDLE_VALIDATOR_OUTPUT_SCHEMA_VERSION
 } from './lib/compat-artifact-bundle-validator-output.mjs';
 
@@ -72,12 +75,78 @@ function buildFixturesSummary() {
   };
 }
 
-function writeArtifacts(root, { verifierPayload }) {
+function buildManifestValidatorSuccessPayload(root, manifestPath) {
+  return buildCompatArtifactBundleManifestValidatorSuccessPayload({
+    manifestPath,
+    artifactCount: 6,
+    artifacts: [
+      'summary.json',
+      'report-schema-validator-result.json',
+      'validator-result.json',
+      'schema-validator-result.json',
+      'validator-result-verifier-result.json',
+      'artifact-bundle-manifest-validator-result.json'
+    ],
+    schemaContracts: [
+      {
+        artifactName: 'summary.json',
+        artifactFile: 'summary.json',
+        schemaPath: path.resolve(process.cwd(), 'schemas', 'compat-summary.schema.json'),
+        schemaId: 'https://clawvault.dev/schemas/compat-summary.schema.json',
+        versionField: 'summarySchemaVersion',
+        expectedSchemaVersion: 1
+      },
+      {
+        artifactName: 'report-schema-validator-result.json',
+        artifactFile: 'report-schema-validator-result.json',
+        schemaPath: path.resolve(process.cwd(), 'schemas', 'compat-report-schema-validator-output.schema.json'),
+        schemaId: 'https://clawvault.dev/schemas/compat-report-schema-validator-output.schema.json',
+        versionField: 'outputSchemaVersion',
+        expectedSchemaVersion: 1
+      },
+      {
+        artifactName: 'validator-result.json',
+        artifactFile: 'validator-result.json',
+        schemaPath: path.resolve(process.cwd(), 'schemas', 'compat-summary-validator-output.schema.json'),
+        schemaId: 'https://clawvault.dev/schemas/compat-summary-validator-output.schema.json',
+        versionField: 'outputSchemaVersion',
+        expectedSchemaVersion: 1
+      },
+      {
+        artifactName: 'schema-validator-result.json',
+        artifactFile: 'schema-validator-result.json',
+        schemaPath: path.resolve(process.cwd(), 'schemas', 'json-schema-validator-output.schema.json'),
+        schemaId: 'https://clawvault.dev/schemas/json-schema-validator-output.schema.json',
+        versionField: 'outputSchemaVersion',
+        expectedSchemaVersion: 1
+      },
+      {
+        artifactName: 'validator-result-verifier-result.json',
+        artifactFile: 'validator-result-verifier-result.json',
+        schemaPath: path.resolve(process.cwd(), 'schemas', 'compat-validator-result-verifier-output.schema.json'),
+        schemaId: 'https://clawvault.dev/schemas/compat-validator-result-verifier-output.schema.json',
+        versionField: 'outputSchemaVersion',
+        expectedSchemaVersion: 1
+      },
+      {
+        artifactName: 'artifact-bundle-manifest-validator-result.json',
+        artifactFile: 'artifact-bundle-manifest-validator-result.json',
+        schemaPath: path.resolve(process.cwd(), 'schemas', 'compat-artifact-bundle-manifest-validator-output.schema.json'),
+        schemaId: 'https://clawvault.dev/schemas/compat-artifact-bundle-manifest-validator-output.schema.json',
+        versionField: 'outputSchemaVersion',
+        expectedSchemaVersion: 1
+      }
+    ]
+  });
+}
+
+function writeArtifacts(root, { verifierPayload, manifestPath = path.resolve(process.cwd(), 'schemas', 'compat-artifact-bundle.manifest.json') }) {
   const summaryPath = path.join(root, 'summary.json');
   const validatorResultPath = path.join(root, 'validator-result.json');
   const reportSchemaValidatorResultPath = path.join(root, 'report-schema-validator-result.json');
   const schemaValidatorResultPath = path.join(root, 'schema-validator-result.json');
   const validatorResultVerifierResultPath = path.join(root, 'validator-result-verifier-result.json');
+  const artifactBundleManifestValidatorResultPath = path.join(root, 'artifact-bundle-manifest-validator-result.json');
 
   fs.writeFileSync(summaryPath, JSON.stringify(buildFixturesSummary(), null, 2), 'utf-8');
   fs.writeFileSync(validatorResultPath, JSON.stringify(buildSummaryValidatorSuccessPayload({
@@ -104,6 +173,11 @@ function writeArtifacts(root, { verifierPayload }) {
     dataPath: validatorResultPath
   }), null, 2), 'utf-8');
   fs.writeFileSync(validatorResultVerifierResultPath, JSON.stringify(verifierPayload, null, 2), 'utf-8');
+  fs.writeFileSync(
+    artifactBundleManifestValidatorResultPath,
+    JSON.stringify(buildManifestValidatorSuccessPayload(root, manifestPath), null, 2),
+    'utf-8'
+  );
 }
 
 describe('validate-compat-artifact-bundle script', () => {
@@ -134,12 +208,14 @@ describe('validate-compat-artifact-bundle script', () => {
         reportSchemaValidatorResultPath: path.join(root, 'report-schema-validator-result.json'),
         schemaValidatorResultPath: path.join(root, 'schema-validator-result.json'),
         validatorResultVerifierResultPath: path.join(root, 'validator-result-verifier-result.json'),
+        artifactBundleManifestValidatorResultPath: path.join(root, 'artifact-bundle-manifest-validator-result.json'),
         verifiedArtifacts: [
           'summary.json',
           'report-schema-validator-result.json',
           'validator-result.json',
           'schema-validator-result.json',
-          'validator-result-verifier-result.json'
+          'validator-result-verifier-result.json',
+          'artifact-bundle-manifest-validator-result.json'
         ],
         artifactContracts: [
           {
@@ -183,6 +259,15 @@ describe('validate-compat-artifact-bundle script', () => {
             artifactPath: path.join(root, 'validator-result-verifier-result.json'),
             schemaPath: path.resolve(process.cwd(), 'schemas', 'compat-validator-result-verifier-output.schema.json'),
             schemaId: 'https://clawvault.dev/schemas/compat-validator-result-verifier-output.schema.json',
+            versionField: 'outputSchemaVersion',
+            expectedSchemaVersion: 1,
+            actualSchemaVersion: 1
+          },
+          {
+            artifactName: 'artifact-bundle-manifest-validator-result.json',
+            artifactPath: path.join(root, 'artifact-bundle-manifest-validator-result.json'),
+            schemaPath: path.resolve(process.cwd(), 'schemas', 'compat-artifact-bundle-manifest-validator-output.schema.json'),
+            schemaId: 'https://clawvault.dev/schemas/compat-artifact-bundle-manifest-validator-output.schema.json',
             versionField: 'outputSchemaVersion',
             expectedSchemaVersion: 1,
             actualSchemaVersion: 1
@@ -240,15 +325,16 @@ describe('validate-compat-artifact-bundle script', () => {
   it('supports explicit manifest override path', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'compat-artifact-bundle-'));
     try {
+      const manifestPath = path.join(root, 'bundle-manifest.json');
       const validatorResultPath = path.join(root, 'validator-result.json');
       writeArtifacts(root, {
         verifierPayload: buildValidatorResultVerifierSuccessPayload({
           payloadPath: validatorResultPath,
           payloadStatus: 'ok',
           validatorPayloadOutputSchemaVersion: 1
-        })
+        }),
+        manifestPath
       });
-      const manifestPath = path.join(root, 'bundle-manifest.json');
       fs.writeFileSync(manifestPath, JSON.stringify({
         schemaVersion: 1,
         artifacts: [
@@ -285,6 +371,13 @@ describe('validate-compat-artifact-bundle script', () => {
             artifactFile: 'validator-result-verifier-result.json',
             schemaPath: 'schemas/compat-validator-result-verifier-output.schema.json',
             schemaId: 'https://clawvault.dev/schemas/compat-validator-result-verifier-output.schema.json',
+            versionField: 'outputSchemaVersion'
+          },
+          {
+            artifactName: 'artifact-bundle-manifest-validator-result.json',
+            artifactFile: 'artifact-bundle-manifest-validator-result.json',
+            schemaPath: 'schemas/compat-artifact-bundle-manifest-validator-output.schema.json',
+            schemaId: 'https://clawvault.dev/schemas/compat-artifact-bundle-manifest-validator-output.schema.json',
             versionField: 'outputSchemaVersion'
           }
         ]

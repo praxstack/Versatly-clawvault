@@ -18,6 +18,9 @@ import {
   loadCompatReportSchemaValidatorPayload
 } from './lib/compat-report-schema-validator-output.mjs';
 import {
+  loadCompatArtifactBundleManifestValidatorPayload
+} from './lib/compat-artifact-bundle-manifest-validator-output.mjs';
+import {
   buildCompatArtifactBundleValidatorErrorPayload,
   buildCompatArtifactBundleValidatorSuccessPayload,
   ensureCompatArtifactBundleValidatorPayloadShape
@@ -144,7 +147,8 @@ function main() {
     'report-schema-validator-result.json',
     'validator-result.json',
     'schema-validator-result.json',
-    'validator-result-verifier-result.json'
+    'validator-result-verifier-result.json',
+    'artifact-bundle-manifest-validator-result.json'
   ];
   for (const requiredName of requiredArtifactNames) {
     if (!artifactContracts.some((entry) => entry.artifactName === requiredName)) {
@@ -177,6 +181,10 @@ function main() {
       artifactPayloadsByName.set(entry.artifactName, payload);
       continue;
     }
+    if (entry.artifactName === 'artifact-bundle-manifest-validator-result.json') {
+      artifactPayloadsByName.set(entry.artifactName, loadCompatArtifactBundleManifestValidatorPayload(entry.artifactPath));
+      continue;
+    }
     throw new Error(`Unsupported compat artifact bundle manifest artifactName: ${entry.artifactName}`);
   }
   const summary = artifactPayloadsByName.get('summary.json');
@@ -184,6 +192,7 @@ function main() {
   const summaryValidatorPayload = artifactPayloadsByName.get('validator-result.json');
   const schemaValidatorPayload = artifactPayloadsByName.get('schema-validator-result.json');
   const validatorResultVerifierPayload = artifactPayloadsByName.get('validator-result-verifier-result.json');
+  const artifactBundleManifestValidatorPayload = artifactPayloadsByName.get('artifact-bundle-manifest-validator-result.json');
 
   const ajv = createJsonSchemaAjv();
   const schemasByArtifactName = new Map(
@@ -220,6 +229,9 @@ function main() {
   if (validatorResultVerifierPayload.status === 'ok') {
     pathChecks.push(['validator-result verifier payloadPath', validatorResultVerifierPayload.payloadPath, artifactPathByName.get('validator-result.json')]);
   }
+  if (artifactBundleManifestValidatorPayload.status === 'ok') {
+    pathChecks.push(['artifact-bundle manifest validator manifestPath', artifactBundleManifestValidatorPayload.manifestPath, manifestPath]);
+  }
   for (const [label, actualValue, expectedValue] of pathChecks) {
     if (actualValue !== expectedValue) {
       throw new Error(`${label} mismatch (expected ${expectedValue}, received ${String(actualValue)})`);
@@ -238,7 +250,8 @@ function main() {
       ['report-schema-validator-result', reportSchemaValidatorPayload.status],
       ['validator-result', summaryValidatorPayload.status],
       ['schema-validator-result', schemaValidatorPayload.status],
-      ['validator-result-verifier-result', validatorResultVerifierPayload.status]
+      ['validator-result-verifier-result', validatorResultVerifierPayload.status],
+      ['artifact-bundle-manifest-validator-result', artifactBundleManifestValidatorPayload.status]
     ];
     for (const [label, status] of statusChecks) {
       if (status !== 'ok') {
@@ -283,6 +296,7 @@ function main() {
     reportSchemaValidatorResultPath: artifactPathByName.get('report-schema-validator-result.json'),
     schemaValidatorResultPath: artifactPathByName.get('schema-validator-result.json'),
     validatorResultVerifierResultPath: artifactPathByName.get('validator-result-verifier-result.json'),
+    artifactBundleManifestValidatorResultPath: artifactPathByName.get('artifact-bundle-manifest-validator-result.json'),
     artifactContracts: artifactContractEntries,
     verifiedArtifacts: artifactContracts.map((entry) => entry.artifactName)
   });

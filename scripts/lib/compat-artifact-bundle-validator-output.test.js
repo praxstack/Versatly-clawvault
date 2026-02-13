@@ -21,6 +21,7 @@ describe('compat artifact bundle validator output payload contracts', () => {
       reportSchemaValidatorResultPath: '/tmp/reports/report-schema-validator-result.json',
       schemaValidatorResultPath: '/tmp/reports/schema-validator-result.json',
       validatorResultVerifierResultPath: '/tmp/reports/validator-result-verifier-result.json',
+      artifactBundleManifestValidatorResultPath: '/tmp/reports/artifact-bundle-manifest-validator-result.json',
       verifiedArtifacts: ['summary.json', 'validator-result.json'],
       artifactContracts: [
         {
@@ -66,6 +67,7 @@ describe('compat artifact bundle validator output payload contracts', () => {
       reportSchemaValidatorResultPath: '/tmp/reports/report-schema-validator-result.json',
       schemaValidatorResultPath: '/tmp/reports/schema-validator-result.json',
       validatorResultVerifierResultPath: '/tmp/reports/validator-result-verifier-result.json',
+      artifactBundleManifestValidatorResultPath: '/tmp/reports/artifact-bundle-manifest-validator-result.json',
       verifiedArtifacts: ['summary.json'],
       artifactContracts: []
     })).toThrow('artifactContracts');

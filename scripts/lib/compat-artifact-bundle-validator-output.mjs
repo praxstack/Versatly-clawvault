@@ -74,7 +74,8 @@ export function ensureCompatArtifactBundleValidatorPayloadShape(payload) {
       'validatorResultPath',
       'reportSchemaValidatorResultPath',
       'schemaValidatorResultPath',
-      'validatorResultVerifierResultPath'
+      'validatorResultVerifierResultPath',
+      'artifactBundleManifestValidatorResultPath'
     ];
     for (const fieldName of pathFields) {
       assertNonEmptyString(payload[fieldName], fieldName);
@@ -109,6 +110,7 @@ export function buildCompatArtifactBundleValidatorSuccessPayload({
   reportSchemaValidatorResultPath,
   schemaValidatorResultPath,
   validatorResultVerifierResultPath,
+  artifactBundleManifestValidatorResultPath,
   verifiedArtifacts,
   artifactContracts
 }) {
@@ -123,6 +125,7 @@ export function buildCompatArtifactBundleValidatorSuccessPayload({
     reportSchemaValidatorResultPath,
     schemaValidatorResultPath,
     validatorResultVerifierResultPath,
+    artifactBundleManifestValidatorResultPath,
     verifiedArtifacts,
     artifactContracts
   };
