@@ -1,5 +1,22 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **Typed memory graph index** (`.clawvault/graph-index.json`) with schema versioning and incremental rebuild support.
+- **Graph-aware context retrieval** for `clawvault context`:
+  - blends semantic search with graph-neighbor context,
+  - includes explain signals/rationale in JSON output.
+- **`clawvault compat`** command for OpenClaw compatibility diagnostics.
+- Doctor now includes an **OpenClaw compatibility** check summary.
+- Dashboard graph parser now emits:
+  - typed nodes,
+  - typed edges (`wiki_link`, `tag`, `frontmatter_relation`),
+  - edge/node type statistics.
+
+### Changed
+- Dashboard edge diffing now includes edge type/label, enabling reliable live updates when relation type changes.
+
 ## [1.11.2] - 2026-02-12
 
 ### Fixed

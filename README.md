@@ -103,7 +103,10 @@ clawvault wake
 Token-budget-aware context injection:
 ```bash
 clawvault context "what decisions were made" --budget 2000
-# → fits within token budget, 🔴 items first
+# → blends semantic + graph-neighbor context within budget
+
+clawvault context "what decisions were made" --format json
+# → includes explain metadata (signals + rationale) per entry
 ```
 
 ## Search
@@ -126,6 +129,8 @@ clawvault vsearch "what did I decide" # Semantic (local embeddings)
 ```
 my-memory/
 ├── .clawvault.json      # Config (includes qmd collection name)
+├── .clawvault/
+│   └── graph-index.json # Typed memory graph index (incremental rebuilds)
 ├── decisions/           # Choices with reasoning
 ├── lessons/             # Things learned
 ├── people/              # One file per person
@@ -189,6 +194,9 @@ clawvault recap --brief   # Token-efficient recap
 
 # Health check
 clawvault doctor
+
+# OpenClaw compatibility check
+clawvault compat
 ```
 
 

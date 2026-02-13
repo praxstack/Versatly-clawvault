@@ -79,7 +79,7 @@ describe('status command', () => {
     hasQmdMock.mockReturnValue(true);
     execFileSyncMock.mockImplementation((command: string) => {
       if (command === 'qmd') {
-        return JSON.stringify([{ name: 'other', root: '/somewhere' }]);
+        return 'Collections (1):\n\nother (qmd://other/)\n  Pattern: **/*.md\n';
       }
       if (command === 'git') {
         return ' M file.md\n?? new.md\n';
@@ -121,7 +121,7 @@ describe('status command', () => {
     hasQmdMock.mockReturnValue(true);
     execFileSyncMock.mockImplementation((command: string) => {
       if (command === 'qmd') {
-        return JSON.stringify([{ name: mockCollection, root: mockRoot }]);
+        return `Collections (1):\n\n${mockCollection} (qmd://${mockCollection}/)\n  Pattern: **/*.md\n  Root: ${mockRoot}\n`;
       }
       if (command === 'git') {
         return '';

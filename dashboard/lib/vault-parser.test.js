@@ -37,18 +37,32 @@ Linked to [[projects/clawvault|ClawVault Project]] and [[missing-note]].
       expect(decisionNode).toMatchObject({
         title: 'Use ClawVault',
         category: 'decisions',
-        tags: ['architecture', 'memory']
+        tags: ['architecture', 'memory'],
+        type: 'decision'
       });
-      expect(graph.edges).toEqual(
-        expect.arrayContaining([
-          { source: 'decisions/use-clawvault', target: 'projects/clawvault' },
-          { source: 'decisions/use-clawvault', target: 'missing-note' }
-        ])
-      );
+      expect(graph.edges).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          source: 'decisions/use-clawvault',
+          target: 'projects/clawvault',
+          type: 'wiki_link'
+        }),
+        expect.objectContaining({
+          source: 'decisions/use-clawvault',
+          target: 'missing-note',
+          type: 'wiki_link'
+        }),
+        expect.objectContaining({
+          source: 'decisions/use-clawvault',
+          target: 'tag:architecture',
+          type: 'tag'
+        })
+      ]));
       expect(unresolvedNode).toMatchObject({
         missing: true,
         category: 'unresolved'
       });
+      expect(graph.stats.edgeTypeCounts.wiki_link).toBeGreaterThanOrEqual(2);
+      expect(graph.stats.edgeTypeCounts.tag).toBeGreaterThanOrEqual(1);
     } finally {
       fs.rmSync(vaultPath, { recursive: true, force: true });
     }
@@ -62,11 +76,49 @@ Linked to [[projects/clawvault|ClawVault Project]] and [[missing-note]].
 
       const graph = await buildVaultGraph(vaultPath);
 
-      expect(graph.edges).toEqual(
-        expect.arrayContaining([
-          { source: 'research/notes', target: 'projects/clawvault' }
-        ])
+      expect(graph.edges).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          source: 'research/notes',
+          target: 'projects/clawvault',
+          type: 'wiki_link'
+        })
+      ]));
+    } finally {
+      fs.rmSync(vaultPath, { recursive: true, force: true });
+    }
+  });
+
+  it('emits frontmatter relation edges with labels', async () => {
+    const vaultPath = makeTempVault();
+    try {
+      writeVaultFile(
+        vaultPath,
+        'decisions/db.md',
+        `---
+related:
+  - projects/clawvault
+owner: people/alice
+---
+Decision details`
       );
+      writeVaultFile(vaultPath, 'projects/clawvault.md', '# ClawVault');
+      writeVaultFile(vaultPath, 'people/alice.md', '# Alice');
+
+      const graph = await buildVaultGraph(vaultPath);
+      expect(graph.edges).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          source: 'decisions/db',
+          target: 'projects/clawvault',
+          type: 'frontmatter_relation',
+          label: 'related'
+        }),
+        expect.objectContaining({
+          source: 'decisions/db',
+          target: 'people/alice',
+          type: 'frontmatter_relation',
+          label: 'owner'
+        })
+      ]));
     } finally {
       fs.rmSync(vaultPath, { recursive: true, force: true });
     }

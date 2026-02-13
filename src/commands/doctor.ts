@@ -5,6 +5,7 @@ import { ClawVault, findVault } from '../lib/vault.js';
 import { scanVaultLinks } from '../lib/backlinks.js';
 import { formatAge } from '../lib/time.js';
 import { hasQmd } from '../lib/search.js';
+import { checkOpenClawCompatibility } from './compat.js';
 
 const CLAWVAULT_DIR = '.clawvault';
 const CHECKPOINT_FILE = 'last-checkpoint.json';
@@ -100,6 +101,30 @@ export async function doctor(vaultPath?: string): Promise<DoctorReport> {
   const checks: DoctorCheck[] = [];
   let warnings = 0;
   let errors = 0;
+  const compatReport = checkOpenClawCompatibility();
+
+  if (compatReport.errors > 0) {
+    checks.push({
+      label: 'OpenClaw compatibility',
+      status: 'error',
+      detail: `${compatReport.errors} error(s), ${compatReport.warnings} warning(s)`,
+      hint: 'Run `clawvault compat` for full compatibility diagnostics.'
+    });
+    errors++;
+  } else if (compatReport.warnings > 0) {
+    checks.push({
+      label: 'OpenClaw compatibility',
+      status: 'warn',
+      detail: `${compatReport.warnings} warning(s)`,
+      hint: 'Run `clawvault compat` for full compatibility diagnostics.'
+    });
+    warnings++;
+  } else {
+    checks.push({
+      label: 'OpenClaw compatibility',
+      status: 'ok'
+    });
+  }
 
   if (hasQmd()) {
     checks.push({ label: 'qmd installed', status: 'ok' });

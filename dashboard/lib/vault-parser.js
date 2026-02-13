@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import matter from 'gray-matter';
 
 export const WIKI_LINK_REGEX = /\[\[([^\]|]+)(\|[^\]]+)?\]\]/g;
+const HASH_TAG_REGEX = /(^|\s)#([\w-]+)/g;
 
 const MARKDOWN_EXT = '.md';
 const IGNORED_DIRECTORIES = new Set([
@@ -11,6 +12,17 @@ const IGNORED_DIRECTORIES = new Set([
   '.trash',
   'node_modules'
 ]);
+const FRONTMATTER_RELATION_FIELDS = [
+  'related',
+  'depends_on',
+  'dependsOn',
+  'blocked_by',
+  'blocks',
+  'owner',
+  'project',
+  'people',
+  'links'
+];
 
 /**
  * Build a graph from markdown notes in a vault.
@@ -23,7 +35,7 @@ export async function buildVaultGraph(vaultPath, options = {}) {
   const markdownFiles = await collectMarkdownFiles(root);
 
   const nodesById = new Map();
-  const edges = [];
+  const edgesByKey = new Map();
   const edgeSet = new Set();
 
   for (const absoluteFilePath of markdownFiles) {
@@ -37,10 +49,13 @@ export async function buildVaultGraph(vaultPath, options = {}) {
       id,
       title: normalizeString(frontmatter.title) || toDisplayTitle(id),
       category: normalizeString(frontmatter.category) || inferCategory(id),
+      type: inferNodeType(id, frontmatter),
       tags: normalizeTags(frontmatter.tags),
       path: toPosixPath(relativePath),
       missing: false,
-      _outboundTargets: extractWikiLinks(parsed.content)
+      _outboundTargets: extractWikiLinks(parsed.content),
+      _frontmatterRelations: extractFrontmatterRelations(frontmatter),
+      _inlineTags: extractInlineTags(parsed.content)
     });
   }
 
@@ -54,55 +69,117 @@ export async function buildVaultGraph(vaultPath, options = {}) {
     idsByBaseName.set(baseName, existing);
   }
 
+  function ensureUnresolvedNode(targetId) {
+    if (nodesById.has(targetId) || !includeDangling) {
+      return;
+    }
+    nodesById.set(targetId, {
+      id: targetId,
+      title: toDisplayTitle(targetId),
+      category: 'unresolved',
+      type: 'unresolved',
+      tags: [],
+      path: null,
+      missing: true,
+      _outboundTargets: [],
+      _frontmatterRelations: [],
+      _inlineTags: []
+    });
+  }
+
+  function addEdge(sourceId, targetId, type, label) {
+    const edgeKey = `${type}:${sourceId}=>${targetId}${label ? `:${label}` : ''}`;
+    if (edgeSet.has(edgeKey)) {
+      return;
+    }
+    edgeSet.add(edgeKey);
+    edgesByKey.set(edgeKey, {
+      source: sourceId,
+      target: targetId,
+      type,
+      label
+    });
+  }
+
   for (const node of nodesById.values()) {
+    const tagSet = new Set([...(node.tags ?? []), ...(node._inlineTags ?? [])]);
+    for (const inlineTag of tagSet) {
+      const tagNodeId = `tag:${inlineTag.toLowerCase()}`;
+      if (!nodesById.has(tagNodeId)) {
+        nodesById.set(tagNodeId, {
+          id: tagNodeId,
+          title: `#${inlineTag}`,
+          category: 'tag',
+          type: 'tag',
+          tags: [],
+          path: null,
+          missing: false,
+          _outboundTargets: [],
+          _frontmatterRelations: [],
+          _inlineTags: []
+        });
+      }
+      addEdge(node.id, tagNodeId, 'tag');
+    }
+
     for (const rawTarget of node._outboundTargets) {
       const targetId = resolveTargetId(rawTarget, {
         idsByLowercase,
         idsByBaseName,
         includeDangling
       });
-
       if (!targetId) {
         continue;
       }
+      ensureUnresolvedNode(targetId);
+      addEdge(node.id, targetId, 'wiki_link');
+    }
 
-      if (!nodesById.has(targetId) && includeDangling) {
-        nodesById.set(targetId, {
-          id: targetId,
-          title: toDisplayTitle(targetId),
-          category: 'unresolved',
-          tags: [],
-          path: null,
-          missing: true,
-          _outboundTargets: []
-        });
-      }
-
-      const edgeKey = `${node.id}=>${targetId}`;
-      if (edgeSet.has(edgeKey)) {
+    for (const relation of node._frontmatterRelations) {
+      const targetId = resolveTargetId(relation.target, {
+        idsByLowercase,
+        idsByBaseName,
+        includeDangling
+      });
+      if (!targetId) {
         continue;
       }
-      edgeSet.add(edgeKey);
-      edges.push({ source: node.id, target: targetId });
+      ensureUnresolvedNode(targetId);
+      addEdge(node.id, targetId, 'frontmatter_relation', relation.field);
     }
   }
 
+  const edges = Array.from(edgesByKey.values());
   const degreeByNodeId = new Map();
   for (const edge of edges) {
     degreeByNodeId.set(edge.source, (degreeByNodeId.get(edge.source) ?? 0) + 1);
     degreeByNodeId.set(edge.target, (degreeByNodeId.get(edge.target) ?? 0) + 1);
   }
 
+  const nodeTypeCounts = {};
   const nodes = Array.from(nodesById.values())
-    .map(({ _outboundTargets, ...node }) => ({
-      ...node,
-      degree: degreeByNodeId.get(node.id) ?? 0
-    }))
+    .map(({ _outboundTargets, _frontmatterRelations, _inlineTags, ...node }) => {
+      nodeTypeCounts[node.type] = (nodeTypeCounts[node.type] ?? 0) + 1;
+      return {
+        ...node,
+        degree: degreeByNodeId.get(node.id) ?? 0
+      };
+    })
     .sort((a, b) => a.id.localeCompare(b.id));
 
+  const edgeTypeCounts = {};
+  for (const edge of edges) {
+    edgeTypeCounts[edge.type] = (edgeTypeCounts[edge.type] ?? 0) + 1;
+  }
+
   edges.sort((a, b) => {
-    const sourceSort = a.source.localeCompare(b.source);
-    return sourceSort !== 0 ? sourceSort : a.target.localeCompare(b.target);
+    const sourceSort = String(a.source).localeCompare(String(b.source));
+    if (sourceSort !== 0) return sourceSort;
+    const targetSort = String(a.target).localeCompare(String(b.target));
+    if (targetSort !== 0) return targetSort;
+    const typeSort = String(a.type || '').localeCompare(String(b.type || ''));
+    if (typeSort !== 0) return typeSort;
+    return String(a.label || '').localeCompare(String(b.label || ''));
   });
 
   return {
@@ -112,7 +189,9 @@ export async function buildVaultGraph(vaultPath, options = {}) {
       generatedAt: new Date().toISOString(),
       nodeCount: nodes.length,
       edgeCount: edges.length,
-      fileCount: markdownFiles.length
+      fileCount: markdownFiles.length,
+      nodeTypeCounts,
+      edgeTypeCounts
     }
   };
 }
@@ -157,6 +236,39 @@ function extractWikiLinks(markdown) {
   }
 
   return links;
+}
+
+function extractInlineTags(markdown) {
+  const tags = new Set();
+  for (const match of markdown.matchAll(HASH_TAG_REGEX)) {
+    const tag = normalizeString(match[2])?.toLowerCase();
+    if (tag) {
+      tags.add(tag);
+    }
+  }
+  return [...tags];
+}
+
+function extractFrontmatterRelations(frontmatter) {
+  const relations = [];
+  for (const field of FRONTMATTER_RELATION_FIELDS) {
+    const raw = frontmatter?.[field];
+    if (typeof raw === 'string') {
+      for (const target of raw.split(',').map((value) => normalizeWikiTarget(value)).filter(Boolean)) {
+        relations.push({ field, target });
+      }
+      continue;
+    }
+    if (Array.isArray(raw)) {
+      for (const entry of raw) {
+        if (typeof entry !== 'string') continue;
+        for (const target of entry.split(',').map((value) => normalizeWikiTarget(value)).filter(Boolean)) {
+          relations.push({ field, target });
+        }
+      }
+    }
+  }
+  return relations;
 }
 
 function resolveTargetId(target, context) {
@@ -219,6 +331,20 @@ function toNodeId(relativePath) {
 function inferCategory(id) {
   const category = id.split('/')[0];
   return normalizeString(category) || 'root';
+}
+
+function inferNodeType(id, frontmatter) {
+  const category = inferCategory(id).toLowerCase();
+  const explicitType = normalizeString(frontmatter?.type).toLowerCase();
+  if (category.includes('daily') || explicitType === 'daily') return 'daily';
+  if (category === 'observations' || explicitType === 'observation') return 'observation';
+  if (category === 'handoffs' || explicitType === 'handoff') return 'handoff';
+  if (category === 'decisions' || explicitType === 'decision') return 'decision';
+  if (category === 'lessons' || explicitType === 'lesson') return 'lesson';
+  if (category === 'projects' || explicitType === 'project') return 'project';
+  if (category === 'people' || explicitType === 'person') return 'person';
+  if (category === 'commitments' || explicitType === 'commitment') return 'commitment';
+  return 'note';
 }
 
 function normalizeTags(tags) {

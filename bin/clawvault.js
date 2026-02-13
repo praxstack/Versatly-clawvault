@@ -1032,6 +1032,21 @@ program
     }
   });
 
+// === COMPAT (OpenClaw compatibility) ===
+program
+  .command('compat')
+  .description('Check OpenClaw compatibility status')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    try {
+      const { compatCommand } = await import('../dist/commands/compat.js');
+      await compatCommand({ json: options.json });
+    } catch (err) {
+      console.error(chalk.red(`Error: ${err.message}`));
+      process.exit(1);
+    }
+  });
+
 // === ENTITIES ===
 program
   .command('entities')

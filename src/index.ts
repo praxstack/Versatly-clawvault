@@ -32,6 +32,8 @@ import { registerObserveCommand } from './commands/observe.js';
 // Core exports
 export { ClawVault, createVault, findVault } from './lib/vault.js';
 export { setupCommand } from './commands/setup.js';
+export { compatCommand, checkOpenClawCompatibility } from './commands/compat.js';
+export type { CompatCheck, CompatReport, CompatStatus } from './commands/compat.js';
 export {
   contextCommand,
   buildContext,
