@@ -48,6 +48,7 @@ openclaw hooks enable clawvault
 
 1. Extracts the initial user prompt (`context.initialPrompt` or first user message)
 2. Runs `clawvault context "<prompt>" --format json -v <vaultPath>`
+   - Automatically infers context profile from prompt intent (`incident`, `planning`, `handoff`, or `default`)
 3. Injects up to 4 relevant context bullets into session messages
 
 Injection format:
