@@ -28,6 +28,7 @@
 - CLI command registration is being modularized (`core`, `maintenance`, `template`, `resilience`, `session-lifecycle`, `vault-operations`, `query`) to improve maintainability.
 - Hook `session:start` context injection now infers `context --profile` from prompt intent (incident/planning/handoff/default).
 - `context --profile auto` now uses centralized intent inference, and hooks delegate profile selection through this shared path.
+- Library API now exports context profile inference helpers for external integrations (`inferContextProfile`, `resolveContextProfile`).
 
 ## [1.11.2] - 2026-02-12
 
