@@ -151,6 +151,7 @@ describe('checkOpenClawCompatibility', () => {
         expectedWarnings: number;
         expectedErrors: number;
         expectedCheckStatuses: Record<string, 'ok' | 'warn' | 'error'>;
+        expectedDetailIncludes?: Record<string, string>;
       }>;
     };
     const cases = manifest.cases;
@@ -165,6 +166,11 @@ describe('checkOpenClawCompatibility', () => {
       for (const [label, expectedStatus] of Object.entries(testCase.expectedCheckStatuses)) {
         const check = report.checks.find((candidate) => candidate.label === label);
         expect(check?.status).toBe(expectedStatus);
+      }
+
+      for (const [label, expectedSnippet] of Object.entries(testCase.expectedDetailIncludes ?? {})) {
+        const check = report.checks.find((candidate) => candidate.label === label);
+        expect(check?.detail).toContain(expectedSnippet);
       }
     }
   });
