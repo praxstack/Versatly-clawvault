@@ -24,7 +24,7 @@ Standalone validator behavior is unit-tested in `scripts/validate-compat-summary
 Summary workflow scripts respect `COMPAT_REPORT_DIR` from the caller environment (falling back to `.compat-reports` when unset).
 Runner utility tests also cover malformed summary-loading paths and fixtures-summary case-report failure validation for artifact-level error contracts.
 CI publishes the generated summary artifact (`compat-summary`) for each run, with full per-case report bundles uploaded on failures.
-`compat-summary` now includes both `summary.json` and `validator-result.json` for richer downstream CI artifact consumers.
+`compat-summary` now includes `summary.json`, `validator-result.json`, and `schema-validator-result.json` for richer downstream CI artifact consumers.
 Compatibility report parsing now enforces per-check schema and warning/error tally coherence to catch malformed check output early.
 Validator result payload schema generation/validation is centralized in `scripts/lib/compat-summary-validator-output.mjs` with dedicated unit tests.
 Validator CLI tests also assert that `--out` still captures structured error payloads during argument-parse failures (e.g., unknown/missing-value options).

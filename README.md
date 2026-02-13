@@ -276,6 +276,7 @@ node scripts/validate-compat-summary.mjs --summary /tmp/summary.json --json --ou
 # validator payload schema/validation is centralized in scripts/lib/compat-summary-validator-output.mjs
 # JSON schema artifacts for payload contracts live in /schemas
 # generic schema checker CLI lives at scripts/validate-json-schema.mjs
+# schema-validator result payload is written to schema-validator-result.json in compat report dirs
 # see validator usage/help
 node scripts/validate-compat-summary.mjs --help
 # equivalent npm wrapper (supports arg passthrough, env fallback)
