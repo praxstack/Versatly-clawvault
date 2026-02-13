@@ -21,6 +21,7 @@ import {
   REQUIRED_COMPAT_CI_WORKFLOW_UNIQUE_FIELD_NAMES,
   REQUIRED_COMPAT_CI_TRIGGER_PUSH_BRANCHES,
   REQUIRED_COMPAT_CI_TRIGGER_NAMES,
+  REQUIRED_COMPAT_CI_TRIGGER_SECTION_FIELD_NAME_SEQUENCES,
   REQUIRED_COMPAT_CI_INSTALL_COMMAND,
   REQUIRED_COMPAT_CI_INSTALL_STEP_NAME,
   REQUIRED_COMPAT_CI_PRIMARY_RUN_COMMAND,
@@ -65,6 +66,7 @@ import {
   extractTopLevelJobNames,
   extractTopLevelFieldNames,
   extractOnTriggerNames,
+  extractOnTriggerSectionFieldNames,
   extractNestedSectionFieldNames,
   extractNestedSectionScalarFieldValue,
   extractStepNames,
@@ -102,6 +104,9 @@ describe('compat ci workflow contract', () => {
   it('keeps workflow trigger domain aligned with push + pull-request contracts', () => {
     const workflowYaml = loadCiWorkflowYaml();
     expect(extractOnTriggerNames(workflowYaml)).toEqual(REQUIRED_COMPAT_CI_TRIGGER_NAMES);
+    for (const [triggerName, expectedFieldNames] of Object.entries(REQUIRED_COMPAT_CI_TRIGGER_SECTION_FIELD_NAME_SEQUENCES)) {
+      expect(extractOnTriggerSectionFieldNames(workflowYaml, triggerName)).toEqual(expectedFieldNames);
+    }
     expect(extractPushBranches(workflowYaml)).toEqual(REQUIRED_COMPAT_CI_TRIGGER_PUSH_BRANCHES);
     expect(hasPullRequestTrigger(workflowYaml)).toBe(true);
   });
@@ -118,6 +123,7 @@ describe('compat ci workflow contract', () => {
       workflowName: snapshot.workflowName,
       topLevelFieldNames: snapshot.topLevelFieldNames,
       triggerNames: snapshot.triggerNames,
+      triggerSectionFieldNamesByTrigger: snapshot.triggerSectionFieldNamesByTrigger,
       pushBranches: snapshot.pushBranches,
       pullRequestTrigger: snapshot.pullRequestTrigger,
       jobNames: snapshot.jobNames,
@@ -133,6 +139,7 @@ describe('compat ci workflow contract', () => {
       workflowName: REQUIRED_COMPAT_CI_WORKFLOW_NAME,
       topLevelFieldNames: REQUIRED_COMPAT_CI_WORKFLOW_FIELD_NAMES,
       triggerNames: REQUIRED_COMPAT_CI_TRIGGER_NAMES,
+      triggerSectionFieldNamesByTrigger: REQUIRED_COMPAT_CI_TRIGGER_SECTION_FIELD_NAME_SEQUENCES,
       pushBranches: REQUIRED_COMPAT_CI_TRIGGER_PUSH_BRANCHES,
       pullRequestTrigger: true,
       jobNames: REQUIRED_COMPAT_CI_JOB_NAMES,

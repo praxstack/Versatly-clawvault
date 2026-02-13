@@ -19,6 +19,7 @@ import {
   REQUIRED_COMPAT_CI_WORKFLOW_UNIQUE_FIELD_NAMES,
   REQUIRED_COMPAT_CI_TRIGGER_PUSH_BRANCHES,
   REQUIRED_COMPAT_CI_TRIGGER_NAMES,
+  REQUIRED_COMPAT_CI_TRIGGER_SECTION_FIELD_NAME_SEQUENCES,
   REQUIRED_COMPAT_CI_INSTALL_COMMAND,
   REQUIRED_COMPAT_CI_INSTALL_STEP_NAME,
   REQUIRED_COMPAT_CI_PRIMARY_RUN_COMMAND,
@@ -95,6 +96,14 @@ describe('compat ci workflow contracts constants', () => {
     expect(Array.isArray(REQUIRED_COMPAT_CI_TRIGGER_NAMES)).toBe(true);
     expect(REQUIRED_COMPAT_CI_TRIGGER_NAMES.length).toBeGreaterThan(0);
     expect(new Set(REQUIRED_COMPAT_CI_TRIGGER_NAMES).size).toBe(REQUIRED_COMPAT_CI_TRIGGER_NAMES.length);
+    expect(Object.keys(REQUIRED_COMPAT_CI_TRIGGER_SECTION_FIELD_NAME_SEQUENCES).sort()).toEqual(
+      [...REQUIRED_COMPAT_CI_TRIGGER_NAMES].sort()
+    );
+    for (const [triggerName, fieldNames] of Object.entries(REQUIRED_COMPAT_CI_TRIGGER_SECTION_FIELD_NAME_SEQUENCES)) {
+      expect(REQUIRED_COMPAT_CI_TRIGGER_NAMES).toContain(triggerName);
+      expect(Array.isArray(fieldNames)).toBe(true);
+      expect(new Set(fieldNames).size).toBe(fieldNames.length);
+    }
     expect(typeof REQUIRED_COMPAT_CI_CHECKOUT_STEP_NAME).toBe('string');
     expect(REQUIRED_COMPAT_CI_CHECKOUT_STEP_NAME.length).toBeGreaterThan(0);
     expect(typeof REQUIRED_COMPAT_CI_CHECKOUT_USES).toBe('string');

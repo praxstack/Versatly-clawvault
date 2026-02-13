@@ -67,6 +67,10 @@ export const REQUIRED_COMPAT_CI_TRIGGER_NAMES = Object.freeze([
   'push',
   'pull_request'
 ]);
+export const REQUIRED_COMPAT_CI_TRIGGER_SECTION_FIELD_NAME_SEQUENCES = Object.freeze({
+  push: Object.freeze(['branches']),
+  pull_request: Object.freeze([])
+});
 
 export const REQUIRED_COMPAT_CI_UPLOAD_ARTIFACT_PATH_PREFIX = '${{ runner.temp }}/compat-reports/';
 export const REQUIRED_COMPAT_CI_UPLOAD_STEP_NAME = 'Upload compatibility summary artifact';

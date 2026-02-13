@@ -35,6 +35,50 @@ export function extractOnTriggerNames(workflowYaml) {
   return triggerNames;
 }
 
+export function extractOnTriggerSectionFieldNames(workflowYaml, triggerName) {
+  const lines = workflowYaml.split('\n');
+  const onLineIndex = lines.findIndex((line) => /^on:\s*$/.test(line.trim()));
+  if (onLineIndex < 0) {
+    return null;
+  }
+
+  let triggerLineIndex = -1;
+  for (let index = onLineIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (/^[^\s].*:\s*$/.test(line)) {
+      break;
+    }
+    const triggerMatch = /^  ([A-Za-z0-9_-]+):\s*$/.exec(line);
+    if (triggerMatch && triggerMatch[1] === triggerName) {
+      triggerLineIndex = index;
+      break;
+    }
+  }
+  if (triggerLineIndex < 0) {
+    return null;
+  }
+
+  const triggerIndent = countLeadingSpaces(lines[triggerLineIndex]);
+  const triggerFieldIndent = triggerIndent + 2;
+  const triggerFieldPattern = new RegExp(`^\\s{${triggerFieldIndent}}([A-Za-z0-9_-]+):\\s*`);
+  const fieldNames = [];
+  for (let index = triggerLineIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!line.trim()) {
+      continue;
+    }
+    const lineIndent = countLeadingSpaces(line);
+    if (lineIndent <= triggerIndent) {
+      break;
+    }
+    const fieldMatch = triggerFieldPattern.exec(line);
+    if (fieldMatch) {
+      fieldNames.push(fieldMatch[1]);
+    }
+  }
+  return fieldNames;
+}
+
 export function extractTopLevelJobNames(workflowYaml) {
   const lines = workflowYaml.split('\n');
   const jobsLineIndex = lines.findIndex((line) => /^jobs:\s*$/.test(line.trim()));
@@ -296,6 +340,13 @@ export function buildWorkflowContractSnapshot({
   const normalizedStepNames = Array.isArray(stepNames) && stepNames.length > 0
     ? stepNames
     : [];
+  const triggerNames = extractOnTriggerNames(workflowYaml) ?? [];
+  const triggerSectionFieldNamesByTrigger = Object.fromEntries(
+    triggerNames.map((triggerName) => [
+      triggerName,
+      extractOnTriggerSectionFieldNames(workflowYaml, triggerName)
+    ])
+  );
   const jobBlock = extractJobBlock(workflowYaml, jobName);
   const stepTopLevelFieldNamesByName = {};
   const stepWithFieldNamesByName = {};
@@ -310,7 +361,8 @@ export function buildWorkflowContractSnapshot({
   return {
     workflowName: extractWorkflowName(workflowYaml),
     topLevelFieldNames: extractTopLevelFieldNames(workflowYaml),
-    triggerNames: extractOnTriggerNames(workflowYaml),
+    triggerNames,
+    triggerSectionFieldNamesByTrigger,
     pushBranches: extractPushBranches(workflowYaml),
     pullRequestTrigger: hasPullRequestTrigger(workflowYaml),
     jobNames: extractTopLevelJobNames(workflowYaml),
