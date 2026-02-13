@@ -188,6 +188,34 @@ function runManifestValidatorPayloadDriftScenario({
   }
 }
 
+function runManifestOverrideDriftScenario({
+  mutateManifest,
+  assertFailure
+}) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'compat-artifact-bundle-'));
+  try {
+    const manifestPath = path.join(root, 'bundle-manifest.json');
+    const validatorResultPath = path.join(root, 'validator-result.json');
+    writeArtifacts(root, {
+      verifierPayload: buildValidatorResultVerifierSuccessPayload({
+        payloadPath: validatorResultPath,
+        payloadStatus: 'ok',
+        validatorPayloadOutputSchemaVersion: 1
+      }),
+      manifestPath
+    });
+    const manifestPayload = buildCanonicalManifestPayload();
+    mutateManifest(manifestPayload);
+    fs.writeFileSync(manifestPath, JSON.stringify(manifestPayload, null, 2), 'utf-8');
+
+    const result = runArtifactBundleValidator(['--manifest', manifestPath], { COMPAT_REPORT_DIR: root });
+    expect(result.status).toBe(1);
+    assertFailure(result);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+}
+
 describe('validate-compat-artifact-bundle script', () => {
   it('validates complete artifact bundle and emits json payload', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'compat-artifact-bundle-'));
@@ -437,62 +465,64 @@ describe('validate-compat-artifact-bundle script', () => {
   });
 
   it('fails explicit manifest override when required schemaPath mapping drifts', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'compat-artifact-bundle-'));
-    try {
-      const manifestPath = path.join(root, 'bundle-manifest.json');
-      const validatorResultPath = path.join(root, 'validator-result.json');
-      writeArtifacts(root, {
-        verifierPayload: buildValidatorResultVerifierSuccessPayload({
-          payloadPath: validatorResultPath,
-          payloadStatus: 'ok',
-          validatorPayloadOutputSchemaVersion: 1
-        }),
-        manifestPath
-      });
-      const manifestPayload = buildCanonicalManifestPayload();
-      manifestPayload.artifacts = manifestPayload.artifacts.map((entry) => (
-        entry.artifactName === 'summary.json'
-          ? { ...entry, schemaPath: 'schemas/drifted-summary.schema.json' }
-          : entry
-      ));
-      fs.writeFileSync(manifestPath, JSON.stringify(manifestPayload, null, 2), 'utf-8');
-
-      const result = runArtifactBundleValidator(['--manifest', manifestPath], { COMPAT_REPORT_DIR: root });
-      expect(result.status).toBe(1);
-      expect(result.stderr).toContain('required artifact summary.json must use schemaPath=schemas/compat-summary.schema.json');
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
+    runManifestOverrideDriftScenario({
+      mutateManifest: (manifestPayload) => {
+        manifestPayload.artifacts = manifestPayload.artifacts.map((entry) => (
+          entry.artifactName === 'summary.json'
+            ? { ...entry, schemaPath: 'schemas/drifted-summary.schema.json' }
+            : entry
+        ));
+      },
+      assertFailure: (result) => {
+        expect(result.stderr).toContain('required artifact summary.json must use schemaPath=schemas/compat-summary.schema.json');
+      }
+    });
   });
 
   it('fails explicit manifest override when required schemaId mapping drifts', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'compat-artifact-bundle-'));
-    try {
-      const manifestPath = path.join(root, 'bundle-manifest.json');
-      const validatorResultPath = path.join(root, 'validator-result.json');
-      writeArtifacts(root, {
-        verifierPayload: buildValidatorResultVerifierSuccessPayload({
-          payloadPath: validatorResultPath,
-          payloadStatus: 'ok',
-          validatorPayloadOutputSchemaVersion: 1
-        }),
-        manifestPath
-      });
-      const manifestPayload = buildCanonicalManifestPayload();
-      manifestPayload.artifacts = manifestPayload.artifacts.map((entry) => (
-        entry.artifactName === 'summary.json'
-          ? { ...entry, schemaId: 'https://example.dev/drifted-summary.schema.json' }
-          : entry
-      ));
-      fs.writeFileSync(manifestPath, JSON.stringify(manifestPayload, null, 2), 'utf-8');
+    runManifestOverrideDriftScenario({
+      mutateManifest: (manifestPayload) => {
+        manifestPayload.artifacts = manifestPayload.artifacts.map((entry) => (
+          entry.artifactName === 'summary.json'
+            ? { ...entry, schemaId: 'https://example.dev/drifted-summary.schema.json' }
+            : entry
+        ));
+      },
+      assertFailure: (result) => {
+        expect(result.stderr).toContain(
+          'required artifact summary.json must use schemaId=https://clawvault.dev/schemas/compat-summary.schema.json'
+        );
+      }
+    });
+  });
 
-      const result = runArtifactBundleValidator(['--manifest', manifestPath], { COMPAT_REPORT_DIR: root });
-      expect(result.status).toBe(1);
-      expect(result.stderr).toContain(
-        'required artifact summary.json must use schemaId=https://clawvault.dev/schemas/compat-summary.schema.json'
-      );
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
+  it('fails explicit manifest override when required artifactFile mapping drifts', () => {
+    runManifestOverrideDriftScenario({
+      mutateManifest: (manifestPayload) => {
+        manifestPayload.artifacts = manifestPayload.artifacts.map((entry) => (
+          entry.artifactName === 'summary.json'
+            ? { ...entry, artifactFile: 'summary-v2.json' }
+            : entry
+        ));
+      },
+      assertFailure: (result) => {
+        expect(result.stderr).toContain('required artifact summary.json must use artifactFile=summary.json');
+      }
+    });
+  });
+
+  it('fails explicit manifest override when required versionField mapping drifts', () => {
+    runManifestOverrideDriftScenario({
+      mutateManifest: (manifestPayload) => {
+        manifestPayload.artifacts = manifestPayload.artifacts.map((entry) => (
+          entry.artifactName === 'summary.json'
+            ? { ...entry, versionField: 'outputSchemaVersion' }
+            : entry
+        ));
+      },
+      assertFailure: (result) => {
+        expect(result.stderr).toContain('required artifact summary.json must use versionField=summarySchemaVersion');
+      }
+    });
   });
 });
