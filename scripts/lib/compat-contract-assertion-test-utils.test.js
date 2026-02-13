@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  expectArrayContainsAllValues,
   expectArrayOfRecordsWithRequiredStringFields,
   expectDistinctStringFieldsPerRecord,
   expectEachDomainValueOccursExactlyOnce,
@@ -163,6 +164,10 @@ describe('compat contract assertion test utils', () => {
     expectNonEmptyString('alpha', 'scalar string domain');
     expectNonEmptyUniqueStringArray(['alpha', 'beta'], 'string-array domain');
     expectNonEmptyUniqueStringArray([], 'empty-allowed string-array domain', { requireNonEmpty: false });
+    expectArrayContainsAllValues(['alpha', 'beta', 'gamma'], ['alpha', 'gamma'], 'array containment domain');
+    expectArrayContainsAllValues(['alpha'], [], 'array containment optional-empty domain', {
+      requireNonEmptyRequiredValues: false
+    });
   });
 
   it('throws when non-empty unique string arrays are invalid', () => {
@@ -177,6 +182,9 @@ describe('compat contract assertion test utils', () => {
     }).toThrow();
     expect(() => {
       expectNonEmptyUniqueStringArray([], 'empty string-array domain');
+    }).toThrow();
+    expect(() => {
+      expectArrayContainsAllValues(['alpha'], ['beta'], 'missing required array containment domain');
     }).toThrow();
   });
 

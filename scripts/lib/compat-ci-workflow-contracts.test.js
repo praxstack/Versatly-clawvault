@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  expectArrayContainsAllValues,
   expectKeyedStringArrayDomains,
   expectKeyedStringRecordDomains,
   expectNonEmptyString,
@@ -108,7 +109,7 @@ describe('compat ci workflow contracts constants', () => {
       { requireExactKeyDomain: true, allowEmptyKeys: ['pull_request'] }
     );
     expectNonEmptyUniqueStringArray(REQUIRED_COMPAT_CI_JOB_NAMES, 'REQUIRED_COMPAT_CI_JOB_NAMES');
-    expect(REQUIRED_COMPAT_CI_JOB_NAMES).toContain(REQUIRED_COMPAT_CI_JOB_NAME);
+    expectArrayContainsAllValues(REQUIRED_COMPAT_CI_JOB_NAMES, [REQUIRED_COMPAT_CI_JOB_NAME], 'REQUIRED_COMPAT_CI_JOB_NAMES');
     expectKeyedStringArrayDomains(
       REQUIRED_COMPAT_CI_JOB_UNIQUE_FIELD_NAME_SEQUENCES,
       REQUIRED_COMPAT_CI_JOB_NAMES,
@@ -175,7 +176,10 @@ describe('compat ci workflow contracts constants', () => {
 
   it('keeps required upload artifact file domain unique and non-empty', () => {
     expectNonEmptyUniqueStringArray(REQUIRED_COMPAT_CI_UPLOAD_ARTIFACT_FILES, 'REQUIRED_COMPAT_CI_UPLOAD_ARTIFACT_FILES');
-    expect(REQUIRED_COMPAT_CI_UPLOAD_ARTIFACT_FILES).toContain('artifact-bundle-validator-result.json');
-    expect(REQUIRED_COMPAT_CI_UPLOAD_ARTIFACT_FILES).toContain('summary.json');
+    expectArrayContainsAllValues(
+      REQUIRED_COMPAT_CI_UPLOAD_ARTIFACT_FILES,
+      ['artifact-bundle-validator-result.json', 'summary.json'],
+      'REQUIRED_COMPAT_CI_UPLOAD_ARTIFACT_FILES'
+    );
   });
 });

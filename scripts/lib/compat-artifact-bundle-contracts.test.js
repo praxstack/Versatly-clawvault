@@ -10,6 +10,7 @@ import {
   REQUIRED_COMPAT_ARTIFACT_BUNDLE_VERSION_FIELDS
 } from './compat-artifact-bundle-contracts.mjs';
 import {
+  expectArrayContainsAllValues,
   expectArrayOfRecordsWithRequiredStringFields,
   expectNonEmptyUniqueStringArray,
   expectObjectKeyDomainParity,
@@ -58,7 +59,11 @@ describe('compat artifact bundle contracts constants', () => {
       'REQUIRED_COMPAT_ARTIFACT_BUNDLE_PATH_FIELDS fieldName'
     );
     const boundArtifactNames = REQUIRED_COMPAT_ARTIFACT_BUNDLE_PATH_FIELDS.map((entry) => entry.artifactName);
-    expect(boundArtifactNames).toEqual(expect.arrayContaining(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES));
+    expectArrayContainsAllValues(
+      boundArtifactNames,
+      REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES,
+      'REQUIRED_COMPAT_ARTIFACT_BUNDLE_PATH_FIELDS artifactName domain'
+    );
   });
 
   it('keeps required version-field bindings aligned with required artifact set', () => {

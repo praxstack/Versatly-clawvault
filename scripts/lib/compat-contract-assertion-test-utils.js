@@ -32,6 +32,17 @@ export function expectNonEmptyString(value, label) {
   expect(value.length, `${label} must be a non-empty string`).toBeGreaterThan(0);
 }
 
+export function expectArrayContainsAllValues(values, requiredValues, label, options = {}) {
+  const { requireNonEmptyRequiredValues = true } = options;
+  expect(Array.isArray(values), `${label} values must be an array`).toBe(true);
+  expectNonEmptyUniqueStringArray(requiredValues, `${label} required values`, {
+    requireNonEmpty: requireNonEmptyRequiredValues
+  });
+  for (const requiredValue of requiredValues) {
+    expect(values, `${label} missing required value: ${requiredValue}`).toContain(requiredValue);
+  }
+}
+
 export function expectNonEmptyStringRecord(valuesByKey, label, options = {}) {
   const { requireNonEmpty = false } = options;
   expect(valuesByKey && typeof valuesByKey === 'object', `${label} must be an object`).toBe(true);

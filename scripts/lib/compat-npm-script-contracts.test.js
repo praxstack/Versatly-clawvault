@@ -70,6 +70,7 @@ import {
   REQUIRED_COMPAT_VALIDATOR_STACK_SEQUENCE
 } from './compat-npm-script-contracts.mjs';
 import {
+  expectArrayContainsAllValues,
   expectArrayOfRecordsWithRequiredStringFields,
   expectDistinctStringFieldsPerRecord,
   expectKeyedStringArrayDomains,
@@ -147,24 +148,25 @@ describe('compat npm script contracts constants', () => {
       expectNonEmptyString(value, label);
     }
     expectNonEmptyUniqueStringArray(REQUIRED_COMPAT_CI_WORKFLOW_UNIQUE_FIELD_NAMES, 'REQUIRED_COMPAT_CI_WORKFLOW_UNIQUE_FIELD_NAMES');
-    expect(REQUIRED_COMPAT_CI_WORKFLOW_UNIQUE_FIELD_NAMES).toEqual(expect.arrayContaining([
-      'name',
-      'on',
-      'jobs'
-    ]));
+    expectArrayContainsAllValues(
+      REQUIRED_COMPAT_CI_WORKFLOW_UNIQUE_FIELD_NAMES,
+      ['name', 'on', 'jobs'],
+      'REQUIRED_COMPAT_CI_WORKFLOW_UNIQUE_FIELD_NAMES'
+    );
     expectNonEmptyUniqueStringArray(REQUIRED_COMPAT_CI_WORKFLOW_FIELD_NAMES, 'REQUIRED_COMPAT_CI_WORKFLOW_FIELD_NAMES');
     expect(REQUIRED_COMPAT_CI_WORKFLOW_FIELD_NAMES).toEqual(REQUIRED_COMPAT_CI_WORKFLOW_UNIQUE_FIELD_NAMES);
     expectNonEmptyUniqueStringArray(REQUIRED_COMPAT_CI_TRIGGER_PUSH_BRANCHES, 'REQUIRED_COMPAT_CI_TRIGGER_PUSH_BRANCHES');
-    expect(REQUIRED_COMPAT_CI_TRIGGER_PUSH_BRANCHES).toEqual(expect.arrayContaining([
-      'main',
-      'master',
-      'cursor/**'
-    ]));
+    expectArrayContainsAllValues(
+      REQUIRED_COMPAT_CI_TRIGGER_PUSH_BRANCHES,
+      ['main', 'master', 'cursor/**'],
+      'REQUIRED_COMPAT_CI_TRIGGER_PUSH_BRANCHES'
+    );
     expectNonEmptyUniqueStringArray(REQUIRED_COMPAT_CI_TRIGGER_NAMES, 'REQUIRED_COMPAT_CI_TRIGGER_NAMES');
-    expect(REQUIRED_COMPAT_CI_TRIGGER_NAMES).toEqual(expect.arrayContaining([
-      'push',
-      'pull_request'
-    ]));
+    expectArrayContainsAllValues(
+      REQUIRED_COMPAT_CI_TRIGGER_NAMES,
+      ['push', 'pull_request'],
+      'REQUIRED_COMPAT_CI_TRIGGER_NAMES'
+    );
     expectKeyedStringArrayDomains(
       REQUIRED_COMPAT_CI_TRIGGER_SECTION_FIELD_NAME_SEQUENCES,
       REQUIRED_COMPAT_CI_TRIGGER_NAMES,
@@ -172,7 +174,7 @@ describe('compat npm script contracts constants', () => {
       { requireExactKeyDomain: true, allowEmptyKeys: ['pull_request'] }
     );
     expectNonEmptyUniqueStringArray(REQUIRED_COMPAT_CI_JOB_NAMES, 'REQUIRED_COMPAT_CI_JOB_NAMES');
-    expect(REQUIRED_COMPAT_CI_JOB_NAMES).toContain(REQUIRED_COMPAT_CI_JOB_NAME);
+    expectArrayContainsAllValues(REQUIRED_COMPAT_CI_JOB_NAMES, [REQUIRED_COMPAT_CI_JOB_NAME], 'REQUIRED_COMPAT_CI_JOB_NAMES');
     expectKeyedStringArrayDomains(
       REQUIRED_COMPAT_CI_JOB_UNIQUE_FIELD_NAME_SEQUENCES,
       REQUIRED_COMPAT_CI_JOB_NAMES,
@@ -192,22 +194,26 @@ describe('compat npm script contracts constants', () => {
       { requireExactKeyDomain: true }
     );
     expectNonEmptyUniqueStringArray(REQUIRED_COMPAT_CI_JOB_UNIQUE_FIELD_NAMES, 'REQUIRED_COMPAT_CI_JOB_UNIQUE_FIELD_NAMES');
-    expect(REQUIRED_COMPAT_CI_JOB_UNIQUE_FIELD_NAMES).toEqual(expect.arrayContaining([
-      'runs-on',
-      'timeout-minutes',
-      'steps'
-    ]));
+    expectArrayContainsAllValues(
+      REQUIRED_COMPAT_CI_JOB_UNIQUE_FIELD_NAMES,
+      ['runs-on', 'timeout-minutes', 'steps'],
+      'REQUIRED_COMPAT_CI_JOB_UNIQUE_FIELD_NAMES'
+    );
     expectNonEmptyUniqueStringArray(REQUIRED_COMPAT_CI_JOB_FIELD_NAMES, 'REQUIRED_COMPAT_CI_JOB_FIELD_NAMES');
     expect(REQUIRED_COMPAT_CI_JOB_FIELD_NAMES).toEqual(REQUIRED_COMPAT_CI_JOB_UNIQUE_FIELD_NAMES);
     expectNonEmptyUniqueStringArray(REQUIRED_COMPAT_CI_STEP_SEQUENCE, 'REQUIRED_COMPAT_CI_STEP_SEQUENCE');
-    expect(REQUIRED_COMPAT_CI_STEP_SEQUENCE).toEqual(expect.arrayContaining([
-      REQUIRED_COMPAT_CI_CHECKOUT_STEP_NAME,
-      REQUIRED_COMPAT_CI_SETUP_NODE_STEP_NAME,
-      REQUIRED_COMPAT_CI_INSTALL_STEP_NAME,
-      REQUIRED_COMPAT_CI_PRIMARY_RUN_STEP_NAME,
-      REQUIRED_COMPAT_CI_FAILURE_UPLOAD_STEP_NAME,
-      REQUIRED_COMPAT_CI_UPLOAD_STEP_NAME
-    ]));
+    expectArrayContainsAllValues(
+      REQUIRED_COMPAT_CI_STEP_SEQUENCE,
+      [
+        REQUIRED_COMPAT_CI_CHECKOUT_STEP_NAME,
+        REQUIRED_COMPAT_CI_SETUP_NODE_STEP_NAME,
+        REQUIRED_COMPAT_CI_INSTALL_STEP_NAME,
+        REQUIRED_COMPAT_CI_PRIMARY_RUN_STEP_NAME,
+        REQUIRED_COMPAT_CI_FAILURE_UPLOAD_STEP_NAME,
+        REQUIRED_COMPAT_CI_UPLOAD_STEP_NAME
+      ],
+      'REQUIRED_COMPAT_CI_STEP_SEQUENCE'
+    );
     expectNonEmptyUniqueStringArray(REQUIRED_COMPAT_CI_STEP_NAMES, 'REQUIRED_COMPAT_CI_STEP_NAMES');
     expect(REQUIRED_COMPAT_CI_STEP_NAMES).toEqual(REQUIRED_COMPAT_CI_STEP_SEQUENCE);
     expectKeyedStringArrayDomains(
