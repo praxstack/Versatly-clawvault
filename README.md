@@ -278,6 +278,8 @@ node scripts/validate-compat-summary.mjs --summary /tmp/summary.json --json --ou
 node scripts/validate-compat-summary.mjs --help
 # equivalent npm wrapper (supports arg passthrough, env fallback)
 npm run test:compat-summary:verify -- /tmp/clawvault-compat-reports/summary.json
+# validate previously emitted validator-result payload directly
+npm run test:compat-validator-result:verify -- /tmp/clawvault-compat-reports/validator-result.json
 # or run fixture generation + standalone summary validation together
 npm run test:compat-summary:fast
 # script behavior is covered by dedicated unit tests (success + failure + env fallback)

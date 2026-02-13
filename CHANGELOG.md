@@ -131,6 +131,7 @@
 - CI `compat-summary` artifact now bundles both `summary.json` and `validator-result.json`, providing schema-level and validator-level outputs for downstream analysis.
 - Validator payload contracts are now centralized in dedicated helpers (`scripts/lib/compat-summary-validator-output.mjs`) with unit coverage, reducing drift between CLI output generation and validation semantics.
 - Standalone validator tests now verify `--out` error-payload persistence even when CLI argument parsing fails, hardening pipeline auditability for malformed invocations.
+- Added standalone validator-result verification workflow (`validate-compat-validator-result.mjs`, `test:compat-validator-result:verify`) to validate emitted validator payload artifacts independently of summary generation.
 
 ## [1.11.2] - 2026-02-12
 
