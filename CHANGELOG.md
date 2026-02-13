@@ -115,6 +115,7 @@
 - Consolidated `npm run ci` now uses standalone compatibility summary validation after fixture execution, adding artifact-level contract checks to the core local/CI gate.
 - Case-report artifact writing now centrally validates compatibility report shape in `writeCaseReport`, aligning per-case artifact enforcement with summary writer safeguards.
 - Added dedicated unit tests for the standalone summary validator script (`scripts/validate-compat-summary.test.js`) covering success, missing-case-report failure, and env-based path resolution.
+- Standalone summary validator script coverage now also includes explicit missing-input failure behavior to keep CLI error guidance stable.
 
 ## [1.11.2] - 2026-02-12
 

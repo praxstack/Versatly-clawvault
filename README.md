@@ -265,6 +265,7 @@ node scripts/validate-compat-summary.mjs /tmp/clawvault-compat-reports/summary.j
 # or run fixture generation + standalone summary validation together
 npm run test:compat-summary:fast
 # script behavior is covered by dedicated unit tests (success + failure + env fallback)
+# validator exits with a clear error when no summary path/source input is provided
 ```
 
 
