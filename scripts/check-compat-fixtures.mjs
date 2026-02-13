@@ -175,6 +175,9 @@ function main() {
     }
     const results = cases.map((testCase) => runCase(testCase, env));
     const totalDurationMs = results.reduce((sum, result) => sum + (result.durationMs ?? 0), 0);
+    const averageDurationMs = results.length > 0
+      ? Math.round(totalDurationMs / results.length)
+      : 0;
     writeSummaryReport(compatReportDir, {
       generatedAt: new Date().toISOString(),
       mode: 'fixtures',
@@ -182,6 +185,7 @@ function main() {
       selectedCases: cases.map((testCase) => testCase.name),
       total: results.length,
       totalDurationMs,
+      averageDurationMs,
       failures: results.filter((result) => !result.passed).length,
       results
     });
@@ -192,6 +196,7 @@ function main() {
       process.exit(1);
     }
 
+    console.log(`Compatibility fixtures runtime: total=${totalDurationMs}ms avg=${averageDurationMs}ms`);
     console.log('Compatibility fixture check passed.');
   } finally {
     fs.rmSync(shimDir, { recursive: true, force: true });
