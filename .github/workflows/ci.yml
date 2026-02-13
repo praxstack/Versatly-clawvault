@@ -26,11 +26,5 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Unit and integration tests
-        run: npm test
-
-      - name: OpenClaw compatibility fixture matrix
-        run: npm run test:compat-fixtures
+      - name: Run quality and compatibility checks
+        run: npm run ci
