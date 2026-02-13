@@ -53,6 +53,7 @@
 - Added `tests/compat-fixtures/README.md` documenting fixture layout and scenario intent for easier extension/review.
 - Compatibility fixture runner now emits `summary.json` alongside per-case reports for faster CI artifact triage.
 - Compatibility fixture manifest now includes explicit `schemaVersion` validation to make contract changes intentional and reviewable.
+- Compatibility unit tests now assert expected diagnostic detail substrings from declarative cases, not only status/count outputs.
 
 ## [1.11.2] - 2026-02-12
 
