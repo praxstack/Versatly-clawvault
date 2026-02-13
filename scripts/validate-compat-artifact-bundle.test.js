@@ -278,6 +278,34 @@ describe('validate-compat-artifact-bundle script', () => {
     }
   });
 
+  it('fails when manifest-validator schemaId drift violates payload contract', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'compat-artifact-bundle-'));
+    try {
+      const validatorResultPath = path.join(root, 'validator-result.json');
+      writeArtifacts(root, {
+        verifierPayload: buildValidatorResultVerifierSuccessPayload({
+          payloadPath: validatorResultPath,
+          payloadStatus: 'ok',
+          validatorPayloadOutputSchemaVersion: 1
+        })
+      });
+      const manifestValidatorResultPath = path.join(root, 'artifact-bundle-manifest-validator-result.json');
+      const manifestValidatorPayload = JSON.parse(fs.readFileSync(manifestValidatorResultPath, 'utf-8'));
+      manifestValidatorPayload.schemaContracts = manifestValidatorPayload.schemaContracts.map((entry) => (
+        entry.artifactName === 'summary.json'
+          ? { ...entry, schemaId: 'https://example.dev/drifted-summary.schema.json' }
+          : entry
+      ));
+      fs.writeFileSync(manifestValidatorResultPath, JSON.stringify(manifestValidatorPayload, null, 2), 'utf-8');
+
+      const result = runArtifactBundleValidator([], { COMPAT_REPORT_DIR: root });
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain('schemaContracts entry for summary.json must use schemaId=');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('fails when validator-result verifier payload drifts from validator-result artifact', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'compat-artifact-bundle-'));
     try {
