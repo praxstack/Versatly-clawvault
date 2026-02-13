@@ -244,6 +244,22 @@ export function parseCompatReport(stdout, caseName) {
   }
 }
 
+function collectDuplicateValues(values) {
+  return values
+    .filter((value, index, array) => array.indexOf(value) !== index)
+    .filter((value, index, array) => array.indexOf(value) === index);
+}
+
+function assertUniqueNonEmptyStringArray(values, fieldName) {
+  if (!Array.isArray(values) || values.some((value) => typeof value !== 'string' || value.length === 0)) {
+    throw new Error(`Invalid summary header field: ${fieldName}`);
+  }
+  const duplicates = collectDuplicateValues(values);
+  if (duplicates.length > 0) {
+    throw new Error(`Duplicate summary header entries in ${fieldName}: ${duplicates.join(', ')}`);
+  }
+}
+
 export function evaluateCaseReport(testCase, report, actualExitCode) {
   const mismatches = [];
 
@@ -431,15 +447,7 @@ export function buildCompatSummaryHeader({
     ['runtimeCheckLabels', runtimeCheckLabels]
   ];
   for (const [fieldName, values] of fields) {
-    if (!Array.isArray(values) || values.some((value) => typeof value !== 'string' || value.length === 0)) {
-      throw new Error(`Invalid summary header field: ${fieldName}`);
-    }
-    const duplicates = values
-      .filter((value, index, array) => array.indexOf(value) !== index)
-      .filter((value, index, array) => array.indexOf(value) === index);
-    if (duplicates.length > 0) {
-      throw new Error(`Duplicate summary header entries in ${fieldName}: ${duplicates.join(', ')}`);
-    }
+    assertUniqueNonEmptyStringArray(values, fieldName);
   }
 
   if (mode !== 'contract' && mode !== 'fixtures') {
@@ -456,6 +464,77 @@ export function buildCompatSummaryHeader({
     expectedCheckLabels,
     runtimeCheckLabels
   };
+}
+
+export function ensureCompatSummaryShape(summary) {
+  if (!summary || typeof summary !== 'object' || Array.isArray(summary)) {
+    throw new Error('compat summary must be an object');
+  }
+  if (summary.summarySchemaVersion !== COMPAT_SUMMARY_SCHEMA_VERSION) {
+    throw new Error(`compat summary schemaVersion must be ${COMPAT_SUMMARY_SCHEMA_VERSION}`);
+  }
+  if (summary.mode !== 'contract' && summary.mode !== 'fixtures') {
+    throw new Error(`compat summary has unsupported mode: ${String(summary.mode)}`);
+  }
+  if (summary.schemaVersion !== COMPAT_FIXTURE_SCHEMA_VERSION) {
+    throw new Error(`compat summary schemaVersion must match fixture schema ${COMPAT_FIXTURE_SCHEMA_VERSION}`);
+  }
+  if (typeof summary.generatedAt !== 'string' || summary.generatedAt.length === 0) {
+    throw new Error('compat summary missing generatedAt');
+  }
+
+  assertUniqueNonEmptyStringArray(summary.selectedCases, 'selectedCases');
+  assertUniqueNonEmptyStringArray(summary.expectedCheckLabels, 'expectedCheckLabels');
+  assertUniqueNonEmptyStringArray(summary.runtimeCheckLabels, 'runtimeCheckLabels');
+
+  if (!Number.isInteger(summary.selectedTotal) || summary.selectedTotal !== summary.selectedCases.length) {
+    throw new Error('compat summary selectedTotal must equal selectedCases.length');
+  }
+
+  const numericFields = [
+    'total',
+    'preflightDurationMs',
+    'totalDurationMs',
+    'averageDurationMs',
+    'overallDurationMs',
+    'failures'
+  ];
+  for (const fieldName of numericFields) {
+    if (!Number.isFinite(summary[fieldName]) || summary[fieldName] < 0) {
+      throw new Error(`compat summary has invalid numeric field: ${fieldName}`);
+    }
+  }
+
+  if (!Array.isArray(summary.slowestCases)) {
+    throw new Error('compat summary missing slowestCases[]');
+  }
+  for (const [index, entry] of summary.slowestCases.entries()) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      throw new Error(`compat summary slowestCases[${index}] must be an object`);
+    }
+    if (typeof entry.name !== 'string' || entry.name.length === 0) {
+      throw new Error(`compat summary slowestCases[${index}] missing name`);
+    }
+    if (!Number.isFinite(entry.durationMs) || entry.durationMs < 0) {
+      throw new Error(`compat summary slowestCases[${index}] has invalid durationMs`);
+    }
+  }
+
+  assertUniqueNonEmptyStringArray(summary.passedCases, 'passedCases');
+  assertUniqueNonEmptyStringArray(summary.failedCases, 'failedCases');
+
+  if (!Array.isArray(summary.results)) {
+    throw new Error('compat summary missing results[]');
+  }
+  if (summary.failures !== summary.failedCases.length) {
+    throw new Error('compat summary failures must equal failedCases.length');
+  }
+  if (summary.total !== summary.results.length) {
+    throw new Error('compat summary total must equal results.length');
+  }
+  if (summary.total !== summary.passedCases.length + summary.failedCases.length) {
+    throw new Error('compat summary total must equal passedCases.length + failedCases.length');
+  }
 }
 
 export function assertBuildFreshness(sourcePath, buildPath, label = 'build artifact') {

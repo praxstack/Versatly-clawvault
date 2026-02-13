@@ -12,6 +12,7 @@ import {
   ensureReportDir,
   evaluateCaseReport,
   ensureCompatReportShape,
+  ensureCompatSummaryShape,
   loadCaseManifest,
   loadCases,
   parseCompatReport,
@@ -745,6 +746,45 @@ describe('compat fixture runner utilities', () => {
       expectedCheckLabels: ['openclaw CLI available'],
       runtimeCheckLabels: [123]
     })).toThrow('Invalid summary header field');
+  });
+
+  it('validates compatibility summary shape invariants', () => {
+    const summary = {
+      ...buildCompatSummaryHeader({
+        generatedAt: '2026-02-13T00:00:00.000Z',
+        mode: 'fixtures',
+        schemaVersion: COMPAT_FIXTURE_SCHEMA_VERSION,
+        selectedCases: ['healthy'],
+        expectedCheckLabels: ['openclaw CLI available'],
+        runtimeCheckLabels: ['openclaw CLI available']
+      }),
+      total: 1,
+      preflightDurationMs: 10,
+      totalDurationMs: 20,
+      averageDurationMs: 20,
+      overallDurationMs: 30,
+      slowestCases: [{ name: 'healthy', durationMs: 20 }],
+      failures: 0,
+      passedCases: ['healthy'],
+      failedCases: [],
+      results: [{ name: 'healthy', passed: true }]
+    };
+    expect(() => ensureCompatSummaryShape(summary)).not.toThrow();
+
+    expect(() => ensureCompatSummaryShape({
+      ...summary,
+      failures: 1
+    })).toThrow('failures must equal failedCases.length');
+
+    expect(() => ensureCompatSummaryShape({
+      ...summary,
+      selectedTotal: 2
+    })).toThrow('selectedTotal must equal selectedCases.length');
+
+    expect(() => ensureCompatSummaryShape({
+      ...summary,
+      passedCases: ['healthy', 'healthy']
+    })).toThrow('Duplicate summary header entries in passedCases');
   });
 
   it('validates build freshness for compatibility checks', () => {

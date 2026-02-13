@@ -8,6 +8,7 @@ import {
   assertFixtureFiles,
   buildCompatSummaryHeader,
   buildFixtureRunTelemetry,
+  ensureCompatSummaryShape,
   ensureReportDir,
   evaluateCaseReport,
   loadCaseManifest,
@@ -171,7 +172,7 @@ function main() {
     const preflightDurationMs = Date.now() - preflightStartedAtMs;
     if (validateOnly) {
       const generatedAt = new Date().toISOString();
-      writeSummaryReport(compatReportDir, {
+      const summary = {
         ...buildCompatSummaryHeader({
           generatedAt,
           mode: 'contract',
@@ -190,7 +191,9 @@ function main() {
         passedCases: [],
         failedCases: [],
         results: []
-      });
+      };
+      ensureCompatSummaryShape(summary);
+      writeSummaryReport(compatReportDir, summary);
       console.log(`Compatibility contract runtime: ${preflightDurationMs}ms`);
       console.log('Compatibility fixture contract validation passed.');
       return;
@@ -199,7 +202,7 @@ function main() {
     const resultSummary = summarizeFixtureResults(results);
     const telemetry = buildFixtureRunTelemetry(results, preflightDurationMs);
     const generatedAt = new Date().toISOString();
-    writeSummaryReport(compatReportDir, {
+    const summary = {
       ...buildCompatSummaryHeader({
         generatedAt,
         mode: 'fixtures',
@@ -214,7 +217,9 @@ function main() {
       passedCases: resultSummary.passedCases,
       failedCases: resultSummary.failedCases,
       results
-    });
+    };
+    ensureCompatSummaryShape(summary);
+    writeSummaryReport(compatReportDir, summary);
     const failures = resultSummary.failures;
 
     if (failures > 0) {
