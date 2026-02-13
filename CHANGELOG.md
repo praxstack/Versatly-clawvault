@@ -71,6 +71,7 @@
 - Compatibility fixture manifest schema has been bumped to `schemaVersion: 2` to formalize the `expectedCheckLabels` contract addition.
 - Compatibility command unit tests now also assert declarative expected check-label order and `expectedHintIncludes` contracts from fixture manifest.
 - Compatibility fixture runner now supports contract-only mode (`COMPAT_VALIDATE_ONLY=1`) and dedicated scripts (`test:compat-contract`, `test:compat-contract:fast`) for quick manifest/docs/runtime-label validation.
+- Compatibility smoke workflow now runs fast contract validation before the healthy fixture case, improving early drift detection during local iteration.
 
 ## [1.11.2] - 2026-02-12
 

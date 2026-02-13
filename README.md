@@ -224,7 +224,7 @@ npm run test:compat-fixtures
 
 # Quick smoke check (healthy fixture only)
 npm run test:compat-smoke
-# uses fast fixture runner mode (requires existing dist build)
+# runs fast contract validation + healthy fixture check (requires existing dist build)
 
 # Validate compatibility fixture contract only (no full matrix execution)
 npm run test:compat-contract
