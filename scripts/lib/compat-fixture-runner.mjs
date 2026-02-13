@@ -131,6 +131,11 @@ export function loadCaseManifest(casesPath) {
       if (!Array.isArray(testCase.allowMissingFiles) || testCase.allowMissingFiles.some((value) => typeof value !== 'string' || !value)) {
         throw new Error(`compat fixture case[${index}] allowMissingFiles must be an array of non-empty strings`);
       }
+      const requiredFileSet = new Set(REQUIRED_FIXTURE_FILES);
+      const unknownAllowMissing = testCase.allowMissingFiles.filter((value) => !requiredFileSet.has(value));
+      if (unknownAllowMissing.length > 0) {
+        throw new Error(`compat fixture case[${index}] allowMissingFiles contains unknown required-file paths: ${unknownAllowMissing.join(', ')}`);
+      }
     }
 
     if (testCase.openclawExitCode !== undefined) {

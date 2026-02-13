@@ -106,6 +106,31 @@ describe('compat fixture runner utilities', () => {
     }
   });
 
+  it('rejects allowMissingFiles paths outside required fixture file set', () => {
+    const root = makeTempDir('compat-cases-');
+    const file = path.join(root, 'cases.json');
+    fs.writeFileSync(file, JSON.stringify({
+      schemaVersion: COMPAT_FIXTURE_SCHEMA_VERSION,
+      expectedCheckLabels: ['hook handler safety'],
+      cases: [
+        {
+          name: 'bad-allow-missing-path',
+          description: 'fixture with unknown allowMissingFiles path.',
+          expectedExitCode: 1,
+          expectedWarnings: 1,
+          expectedErrors: 0,
+          expectedCheckStatuses: { 'hook handler safety': 'warn' },
+          allowMissingFiles: ['UNKNOWN.md']
+        }
+      ]
+    }), 'utf-8');
+    try {
+      expect(() => loadCases(file)).toThrow('unknown required-file paths');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('rejects invalid openclawExitCode metadata', () => {
     const root = makeTempDir('compat-cases-');
     const file = path.join(root, 'cases.json');
