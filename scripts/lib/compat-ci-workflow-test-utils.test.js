@@ -71,6 +71,37 @@ steps:
     run: echo beta
 `.trim();
 
+const MATRIX_WORKFLOW_YAML = `
+name: Matrix CI
+on:
+  push:
+    branches:
+      - main
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Lint
+        run: npm run lint
+  test-matrix:
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node:
+          - 20
+          - 22
+    steps:
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: \${{ matrix.node }}
+      - name: Run tests
+        run: npm test
+        env:
+          NODE_VERSION: \${{ matrix.node }}
+`.trim();
+
 describe('compat ci workflow test utils', () => {
   it('extracts workflow-level trigger metadata', () => {
     expect(extractWorkflowName(`\n${SAMPLE_WORKFLOW_YAML}\n`)).toBe('CI');
@@ -195,6 +226,48 @@ describe('compat ci workflow test utils', () => {
     expect(countJobNameOccurrences(`\n${SAMPLE_WORKFLOW_YAML}\n`, 'Missing Job')).toBe(0);
     expect(countScalarFieldOccurrences(jobBlock, 'runs-on')).toBe(1);
     expect(countScalarFieldOccurrences(jobBlock, 'steps')).toBe(1);
+  });
+
+  it('extracts matrix-job top-level fields and step snapshots across multiple jobs', () => {
+    const matrixJobBlock = extractJobBlock(`\n${MATRIX_WORKFLOW_YAML}\n`, 'test-matrix');
+    expect(matrixJobBlock).toBeTruthy();
+    expect(matrixJobBlock).toContain('strategy:');
+    expect(matrixJobBlock).toContain('matrix:');
+    expect(matrixJobBlock).not.toContain('lint:');
+    expect(extractJobTopLevelFieldNames(matrixJobBlock)).toEqual([
+      'needs',
+      'runs-on',
+      'strategy',
+      'steps'
+    ]);
+
+    const snapshotsByJobName = buildWorkflowJobsContractSnapshot({
+      workflowYaml: `\n${MATRIX_WORKFLOW_YAML}\n`,
+      stepNamesByJobName: {
+        lint: ['Lint'],
+        'test-matrix': ['Setup Node', 'Run tests']
+      }
+    });
+    expect(Object.keys(snapshotsByJobName)).toEqual(['lint', 'test-matrix']);
+    expect(snapshotsByJobName['test-matrix']).toEqual({
+      jobName: 'test-matrix',
+      jobTopLevelFieldNames: ['needs', 'runs-on', 'strategy', 'steps'],
+      jobRunsOn: 'ubuntu-latest',
+      jobTimeoutMinutes: null,
+      stepNames: ['Setup Node', 'Run tests'],
+      stepTopLevelFieldNamesByName: {
+        'Setup Node': ['name', 'uses', 'with'],
+        'Run tests': ['name', 'run', 'env']
+      },
+      stepWithFieldNamesByName: {
+        'Setup Node': ['node-version'],
+        'Run tests': null
+      },
+      stepEnvFieldNamesByName: {
+        'Setup Node': null,
+        'Run tests': ['NODE_VERSION']
+      }
+    });
   });
 
   it('extracts step metadata/block and run/env fields', () => {

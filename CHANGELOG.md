@@ -30,6 +30,7 @@
 - CI workflow contract enforcement now validates required job-level unique field occurrences and required step ordering/uniqueness through job-keyed sequence maps, making multi-job expansion contract checks reusable without single-job assumptions.
 - Workflow job snapshot utilities now auto-discover top-level job names when explicit job lists are omitted, with regression coverage to keep multi-job contract extraction reusable for future CI topology expansion.
 - CI workflow contract suites now exercise discovered-job snapshot extraction directly against the live workflow file, ensuring auto-discovery remains aligned with canonical required job domains.
+- CI workflow parser utility coverage now includes synthetic matrix-style multi-job fixtures (`strategy.matrix`, cross-job `needs`, and mixed step field domains), hardening future CI topology expansion before real workflow changes land.
 - Dashboard edge diffing now includes edge type/label, enabling reliable live updates when relation type changes.
 - Hook event matching now supports alias payload shapes (`event`, `eventName`, etc.) for better OpenClaw compatibility.
 - `link` and `entities` commands now consistently respect `--vault` without requiring `CLAWVAULT_PATH`.
