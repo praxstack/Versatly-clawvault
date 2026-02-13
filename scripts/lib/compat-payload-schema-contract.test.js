@@ -23,6 +23,9 @@ import {
 import {
   COMPAT_ARTIFACT_BUNDLE_MANIFEST_SCHEMA_VERSION
 } from './compat-artifact-bundle-manifest.mjs';
+import {
+  COMPAT_ARTIFACT_BUNDLE_MANIFEST_VALIDATOR_OUTPUT_SCHEMA_VERSION
+} from './compat-artifact-bundle-manifest-validator-output.mjs';
 
 function readSchema(schemaFileName) {
   const schemaPath = path.resolve(process.cwd(), 'schemas', schemaFileName);
@@ -83,6 +86,13 @@ describe('compat payload json schema contracts', () => {
   it('keeps compat artifact-bundle manifest schema in sync with runtime contract versions', () => {
     const schema = readSchema('compat-artifact-bundle.manifest.schema.json');
     expect(schema.properties.schemaVersion.const).toBe(COMPAT_ARTIFACT_BUNDLE_MANIFEST_SCHEMA_VERSION);
+    expect(schema.additionalProperties).toBe(false);
+  });
+
+  it('keeps compat artifact-bundle manifest validator output schema in sync with runtime contract versions', () => {
+    const schema = readSchema('compat-artifact-bundle-manifest-validator-output.schema.json');
+    expect(schema.properties.outputSchemaVersion.const).toBe(COMPAT_ARTIFACT_BUNDLE_MANIFEST_VALIDATOR_OUTPUT_SCHEMA_VERSION);
+    expect(schema.properties.status.enum).toEqual(['ok', 'error']);
     expect(schema.additionalProperties).toBe(false);
   });
 });

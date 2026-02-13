@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://clawvault.dev/schemas/compat-artifact-bundle-manifest-validator-output.schema.json",
+  "title": "Compatibility artifact-bundle manifest validator CLI output",
+  "description": "Structured output payload emitted by scripts/validate-compat-artifact-bundle-manifest.mjs in --json mode and/or via --out file output.",
+  "type": "object",
+  "properties": {
+    "outputSchemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": ["ok", "error"]
+    },
+    "manifestPath": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artifactCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "artifacts": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "schemaContracts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "artifactName": { "type": "string", "minLength": 1 },
+          "artifactFile": { "type": "string", "minLength": 1 },
+          "schemaPath": { "type": "string", "minLength": 1 },
+          "schemaId": { "type": "string", "minLength": 1 },
+          "versionField": {
+            "type": "string",
+            "enum": ["summarySchemaVersion", "outputSchemaVersion"]
+          },
+          "expectedSchemaVersion": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "artifactName",
+          "artifactFile",
+          "schemaPath",
+          "schemaId",
+          "versionField",
+          "expectedSchemaVersion"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "error": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": ["outputSchemaVersion", "status"],
+  "allOf": [
+    {
+      "if": {
+        "properties": { "status": { "const": "ok" } },
+        "required": ["status"]
+      },
+      "then": {
+        "required": [
+          "manifestPath",
+          "artifactCount",
+          "artifacts",
+          "schemaContracts"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "error" } },
+        "required": ["status"]
+      },
+      "then": {
+        "required": ["error"]
+      }
+    }
+  ],
+  "additionalProperties": false
+}
