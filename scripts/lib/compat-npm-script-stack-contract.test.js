@@ -32,6 +32,24 @@ function collectNpmRunTargets(scriptCommand) {
   return [...matches].map((match) => match[1]);
 }
 
+function hasCycleFromNode(node, adjacencyByNode, visiting, visited) {
+  if (visiting.has(node)) {
+    return true;
+  }
+  if (visited.has(node)) {
+    return false;
+  }
+  visiting.add(node);
+  for (const neighbor of adjacencyByNode.get(node) ?? []) {
+    if (hasCycleFromNode(neighbor, adjacencyByNode, visiting, visited)) {
+      return true;
+    }
+  }
+  visiting.delete(node);
+  visited.add(node);
+  return false;
+}
+
 describe('compat npm script stack contracts', () => {
   it('keeps required compat script names present', () => {
     const scripts = loadPackageScripts();
@@ -52,6 +70,26 @@ describe('compat npm script stack contracts', () => {
           `${sourceScriptName} references missing npm script target: ${targetName}`
         ).toBe('string');
       }
+    }
+  });
+
+  it('keeps required stack-source npm-run graph acyclic', () => {
+    const scripts = loadPackageScripts();
+    const sourceSet = new Set(REQUIRED_COMPAT_SCRIPT_REFERENCE_SOURCES);
+    const adjacencyByNode = new Map(
+      REQUIRED_COMPAT_SCRIPT_REFERENCE_SOURCES.map((sourceScriptName) => {
+        const command = scripts[sourceScriptName];
+        const targetScripts = collectNpmRunTargets(command).filter((targetName) => sourceSet.has(targetName));
+        return [sourceScriptName, targetScripts];
+      })
+    );
+    const visiting = new Set();
+    const visited = new Set();
+    for (const node of REQUIRED_COMPAT_SCRIPT_REFERENCE_SOURCES) {
+      expect(
+        hasCycleFromNode(node, adjacencyByNode, visiting, visited),
+        `cycle detected in required compat npm-run graph at ${node}`
+      ).toBe(false);
     }
   });
 
