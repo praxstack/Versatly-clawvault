@@ -58,6 +58,7 @@ export const REQUIRED_COMPAT_SUMMARY_STACK_SEQUENCE = Object.freeze([
 ]);
 
 export const REQUIRED_COMPAT_CI_SEQUENCE = Object.freeze([
+  'npm run test:compat-script-stack-contract:fast',
   'npm run typecheck',
   'npm test',
   'npm run build',

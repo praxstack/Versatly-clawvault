@@ -64,7 +64,7 @@
     "test:compat-summary": "COMPAT_REPORT_DIR=${COMPAT_REPORT_DIR:-.compat-reports} npm run test:compat-fixtures && COMPAT_REPORT_DIR=${COMPAT_REPORT_DIR:-.compat-reports} node scripts/validate-compat-summary.mjs --out ${COMPAT_REPORT_DIR:-.compat-reports}/validator-result.json",
     "test:compat-summary:fast": "npm run test:compat-script-stack-contract:fast && COMPAT_REPORT_DIR=${COMPAT_REPORT_DIR:-.compat-reports} npm run test:compat-fixtures:fast && COMPAT_REPORT_DIR=${COMPAT_REPORT_DIR:-.compat-reports} node scripts/validate-compat-summary.mjs --out ${COMPAT_REPORT_DIR:-.compat-reports}/validator-result.json && COMPAT_REPORT_DIR=${COMPAT_REPORT_DIR:-.compat-reports} npm run test:compat-report-stack:fast",
     "test:compat-smoke": "npm run test:compat-contract:fast && COMPAT_CASES=healthy npm run test:compat-fixtures:fast",
-    "ci": "npm run typecheck && npm test && npm run build && npm run test:compat-contract:fast && npm run test:compat-summary:fast",
+    "ci": "npm run test:compat-script-stack-contract:fast && npm run typecheck && npm test && npm run build && npm run test:compat-contract:fast && npm run test:compat-summary:fast",
     "seo:generate": "node generate-seo-assets.mjs",
     "prepublishOnly": "npm run build"
   },
