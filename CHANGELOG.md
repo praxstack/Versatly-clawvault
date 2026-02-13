@@ -68,6 +68,7 @@
 - Compatibility fixture runner now validates declarative expected check labels against the live `compat` report schema (healthy fixture) to catch stale/typoed label contracts early.
 - Compatibility fixture README coverage now also enforces scenario ordering parity with declarative `cases.json` to prevent review confusion and drift.
 - Compatibility fixture manifest now declares `expectedCheckLabels`, and runner validation enforces both label set and label order parity against runtime compatibility output.
+- Compatibility fixture manifest schema has been bumped to `schemaVersion: 2` to formalize the `expectedCheckLabels` contract addition.
 
 ## [1.11.2] - 2026-02-12
 

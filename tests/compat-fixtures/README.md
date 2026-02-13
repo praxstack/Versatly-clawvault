@@ -3,7 +3,7 @@
 This directory contains declarative fixtures used by `npm run test:compat-fixtures`.
 
 - `cases.json` is the source of truth for expected outcomes.
-  - includes `schemaVersion` for explicit contract evolution.
+  - includes `schemaVersion` for explicit contract evolution (current: `2`).
   - includes `expectedCheckLabels` to lock the compatibility check-label contract.
   - supports `expectedCheckStatuses`, `expectedDetailIncludes`, and `expectedHintIncludes`.
 - Each case references a fixture folder with:

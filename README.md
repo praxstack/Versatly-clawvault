@@ -215,7 +215,7 @@ clawvault compat --strict --base-dir ./tests/compat-fixtures/healthy
 # Run strict compatibility fixture matrix (healthy + intentional drift cases)
 npm run test:compat-fixtures
 # fixture expectations are defined in tests/compat-fixtures/cases.json
-# fixture manifest includes schemaVersion for explicit contract evolution
+# fixture manifest includes schemaVersion for explicit contract evolution (current schemaVersion=2)
 # includes expectedCheckLabels to lock compat check-label contract
 # supports expected status, detail snippets, and hint snippets per check
 # each case also owns its scenario description (README coverage is validated)
