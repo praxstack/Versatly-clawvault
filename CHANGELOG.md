@@ -59,6 +59,7 @@
 - Added reusable keyed string-record domain assertion helper (`expectKeyedStringRecordDomains`, with exact-key-domain and allow-empty-key options) and refactored compatibility contract suites to centralize keyed scalar-contract map validation across job/step scalar value domains.
 - Added reusable array containment assertion helper (`expectArrayContainsAllValues`) and refactored compatibility contract suites to enforce required subset domains through shared semantics instead of repeated `arrayContaining`/`toContain` patterns.
 - Added reusable string-segment order/uniqueness assertion helpers (`expectStringContainsSegmentsInOrder`, `expectStringContainsSegmentsExactlyOnce`, `expectStringContainsSegmentsExactlyOnceInOrder`) and refactored npm stack-contract tests to use shared segment-order semantics instead of file-local string-index helpers.
+- Added reusable keyed string-map value parity assertion helper (`expectKeyedStringMapValueParity`) and refactored artifact-bundle/graph contract tests to validate keyed map value contracts and required visited-domain containment through shared assertion semantics.
 - Dashboard edge diffing now includes edge type/label, enabling reliable live updates when relation type changes.
 - Hook event matching now supports alias payload shapes (`event`, `eventName`, etc.) for better OpenClaw compatibility.
 - `link` and `entities` commands now consistently respect `--vault` without requiring `CLAWVAULT_PATH`.

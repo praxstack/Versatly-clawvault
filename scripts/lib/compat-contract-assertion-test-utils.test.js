@@ -4,6 +4,7 @@ import {
   expectArrayOfRecordsWithRequiredStringFields,
   expectDistinctStringFieldsPerRecord,
   expectEachDomainValueOccursExactlyOnce,
+  expectKeyedStringMapValueParity,
   expectKeyedStringArrayDomains,
   expectKeyedStringRecordDomains,
   expectNonEmptyString,
@@ -334,6 +335,53 @@ describe('compat contract assertion test utils', () => {
       'keyed string-record optional-empty domain',
       { allowEmptyKeys: ['beta'] }
     );
+  });
+
+  it('asserts keyed string-map value parity', () => {
+    expectKeyedStringMapValueParity(
+      {
+        alpha: 'ALPHA',
+        beta: 'BETA'
+      },
+      ['alpha', 'beta'],
+      (key) => key.toUpperCase(),
+      'keyed string-map value parity'
+    );
+    expectKeyedStringMapValueParity(
+      {
+        alpha: 'ALPHA',
+        beta: 'BETA',
+        gamma: 'EXTRA'
+      },
+      ['alpha', 'beta'],
+      (key) => key.toUpperCase(),
+      'keyed string-map value parity non-exact',
+      { requireExactKeyDomain: false }
+    );
+  });
+
+  it('throws when keyed string-map value parity is invalid', () => {
+    expect(() => {
+      expectKeyedStringMapValueParity(
+        {
+          alpha: 'ALPHA',
+          beta: 'WRONG'
+        },
+        ['alpha', 'beta'],
+        (key) => key.toUpperCase(),
+        'mismatched keyed string-map value parity'
+      );
+    }).toThrow();
+    expect(() => {
+      expectKeyedStringMapValueParity(
+        {
+          alpha: 'ALPHA'
+        },
+        ['alpha', 'beta'],
+        (key) => key.toUpperCase(),
+        'missing keyed string-map value parity'
+      );
+    }).toThrow();
   });
 
   it('throws when keyed string-record domains violate key-domain or value constraints', () => {

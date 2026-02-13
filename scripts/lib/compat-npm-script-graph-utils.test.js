@@ -4,6 +4,7 @@ import {
   collectNpmRunTargets,
   hasReachableNpmRunCycle
 } from './compat-npm-script-graph-utils.mjs';
+import { expectArrayContainsAllValues } from './compat-contract-assertion-test-utils.js';
 
 describe('compat npm script graph utils', () => {
   it('extracts npm run targets in order', () => {
@@ -21,7 +22,7 @@ describe('compat npm script graph utils', () => {
       },
       sourceScripts: ['a']
     });
-    expect([...visitedScripts]).toEqual(expect.arrayContaining(['a', 'b', 'c', 'd']));
+    expectArrayContainsAllValues([...visitedScripts], ['a', 'b', 'c', 'd'], 'visited script domain');
     expect([...unresolvedScripts]).toEqual(['d']);
     expect(adjacencyByScript.get('a')).toEqual(['b', 'c']);
     expect(adjacencyByScript.get('b')).toEqual([]);

@@ -12,6 +12,7 @@ import {
 import {
   expectArrayContainsAllValues,
   expectArrayOfRecordsWithRequiredStringFields,
+  expectKeyedStringMapValueParity,
   expectNonEmptyUniqueStringArray,
   expectObjectKeyDomainParity,
   expectUniqueStringFieldAcrossRecords
@@ -67,26 +68,21 @@ describe('compat artifact bundle contracts constants', () => {
   });
 
   it('keeps required version-field bindings aligned with required artifact set', () => {
-    expectObjectKeyDomainParity(
+    expectKeyedStringMapValueParity(
       REQUIRED_COMPAT_ARTIFACT_BUNDLE_VERSION_FIELDS,
       REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES,
+      (artifactName) => (artifactName === 'summary.json' ? 'summarySchemaVersion' : 'outputSchemaVersion'),
       'REQUIRED_COMPAT_ARTIFACT_BUNDLE_VERSION_FIELDS'
     );
-    expect(REQUIRED_COMPAT_ARTIFACT_BUNDLE_VERSION_FIELDS['summary.json']).toBe('summarySchemaVersion');
-    for (const artifactName of REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES.filter((name) => name !== 'summary.json')) {
-      expect(REQUIRED_COMPAT_ARTIFACT_BUNDLE_VERSION_FIELDS[artifactName]).toBe('outputSchemaVersion');
-    }
   });
 
   it('keeps required artifact-file bindings aligned with required artifact set', () => {
-    expectObjectKeyDomainParity(
+    expectKeyedStringMapValueParity(
       REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_FILES,
       REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES,
+      (artifactName) => artifactName,
       'REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_FILES'
     );
-    for (const artifactName of REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES) {
-      expect(REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_FILES[artifactName]).toBe(artifactName);
-    }
   });
 
   it('keeps required schema path/id bindings aligned with required artifact set', () => {
@@ -102,9 +98,13 @@ describe('compat artifact bundle contracts constants', () => {
     );
     for (const artifactName of REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES) {
       const schemaPath = REQUIRED_COMPAT_ARTIFACT_BUNDLE_SCHEMA_PATHS[artifactName];
-      const schemaId = REQUIRED_COMPAT_ARTIFACT_BUNDLE_SCHEMA_IDS[artifactName];
       expect(schemaPath.startsWith('schemas/')).toBe(true);
-      expect(schemaId).toBe(`https://clawvault.dev/${schemaPath}`);
     }
+    expectKeyedStringMapValueParity(
+      REQUIRED_COMPAT_ARTIFACT_BUNDLE_SCHEMA_IDS,
+      REQUIRED_COMPAT_ARTIFACT_BUNDLE_ARTIFACT_NAMES,
+      (artifactName) => `https://clawvault.dev/${REQUIRED_COMPAT_ARTIFACT_BUNDLE_SCHEMA_PATHS[artifactName]}`,
+      'REQUIRED_COMPAT_ARTIFACT_BUNDLE_SCHEMA_IDS'
+    );
   });
 });
