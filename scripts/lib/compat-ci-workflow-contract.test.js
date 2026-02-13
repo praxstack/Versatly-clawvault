@@ -168,7 +168,6 @@ describe('compat ci workflow contract', () => {
     const workflowYaml = loadCiWorkflowYaml();
     const jobSnapshotsByName = buildWorkflowJobsContractSnapshot({
       workflowYaml,
-      jobNames: REQUIRED_COMPAT_CI_JOB_NAMES,
       stepNamesByJobName: REQUIRED_COMPAT_CI_JOB_STEP_NAME_SEQUENCES
     });
 
