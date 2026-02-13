@@ -30,6 +30,7 @@ export interface CompatCommandOptions {
 }
 
 const REQUIRED_HOOK_EVENTS = ['gateway:startup', 'command:new', 'session:start'];
+const REQUIRED_HOOK_BIN = 'clawvault';
 
 function readOptionalFile(filePath: string): string | null {
   try {
@@ -135,6 +136,48 @@ function checkHookManifest(options: CompatOptions): CompatCheck {
   }
 }
 
+function checkHookManifestRequirements(options: CompatOptions): CompatCheck {
+  const hookRaw = readOptionalFile(resolveProjectFile('hooks/clawvault/HOOK.md', options.baseDir));
+  if (!hookRaw) {
+    return {
+      label: 'hook manifest requirements',
+      status: 'error',
+      detail: 'HOOK.md not found'
+    };
+  }
+
+  try {
+    const parsed = matter(hookRaw);
+    const requiresBins = (
+      (parsed.data?.metadata as { openclaw?: { requires?: { bins?: string[] } } } | undefined)
+        ?.openclaw
+        ?.requires
+        ?.bins
+    );
+    const bins = Array.isArray(requiresBins) ? requiresBins : [];
+    if (bins.includes(REQUIRED_HOOK_BIN)) {
+      return {
+        label: 'hook manifest requirements',
+        status: 'ok',
+        detail: `bins: ${bins.join(', ')}`
+      };
+    }
+
+    return {
+      label: 'hook manifest requirements',
+      status: 'warn',
+      detail: `Missing required hook bin "${REQUIRED_HOOK_BIN}"`,
+      hint: 'Add metadata.openclaw.requires.bins: ["clawvault"] to hooks/clawvault/HOOK.md.'
+    };
+  } catch (err: any) {
+    return {
+      label: 'hook manifest requirements',
+      status: 'error',
+      detail: err?.message || 'Unable to parse HOOK.md frontmatter'
+    };
+  }
+}
+
 function checkHookHandlerSafety(options: CompatOptions): CompatCheck {
   const handlerRaw = readOptionalFile(resolveProjectFile('hooks/clawvault/handler.js', options.baseDir));
   if (!handlerRaw) {
@@ -147,12 +190,22 @@ function checkHookHandlerSafety(options: CompatOptions): CompatCheck {
 
   const usesExecFileSync = handlerRaw.includes('execFileSync');
   const usesExecSync = /\bexecSync\b/.test(handlerRaw);
+  const delegatesAutoProfile = /['"]--profile['"]\s*,\s*['"]auto['"]/.test(handlerRaw);
+
+  const violations: string[] = [];
   if (!usesExecFileSync || usesExecSync) {
+    violations.push('execFileSync-only execution path');
+  }
+  if (!delegatesAutoProfile) {
+    violations.push('shared context profile delegation (--profile auto)');
+  }
+
+  if (violations.length > 0) {
     return {
       label: 'hook handler safety',
       status: 'warn',
-      detail: 'Expected execFileSync-only execution path',
-      hint: 'Prefer execFileSync (no shell) and avoid execSync.'
+      detail: `Missing conventions: ${violations.join(', ')}`,
+      hint: 'Use execFileSync (no shell), avoid execSync, and delegate profile inference via --profile auto.'
     };
   }
 
@@ -187,6 +240,7 @@ export function checkOpenClawCompatibility(options: CompatOptions = {}): CompatR
     checkOpenClawCli(),
     checkPackageHookRegistration(options),
     checkHookManifest(options),
+    checkHookManifestRequirements(options),
     checkHookHandlerSafety(options),
     checkSkillMetadata(options)
   ];

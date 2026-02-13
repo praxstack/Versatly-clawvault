@@ -38,13 +38,15 @@ function writeProjectFixture(root: string): void {
       'metadata:',
       '  openclaw:',
       '    events: ["gateway:startup","command:new","session:start"]',
+      '    requires:',
+      '      bins: ["clawvault"]',
       '---'
     ].join('\n'),
     'utf-8'
   );
   fs.writeFileSync(
     path.join(root, 'hooks', 'clawvault', 'handler.js'),
-    "import { execFileSync } from 'child_process';\nexecFileSync('clawvault', ['wake']);\n",
+    "import { execFileSync } from 'child_process';\nexecFileSync('clawvault', ['context', 'task', '--format', 'json', '--profile', 'auto']);\n",
     'utf-8'
   );
 }
@@ -89,5 +91,51 @@ describe('checkOpenClawCompatibility', () => {
     expect(compatibilityExitCode({ generatedAt: '', checks: [], warnings: 1, errors: 0 })).toBe(0);
     expect(compatibilityExitCode({ generatedAt: '', checks: [], warnings: 1, errors: 0 }, { strict: true })).toBe(1);
     expect(compatibilityExitCode({ generatedAt: '', checks: [], warnings: 0, errors: 1 })).toBe(1);
+  });
+
+  it('flags non-auto profile delegation in hook handler', async () => {
+    spawnSyncMock.mockReturnValue({ error: undefined });
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'clawvault-compat-'));
+    try {
+      writeProjectFixture(root);
+      fs.writeFileSync(
+        path.join(root, 'hooks', 'clawvault', 'handler.js'),
+        "import { execFileSync } from 'child_process';\nexecFileSync('clawvault', ['context', 'task', '--profile', 'planning']);\n",
+        'utf-8'
+      );
+      const { checkOpenClawCompatibility } = await loadCompatModule();
+      const report = checkOpenClawCompatibility({ baseDir: root });
+      const handlerCheck = report.checks.find((check) => check.label === 'hook handler safety');
+      expect(handlerCheck?.status).toBe('warn');
+      expect(handlerCheck?.detail).toContain('--profile auto');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('flags missing hook manifest required bin', async () => {
+    spawnSyncMock.mockReturnValue({ error: undefined });
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'clawvault-compat-'));
+    try {
+      writeProjectFixture(root);
+      fs.writeFileSync(
+        path.join(root, 'hooks', 'clawvault', 'HOOK.md'),
+        [
+          '---',
+          'metadata:',
+          '  openclaw:',
+          '    events: ["gateway:startup","command:new","session:start"]',
+          '---'
+        ].join('\n'),
+        'utf-8'
+      );
+      const { checkOpenClawCompatibility } = await loadCompatModule();
+      const report = checkOpenClawCompatibility({ baseDir: root });
+      const requirementsCheck = report.checks.find((check) => check.label === 'hook manifest requirements');
+      expect(requirementsCheck?.status).toBe('warn');
+      expect(requirementsCheck?.detail).toContain('Missing required hook bin');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 });
