@@ -181,6 +181,86 @@ describe('compat fixture runner utilities', () => {
     }
   });
 
+  it('rejects invalid expected exit/count consistency in case metadata', () => {
+    const root = makeTempDir('compat-cases-');
+    const file = path.join(root, 'cases.json');
+    try {
+      fs.writeFileSync(file, JSON.stringify({
+        schemaVersion: COMPAT_FIXTURE_SCHEMA_VERSION,
+        expectedCheckLabels: ['hook handler safety'],
+        cases: [
+          {
+            name: 'bad-exit',
+            description: 'invalid exit code value.',
+            expectedExitCode: 2,
+            expectedWarnings: 0,
+            expectedErrors: 0,
+            expectedCheckStatuses: { 'hook handler safety': 'ok' }
+          }
+        ]
+      }), 'utf-8');
+      expect(() => loadCases(file)).toThrow('expectedExitCode must be 0 or 1');
+
+      fs.writeFileSync(file, JSON.stringify({
+        schemaVersion: COMPAT_FIXTURE_SCHEMA_VERSION,
+        expectedCheckLabels: ['hook handler safety'],
+        cases: [
+          {
+            name: 'bad-success-counts',
+            description: 'success exit with non-zero warnings.',
+            expectedExitCode: 0,
+            expectedWarnings: 1,
+            expectedErrors: 0,
+            expectedCheckStatuses: { 'hook handler safety': 'warn' }
+          }
+        ]
+      }), 'utf-8');
+      expect(() => loadCases(file)).toThrow('expectedExitCode=0');
+
+      fs.writeFileSync(file, JSON.stringify({
+        schemaVersion: COMPAT_FIXTURE_SCHEMA_VERSION,
+        expectedCheckLabels: ['hook handler safety'],
+        cases: [
+          {
+            name: 'bad-failure-counts',
+            description: 'failure exit with zero warnings and errors.',
+            expectedExitCode: 1,
+            expectedWarnings: 0,
+            expectedErrors: 0,
+            expectedCheckStatuses: { 'hook handler safety': 'ok' }
+          }
+        ]
+      }), 'utf-8');
+      expect(() => loadCases(file)).toThrow('expectedExitCode=1');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects empty expectedCheckStatuses metadata', () => {
+    const root = makeTempDir('compat-cases-');
+    const file = path.join(root, 'cases.json');
+    fs.writeFileSync(file, JSON.stringify({
+      schemaVersion: COMPAT_FIXTURE_SCHEMA_VERSION,
+      expectedCheckLabels: ['hook handler safety'],
+      cases: [
+        {
+          name: 'empty-status',
+          description: 'missing status assertions.',
+          expectedExitCode: 0,
+          expectedWarnings: 0,
+          expectedErrors: 0,
+          expectedCheckStatuses: {}
+        }
+      ]
+    }), 'utf-8');
+    try {
+      expect(() => loadCases(file)).toThrow('expectedCheckStatuses must include at least one');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('filters selected case names and rejects unknown filters', () => {
     const cases = [
       { name: 'healthy', description: 'ok' },

@@ -62,14 +62,32 @@ export function loadCaseManifest(casesPath) {
     if (!Number.isInteger(testCase.expectedExitCode)) {
       throw new Error(`compat fixture case[${index}] missing expectedExitCode`);
     }
+    if (testCase.expectedExitCode !== 0 && testCase.expectedExitCode !== 1) {
+      throw new Error(`compat fixture case[${index}] expectedExitCode must be 0 or 1`);
+    }
     if (!Number.isInteger(testCase.expectedWarnings)) {
       throw new Error(`compat fixture case[${index}] missing expectedWarnings`);
+    }
+    if (testCase.expectedWarnings < 0) {
+      throw new Error(`compat fixture case[${index}] expectedWarnings must be >= 0`);
     }
     if (!Number.isInteger(testCase.expectedErrors)) {
       throw new Error(`compat fixture case[${index}] missing expectedErrors`);
     }
+    if (testCase.expectedErrors < 0) {
+      throw new Error(`compat fixture case[${index}] expectedErrors must be >= 0`);
+    }
+    if (testCase.expectedExitCode === 0 && (testCase.expectedWarnings > 0 || testCase.expectedErrors > 0)) {
+      throw new Error(`compat fixture case[${index}] expectedExitCode=0 requires expectedWarnings=0 and expectedErrors=0`);
+    }
+    if (testCase.expectedExitCode === 1 && testCase.expectedWarnings === 0 && testCase.expectedErrors === 0) {
+      throw new Error(`compat fixture case[${index}] expectedExitCode=1 requires warnings or errors`);
+    }
     if (!testCase.expectedCheckStatuses || typeof testCase.expectedCheckStatuses !== 'object') {
       throw new Error(`compat fixture case[${index}] missing expectedCheckStatuses`);
+    }
+    if (Object.keys(testCase.expectedCheckStatuses).length === 0) {
+      throw new Error(`compat fixture case[${index}] expectedCheckStatuses must include at least one check label`);
     }
     for (const [label, status] of Object.entries(testCase.expectedCheckStatuses)) {
       if (typeof label !== 'string' || !label) {
