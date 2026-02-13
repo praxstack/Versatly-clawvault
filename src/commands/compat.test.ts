@@ -207,6 +207,7 @@ describe('checkOpenClawCompatibility', () => {
         expectedHintIncludes?: Record<string, string>;
         openclawExitCode?: number;
         openclawSignal?: string;
+        openclawMissing?: boolean;
       }>;
     };
     const cases = manifest.cases;
@@ -214,6 +215,8 @@ describe('checkOpenClawCompatibility', () => {
     for (const testCase of cases) {
       const spawnResult = testCase.openclawSignal
         ? { error: undefined, status: null, signal: testCase.openclawSignal }
+        : testCase.openclawMissing
+          ? { error: new Error('missing') }
         : testCase.openclawExitCode === undefined
           ? { error: undefined, status: 0 }
           : { error: undefined, status: testCase.openclawExitCode };

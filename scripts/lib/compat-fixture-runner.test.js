@@ -155,6 +155,31 @@ describe('compat fixture runner utilities', () => {
     }
   });
 
+  it('rejects invalid openclawMissing metadata', () => {
+    const root = makeTempDir('compat-cases-');
+    const file = path.join(root, 'cases.json');
+    fs.writeFileSync(file, JSON.stringify({
+      schemaVersion: COMPAT_FIXTURE_SCHEMA_VERSION,
+      expectedCheckLabels: ['hook handler safety'],
+      cases: [
+        {
+          name: 'bad-openclaw-missing',
+          description: 'fixture with invalid openclawMissing metadata.',
+          expectedExitCode: 1,
+          expectedWarnings: 1,
+          expectedErrors: 0,
+          expectedCheckStatuses: { 'hook handler safety': 'warn' },
+          openclawMissing: 'yes'
+        }
+      ]
+    }), 'utf-8');
+    try {
+      expect(() => loadCases(file)).toThrow('openclawMissing');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('rejects mixed openclawExitCode/openclawSignal metadata', () => {
     const root = makeTempDir('compat-cases-');
     const file = path.join(root, 'cases.json');
@@ -175,7 +200,25 @@ describe('compat fixture runner utilities', () => {
       ]
     }), 'utf-8');
     try {
-      expect(() => loadCases(file)).toThrow('cannot set both openclawExitCode and openclawSignal');
+      expect(() => loadCases(file)).toThrow('mutually exclusive');
+
+      fs.writeFileSync(file, JSON.stringify({
+        schemaVersion: COMPAT_FIXTURE_SCHEMA_VERSION,
+        expectedCheckLabels: ['hook handler safety'],
+        cases: [
+          {
+            name: 'mixed-openclaw-exit-missing',
+            description: 'fixture with both openclawExitCode and openclawMissing.',
+            expectedExitCode: 1,
+            expectedWarnings: 1,
+            expectedErrors: 0,
+            expectedCheckStatuses: { 'hook handler safety': 'warn' },
+            openclawExitCode: 2,
+            openclawMissing: true
+          }
+        ]
+      }), 'utf-8');
+      expect(() => loadCases(file)).toThrow('mutually exclusive');
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
@@ -214,6 +257,23 @@ describe('compat fixture runner utilities', () => {
             expectedErrors: 0,
             expectedCheckStatuses: { 'openclaw CLI available': 'ok' },
             openclawSignal: 'SIGTERM'
+          }
+        ]
+      }), 'utf-8');
+      expect(() => loadCases(file)).toThrow('non-ready openclaw simulation');
+
+      fs.writeFileSync(file, JSON.stringify({
+        schemaVersion: COMPAT_FIXTURE_SCHEMA_VERSION,
+        expectedCheckLabels: ['openclaw CLI available'],
+        cases: [
+          {
+            name: 'bad-openclaw-missing-status',
+            description: 'missing openclaw simulation without warning expectation.',
+            expectedExitCode: 1,
+            expectedWarnings: 1,
+            expectedErrors: 0,
+            expectedCheckStatuses: { 'openclaw CLI available': 'ok' },
+            openclawMissing: true
           }
         ]
       }), 'utf-8');

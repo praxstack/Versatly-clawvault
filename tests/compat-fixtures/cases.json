@@ -59,6 +59,23 @@
     }
   },
   {
+    "name": "missing-openclaw-cli",
+    "description": "warning when openclaw CLI is missing from PATH.",
+    "openclawMissing": true,
+    "expectedExitCode": 1,
+    "expectedWarnings": 1,
+    "expectedErrors": 0,
+    "expectedCheckStatuses": {
+      "openclaw CLI available": "warn"
+    },
+    "expectedDetailIncludes": {
+      "openclaw CLI available": "binary not found"
+    },
+    "expectedHintIncludes": {
+      "openclaw CLI available": "Install OpenClaw CLI"
+    }
+  },
+  {
     "name": "missing-requires-bin",
     "description": "warning for missing metadata.openclaw.requires.bins.",
     "expectedExitCode": 1,

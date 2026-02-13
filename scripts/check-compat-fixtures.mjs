@@ -61,6 +61,9 @@ function runCase(testCase, env) {
     OPENCLAW_SHIM_EXIT_CODE: String(testCase.openclawExitCode ?? 0),
     OPENCLAW_SHIM_SIGNAL: testCase.openclawSignal ?? ''
   };
+  if (testCase.openclawMissing === true) {
+    caseEnv.PATH = '';
+  }
   const result = spawnSync(
     process.execPath,
     ['./bin/clawvault.js', 'compat', '--strict', '--base-dir', fixturePath, '--json'],
