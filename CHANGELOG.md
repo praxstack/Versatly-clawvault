@@ -84,6 +84,7 @@
 - OpenClaw CLI compatibility checks now also report signal-terminated executions (e.g., `SIGTERM`) as warnings for clearer runtime readiness diagnostics.
 - Compatibility fixture execution output now includes per-case `durationMs`, and summary artifacts include aggregate timing metadata for faster CI triage.
 - Compatibility fixture contracts now support signal-based OpenClaw CLI simulation (`openclawSignal`), with matrix coverage for signal-terminated CLI readiness warnings.
+- Fixture manifest validation now enforces that simulated non-ready OpenClaw CLI cases (`openclawExitCode != 0` or `openclawSignal`) explicitly assert `openclaw CLI available: warn`.
 
 ## [1.11.2] - 2026-02-12
 
