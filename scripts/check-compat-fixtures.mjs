@@ -9,6 +9,9 @@ const repoRoot = path.resolve(scriptDir, '..');
 const fixturesRoot = path.join(repoRoot, 'tests', 'compat-fixtures');
 const fixtureCasesPath = path.join(fixturesRoot, 'cases.json');
 const VALID_CHECK_STATUSES = new Set(['ok', 'warn', 'error']);
+const compatReportDir = process.env.COMPAT_REPORT_DIR
+  ? path.resolve(process.env.COMPAT_REPORT_DIR)
+  : '';
 
 function loadCases() {
   const raw = fs.readFileSync(fixtureCasesPath, 'utf-8');
@@ -118,6 +121,17 @@ function parseCompatReport(stdout, caseName) {
   }
 }
 
+function ensureReportDir() {
+  if (!compatReportDir) return;
+  fs.mkdirSync(compatReportDir, { recursive: true });
+}
+
+function writeCaseReport(testCase, report) {
+  if (!compatReportDir || !report) return;
+  const reportPath = path.join(compatReportDir, `${testCase.name}.json`);
+  fs.writeFileSync(reportPath, JSON.stringify(report, null, 2), 'utf-8');
+}
+
 function assertFixtureFiles(caseName, fixturePath) {
   const requiredPaths = [
     'package.json',
@@ -153,6 +167,7 @@ function runCase(testCase, env) {
 
   try {
     report = parseCompatReport(result.stdout, testCase.name);
+    writeCaseReport(testCase, report);
     const warningsMatch = report.warnings === testCase.expectedWarnings;
     const errorsMatch = report.errors === testCase.expectedErrors;
     const statusMatches = Object.entries(testCase.expectedCheckStatuses).every(([label, expectedStatus]) => {
@@ -189,6 +204,7 @@ function runCase(testCase, env) {
 
 function main() {
   const cases = selectCases(loadCases());
+  ensureReportDir();
   const { shimDir } = createOpenClawShim();
   const env = {
     ...process.env,

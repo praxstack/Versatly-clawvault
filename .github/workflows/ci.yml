@@ -28,3 +28,13 @@ jobs:
 
       - name: Run quality and compatibility checks
         run: npm run ci
+        env:
+          COMPAT_REPORT_DIR: ${{ runner.temp }}/compat-reports
+
+      - name: Upload compatibility reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compat-reports
+          path: ${{ runner.temp }}/compat-reports
+          if-no-files-found: ignore
