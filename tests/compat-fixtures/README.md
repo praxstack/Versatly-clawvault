@@ -16,6 +16,7 @@ Use `--out <file>` to persist the validator result payload (success or error) fo
 Use `npm run test:compat-validator-result:verify -- <path-to-validator-result.json>` to validate a pre-existing validator-result payload artifact directly.
 The validator-result verifier also supports explicit CLI options (`--validator-result`, `--json`, `--out`, `--help`) with structured output contracts and tests.
 Use `--require-ok` when verifier workflows must fail on `validator-result` payloads with `status: "error"`.
+The npm verifier wrapper uses `--require-ok` by default for stricter CI/local gating.
 Use `npm run test:compat-summary:verify -- <path-to-summary.json>` to validate existing summary artifacts without re-running fixture generation.
 Standalone validator behavior is unit-tested in `scripts/validate-compat-summary.test.js` (success/failure/env fallback paths).
 Summary workflow scripts respect `COMPAT_REPORT_DIR` from the caller environment (falling back to `.compat-reports` when unset).

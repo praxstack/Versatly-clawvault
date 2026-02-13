@@ -280,6 +280,7 @@ node scripts/validate-compat-summary.mjs --help
 npm run test:compat-summary:verify -- /tmp/clawvault-compat-reports/summary.json
 # validate previously emitted validator-result payload directly
 npm run test:compat-validator-result:verify -- /tmp/clawvault-compat-reports/validator-result.json
+# npm verifier wrapper enforces --require-ok by default
 # explicit verifier CLI options:
 node scripts/validate-compat-validator-result.mjs --validator-result /tmp/clawvault-compat-reports/validator-result.json --json --out /tmp/verifier-result.json
 # enforce success-only validator-result status in strict automation paths
