@@ -6,6 +6,7 @@ Summary artifacts include `summarySchemaVersion` to support stable downstream pa
 Summary header generation rejects malformed/duplicate array entries for case and check-label lists, keeping report metadata contract-safe.
 Fixture runner validates full summary artifact shape/invariants before writing (schema version, totals/failures coherence, telemetry/result array structure).
 - Additional mode rules are enforced: `contract` summaries cannot contain case results, and `fixtures` summaries must keep totals aligned with selected cases.
+- Fixtures-mode summary validation now also enforces per-result schema + status coherence (`passedCases`/`failedCases`) and selected-case ordering parity for emitted result lists.
 
 - `cases.json` is the source of truth for expected outcomes.
   - includes `schemaVersion` for explicit contract evolution (current: `2`).

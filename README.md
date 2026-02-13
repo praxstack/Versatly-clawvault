@@ -255,6 +255,7 @@ npm run test:compat-fixtures:fast
 COMPAT_REPORT_DIR=/tmp/clawvault-compat-reports npm run test:compat-fixtures
 # includes per-case reports and summary.json (summarySchemaVersion + mode/schemaVersion/selectedCases/selectedTotal + expected/runtime labels + passed/failed case lists + preflight/overall timing + slowest cases)
 # summary artifacts are validated for schema/field invariants before write (fail-fast on malformed report generation)
+# validator now also enforces result-entry schema and passed/failed list coherence with selected case ordering
 ```
 
 
