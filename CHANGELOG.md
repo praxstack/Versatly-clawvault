@@ -93,6 +93,7 @@
 - Fixture README contract validation now rejects duplicate scenario entries to prevent ambiguous documentation drift.
 - Compatibility fixture runtime summary calculations are now centralized in a shared runner utility (`buildFixtureRunTelemetry`) with dedicated unit-test coverage.
 - Compatibility runtime telemetry now highlights the slowest fixture cases in both console output and summary artifacts to speed up CI bottleneck triage.
+- Hook handler safety diagnostics now also flag `execFileSync(..., { shell: true })` paths, with dedicated compatibility fixture coverage for shell-enabled execution drift.
 
 ## [1.11.2] - 2026-02-12
 
