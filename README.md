@@ -217,6 +217,7 @@ npm run test:compat-fixtures
 # fixture expectations are defined in tests/compat-fixtures/cases.json
 # fixture manifest includes schemaVersion for explicit contract evolution
 # supports expected status, detail snippets, and hint snippets per check
+# each case also owns its scenario description (README coverage is validated)
 # includes a fresh build before running fixtures
 
 # Quick smoke check (healthy fixture only)

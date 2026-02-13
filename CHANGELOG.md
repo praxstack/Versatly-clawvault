@@ -64,6 +64,7 @@
 - Declarative fixture cases now support `allowMissingFiles` for intentional missing-file drift scenarios (e.g., missing `SKILL.md`).
 - Compatibility fixture runner now uses extracted case-evaluation logic with structured mismatch reporting, improving maintainability and debugging clarity.
 - Declarative fixture cases can now assert compatibility diagnostic `hint` snippets (`expectedHintIncludes`) in addition to statuses/details.
+- Compatibility fixture manifest now includes per-case descriptions, and fixture README coverage enforces description parity with declarative contracts.
 
 ## [1.11.2] - 2026-02-12
 
