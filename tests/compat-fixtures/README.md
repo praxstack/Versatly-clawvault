@@ -9,6 +9,7 @@ Use `npm run test:compat-contract` when you only need contract validation (manif
   - supports `expectedCheckStatuses`, `expectedDetailIncludes`, and `expectedHintIncludes`.
   - `expectedDetailIncludes` / `expectedHintIncludes` labels must also exist in `expectedCheckStatuses`.
   - supports `openclawExitCode` to simulate non-zero OpenClaw CLI behavior per fixture case.
+  - `allowMissingFiles` entries must reference known required fixture paths (typo-safe validation).
   - non-ready OpenClaw simulations (`openclawExitCode != 0` or `openclawSignal`) must assert `expectedCheckStatuses["openclaw CLI available"] = "warn"`.
   - enforces strict expectation consistency (`expectedExitCode` in `0|1`, non-negative warning/error counts, and non-empty `expectedCheckStatuses`).
 - Each case references a fixture folder with:
