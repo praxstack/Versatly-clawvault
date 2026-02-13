@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import {
   assertBuildFreshness,
   assertFixtureFiles,
+  buildFixtureRunTelemetry,
   ensureReportDir,
   evaluateCaseReport,
   loadCaseManifest,
@@ -184,11 +185,7 @@ function main() {
       return;
     }
     const results = cases.map((testCase) => runCase(testCase, env));
-    const totalDurationMs = results.reduce((sum, result) => sum + (result.durationMs ?? 0), 0);
-    const averageDurationMs = results.length > 0
-      ? Math.round(totalDurationMs / results.length)
-      : 0;
-    const overallDurationMs = preflightDurationMs + totalDurationMs;
+    const telemetry = buildFixtureRunTelemetry(results, preflightDurationMs);
     writeSummaryReport(compatReportDir, {
       generatedAt: new Date().toISOString(),
       mode: 'fixtures',
@@ -197,10 +194,7 @@ function main() {
       expectedCheckLabels: manifest.expectedCheckLabels,
       runtimeCheckLabels: availableLabels,
       total: results.length,
-      preflightDurationMs,
-      totalDurationMs,
-      averageDurationMs,
-      overallDurationMs,
+      ...telemetry,
       failures: results.filter((result) => !result.passed).length,
       results
     });
@@ -211,7 +205,7 @@ function main() {
       process.exit(1);
     }
 
-    console.log(`Compatibility fixtures runtime: preflight=${preflightDurationMs}ms total=${totalDurationMs}ms avg=${averageDurationMs}ms overall=${overallDurationMs}ms`);
+    console.log(`Compatibility fixtures runtime: preflight=${telemetry.preflightDurationMs}ms total=${telemetry.totalDurationMs}ms avg=${telemetry.averageDurationMs}ms overall=${telemetry.overallDurationMs}ms`);
     console.log('Compatibility fixture check passed.');
   } finally {
     fs.rmSync(shimDir, { recursive: true, force: true });

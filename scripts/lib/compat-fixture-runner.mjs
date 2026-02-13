@@ -354,6 +354,22 @@ export function writeSummaryReport(compatReportDir, summary) {
   fs.writeFileSync(summaryPath, JSON.stringify(summary, null, 2), 'utf-8');
 }
 
+export function buildFixtureRunTelemetry(results, preflightDurationMs) {
+  const normalizedPreflight = Math.max(0, Number(preflightDurationMs) || 0);
+  const totalDurationMs = results.reduce((sum, result) => sum + Math.max(0, Number(result.durationMs) || 0), 0);
+  const averageDurationMs = results.length > 0
+    ? Math.round(totalDurationMs / results.length)
+    : 0;
+  const overallDurationMs = normalizedPreflight + totalDurationMs;
+
+  return {
+    preflightDurationMs: normalizedPreflight,
+    totalDurationMs,
+    averageDurationMs,
+    overallDurationMs
+  };
+}
+
 export function assertBuildFreshness(sourcePath, buildPath, label = 'build artifact') {
   if (!fs.existsSync(buildPath)) {
     throw new Error(`Missing ${label}: ${buildPath}. Run \`npm run build\` before compatibility checks.`);

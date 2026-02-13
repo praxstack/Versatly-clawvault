@@ -6,6 +6,7 @@ import {
   assertBuildFreshness,
   COMPAT_FIXTURE_SCHEMA_VERSION,
   assertFixtureFiles,
+  buildFixtureRunTelemetry,
   ensureReportDir,
   evaluateCaseReport,
   ensureCompatReportShape,
@@ -578,6 +579,26 @@ describe('compat fixture runner utilities', () => {
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
+  });
+
+  it('builds fixture runtime telemetry from per-case durations', () => {
+    expect(buildFixtureRunTelemetry([
+      { durationMs: 10 },
+      { durationMs: 21 },
+      { durationMs: 9 }
+    ], 5)).toEqual({
+      preflightDurationMs: 5,
+      totalDurationMs: 40,
+      averageDurationMs: 13,
+      overallDurationMs: 45
+    });
+
+    expect(buildFixtureRunTelemetry([], -10)).toEqual({
+      preflightDurationMs: 0,
+      totalDurationMs: 0,
+      averageDurationMs: 0,
+      overallDurationMs: 0
+    });
   });
 
   it('validates build freshness for compatibility checks', () => {
