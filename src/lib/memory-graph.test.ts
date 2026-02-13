@@ -109,4 +109,26 @@ Linked to [[projects/core-api]] and [[missing-doc]].
       fs.rmSync(vaultPath, { recursive: true, force: true });
     }
   });
+
+  it('refreshes stale index entries on read when files change', async () => {
+    const vaultPath = makeVault();
+    try {
+      writeVaultFile(vaultPath, 'decisions/choice.md', 'Initial text');
+      await buildOrUpdateMemoryGraphIndex(vaultPath);
+
+      // Ensure mtime changes before rewrite on filesystems with coarse precision.
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      writeVaultFile(vaultPath, 'decisions/choice.md', 'Now links [[projects/core-api]].');
+      writeVaultFile(vaultPath, 'projects/core-api.md', '# Core API');
+
+      const graph = await getMemoryGraph(vaultPath);
+      expect(graph.edges.some((edge) =>
+        edge.source === 'note:decisions/choice' &&
+        edge.target === 'note:projects/core-api' &&
+        edge.type === 'wiki_link'
+      )).toBe(true);
+    } finally {
+      fs.rmSync(vaultPath, { recursive: true, force: true });
+    }
+  });
 });

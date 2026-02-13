@@ -571,13 +571,7 @@ export async function buildOrUpdateMemoryGraphIndex(
 
 export async function getMemoryGraph(vaultPath: string, options: { refresh?: boolean } = {}): Promise<MemoryGraph> {
   if (options.refresh === true) {
-    return (await buildOrUpdateMemoryGraphIndex(vaultPath)).graph;
+    return (await buildOrUpdateMemoryGraphIndex(vaultPath, { forceFull: true })).graph;
   }
-
-  const existing = loadMemoryGraphIndex(vaultPath);
-  if (existing) {
-    return existing.graph;
-  }
-
   return (await buildOrUpdateMemoryGraphIndex(vaultPath)).graph;
 }

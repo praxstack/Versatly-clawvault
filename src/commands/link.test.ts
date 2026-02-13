@@ -74,5 +74,6 @@ describe('link command', () => {
     await linkCommand(path.join(vaultPath, 'notes', 'a.md'), { vaultPath });
     const content = fs.readFileSync(path.join(vaultPath, 'notes', 'a.md'), 'utf-8');
     expect(content).toContain('[[people/alice]]');
+    expect(fs.existsSync(path.join(vaultPath, '.clawvault', 'graph-index.json'))).toBe(true);
   });
 });
