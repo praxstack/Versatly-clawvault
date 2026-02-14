@@ -37,10 +37,35 @@ function parseCheckpointFile(filePath: string): CheckpointData | null {
       return null;
     }
     const record = parsed as Record<string, unknown>;
-    if (typeof record.timestamp !== 'string' || !record.timestamp.trim()) {
+    const timestamp = typeof record.timestamp === 'string' ? record.timestamp.trim() : '';
+    if (!timestamp) {
       return null;
     }
-    return record as CheckpointData;
+    const checkpoint: CheckpointData = {
+      timestamp,
+      workingOn: typeof record.workingOn === 'string' ? record.workingOn : null,
+      focus: typeof record.focus === 'string' ? record.focus : null,
+      blocked: typeof record.blocked === 'string' ? record.blocked : null
+    };
+    if (typeof record.sessionId === 'string') {
+      checkpoint.sessionId = record.sessionId;
+    }
+    if (typeof record.sessionKey === 'string') {
+      checkpoint.sessionKey = record.sessionKey;
+    }
+    if (typeof record.model === 'string') {
+      checkpoint.model = record.model;
+    }
+    if (typeof record.tokenEstimate === 'number' && Number.isFinite(record.tokenEstimate)) {
+      checkpoint.tokenEstimate = record.tokenEstimate;
+    }
+    if (typeof record.sessionStartedAt === 'string') {
+      checkpoint.sessionStartedAt = record.sessionStartedAt;
+    }
+    if (typeof record.urgent === 'boolean') {
+      checkpoint.urgent = record.urgent;
+    }
+    return checkpoint;
   } catch {
     return null;
   }
