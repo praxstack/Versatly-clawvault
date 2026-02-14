@@ -15,15 +15,22 @@ export type TaskPriority = 'critical' | 'high' | 'medium' | 'low';
 export interface TaskFrontmatter {
   status: TaskStatus;
   source?: string;
+  created: string;
+  updated: string;
   owner?: string;
   project?: string;
   priority?: TaskPriority;
   blocked_by?: string;
-  due?: string;
-  created: string;
-  updated: string;
   completed?: string;
+  escalation?: boolean;
+  confidence?: number;
+  reason?: string;
+  due?: string;
   tags?: string[];
+  description?: string;
+  estimate?: string;
+  parent?: string;
+  depends_on?: string[];
 }
 
 // Full task interface
@@ -59,6 +66,9 @@ export interface TaskFilterOptions {
   owner?: string;
   project?: string;
   priority?: TaskPriority;
+  due?: boolean;
+  tag?: string;
+  overdue?: boolean;
 }
 
 // Backlog filter options
@@ -137,6 +147,18 @@ function extractTitle(content: string): string {
   return match ? match[1].trim() : '';
 }
 
+function parseDueDate(value?: string): number | null {
+  if (!value) return null;
+  const timestamp = Date.parse(value);
+  if (Number.isNaN(timestamp)) return null;
+  return timestamp;
+}
+
+function startOfToday(): number {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+}
+
 /**
  * Read a task file and parse it
  */
@@ -200,6 +222,7 @@ export function listTasks(vaultPath: string, filters?: TaskFilterOptions): Task[
 
   const tasks: Task[] = [];
   const entries = fs.readdirSync(tasksDir, { withFileTypes: true });
+  const today = startOfToday();
 
   for (const entry of entries) {
     if (!entry.isFile() || !entry.name.endsWith('.md')) {
@@ -216,6 +239,16 @@ export function listTasks(vaultPath: string, filters?: TaskFilterOptions): Task[
       if (filters.owner && task.frontmatter.owner !== filters.owner) continue;
       if (filters.project && task.frontmatter.project !== filters.project) continue;
       if (filters.priority && task.frontmatter.priority !== filters.priority) continue;
+      if (filters.due && !task.frontmatter.due) continue;
+      if (filters.tag) {
+        const tags = task.frontmatter.tags || [];
+        const hasTag = tags.some(tag => tag.toLowerCase() === filters.tag?.toLowerCase());
+        if (!hasTag) continue;
+      }
+      if (filters.overdue) {
+        const dueTime = parseDueDate(task.frontmatter.due);
+        if (task.frontmatter.status === 'done' || dueTime === null || dueTime >= today) continue;
+      }
     }
 
     tasks.push(task);
@@ -228,6 +261,19 @@ export function listTasks(vaultPath: string, filters?: TaskFilterOptions): Task[
     medium: 2,
     low: 3
   };
+
+  if (filters?.due || filters?.overdue) {
+    return tasks.sort((a, b) => {
+      const aDue = parseDueDate(a.frontmatter.due);
+      const bDue = parseDueDate(b.frontmatter.due);
+      if (aDue !== null && bDue !== null && aDue !== bDue) {
+        return aDue - bDue;
+      }
+      if (aDue !== null && bDue === null) return -1;
+      if (aDue === null && bDue !== null) return 1;
+      return new Date(b.frontmatter.created).getTime() - new Date(a.frontmatter.created).getTime();
+    });
+  }
 
   return tasks.sort((a, b) => {
     const aPriority = priorityOrder[a.frontmatter.priority || 'low'];
@@ -289,6 +335,10 @@ export function createTask(
     due?: string;
     content?: string;
     tags?: string[];
+    description?: string;
+    estimate?: string;
+    parent?: string;
+    depends_on?: string[];
   } = {}
 ): Task {
   ensureTasksDir(vaultPath);
@@ -312,6 +362,10 @@ export function createTask(
   if (options.priority) frontmatter.priority = options.priority;
   if (options.due) frontmatter.due = options.due;
   if (options.tags && options.tags.length > 0) frontmatter.tags = options.tags;
+  if (options.description) frontmatter.description = options.description;
+  if (options.estimate) frontmatter.estimate = options.estimate;
+  if (options.parent) frontmatter.parent = options.parent;
+  if (options.depends_on && options.depends_on.length > 0) frontmatter.depends_on = options.depends_on;
 
   // Build content with wiki-links for owner and project
   let content = `# ${title}\n`;
@@ -347,12 +401,21 @@ export function updateTask(
   slug: string,
   updates: {
     status?: TaskStatus;
-    owner?: string;
-    project?: string;
-    priority?: TaskPriority;
-    blocked_by?: string;
-    due?: string;
-    tags?: string[];
+    source?: string | null;
+    owner?: string | null;
+    project?: string | null;
+    priority?: TaskPriority | null;
+    blocked_by?: string | null;
+    due?: string | null;
+    tags?: string[] | null;
+    completed?: string | null;
+    escalation?: boolean | null;
+    confidence?: number | null;
+    reason?: string | null;
+    description?: string | null;
+    estimate?: string | null;
+    parent?: string | null;
+    depends_on?: string[] | null;
   }
 ): Task {
   const task = readTask(vaultPath, slug);
@@ -366,16 +429,145 @@ export function updateTask(
     updated: now
   };
 
-  if (updates.status !== undefined) newFrontmatter.status = updates.status;
-  if (updates.owner !== undefined) newFrontmatter.owner = updates.owner;
-  if (updates.project !== undefined) newFrontmatter.project = updates.project;
-  if (updates.priority !== undefined) newFrontmatter.priority = updates.priority;
-  if (updates.due !== undefined) newFrontmatter.due = updates.due;
-  if (updates.tags !== undefined) newFrontmatter.tags = updates.tags;
+  if (updates.status !== undefined) {
+    newFrontmatter.status = updates.status;
+    if (updates.status === 'done' && !newFrontmatter.completed) {
+      newFrontmatter.completed = now;
+    }
+    if (updates.status !== 'done') {
+      delete newFrontmatter.completed;
+    }
+  }
+
+  if (updates.source !== undefined) {
+    if (updates.source === null || updates.source.trim() === '') {
+      delete newFrontmatter.source;
+    } else {
+      newFrontmatter.source = updates.source;
+    }
+  }
+
+  if (updates.owner !== undefined) {
+    if (updates.owner === null || updates.owner.trim() === '') {
+      delete newFrontmatter.owner;
+    } else {
+      newFrontmatter.owner = updates.owner;
+    }
+  }
+
+  if (updates.project !== undefined) {
+    if (updates.project === null || updates.project.trim() === '') {
+      delete newFrontmatter.project;
+    } else {
+      newFrontmatter.project = updates.project;
+    }
+  }
+
+  if (updates.priority !== undefined) {
+    if (updates.priority === null) {
+      delete newFrontmatter.priority;
+    } else {
+      newFrontmatter.priority = updates.priority;
+    }
+  }
+
+  if (updates.due !== undefined) {
+    if (updates.due === null || updates.due.trim() === '') {
+      delete newFrontmatter.due;
+    } else {
+      newFrontmatter.due = updates.due;
+    }
+  }
+
+  if (updates.tags !== undefined) {
+    if (updates.tags === null) {
+      delete newFrontmatter.tags;
+    } else {
+      const normalizedTags = updates.tags.map(tag => tag.trim()).filter(Boolean);
+      if (normalizedTags.length === 0) {
+        delete newFrontmatter.tags;
+      } else {
+        newFrontmatter.tags = normalizedTags;
+      }
+    }
+  }
+
+  if (updates.completed !== undefined) {
+    if (updates.completed === null || updates.completed.trim() === '') {
+      delete newFrontmatter.completed;
+    } else {
+      newFrontmatter.completed = updates.completed;
+    }
+  }
+
+  if (updates.escalation !== undefined) {
+    if (updates.escalation === null) {
+      delete newFrontmatter.escalation;
+    } else {
+      newFrontmatter.escalation = updates.escalation;
+    }
+  }
+
+  if (updates.confidence !== undefined) {
+    if (updates.confidence === null) {
+      delete newFrontmatter.confidence;
+    } else {
+      newFrontmatter.confidence = updates.confidence;
+    }
+  }
+
+  if (updates.reason !== undefined) {
+    if (updates.reason === null || updates.reason.trim() === '') {
+      delete newFrontmatter.reason;
+    } else {
+      newFrontmatter.reason = updates.reason;
+    }
+  }
+
+  if (updates.description !== undefined) {
+    if (updates.description === null || updates.description.trim() === '') {
+      delete newFrontmatter.description;
+    } else {
+      newFrontmatter.description = updates.description;
+    }
+  }
+
+  if (updates.estimate !== undefined) {
+    if (updates.estimate === null || updates.estimate.trim() === '') {
+      delete newFrontmatter.estimate;
+    } else {
+      newFrontmatter.estimate = updates.estimate;
+    }
+  }
+
+  if (updates.parent !== undefined) {
+    if (updates.parent === null || updates.parent.trim() === '') {
+      delete newFrontmatter.parent;
+    } else {
+      newFrontmatter.parent = updates.parent;
+    }
+  }
+
+  if (updates.depends_on !== undefined) {
+    if (updates.depends_on === null) {
+      delete newFrontmatter.depends_on;
+    } else {
+      const normalizedDeps = updates.depends_on.map(dep => dep.trim()).filter(Boolean);
+      if (normalizedDeps.length === 0) {
+        delete newFrontmatter.depends_on;
+      } else {
+        newFrontmatter.depends_on = normalizedDeps;
+      }
+    }
+  }
 
   // Handle blocked_by specially - clear if status is not blocked
   if (updates.blocked_by !== undefined) {
-    newFrontmatter.blocked_by = updates.blocked_by;
+    if (updates.blocked_by === null || updates.blocked_by.trim() === '') {
+      delete newFrontmatter.blocked_by;
+    } else {
+      newFrontmatter.blocked_by = updates.blocked_by;
+    }
   } else if (updates.status && updates.status !== 'blocked') {
     delete newFrontmatter.blocked_by;
   }
@@ -558,6 +750,23 @@ export function getBlockedTasks(vaultPath: string, project?: string): Task[] {
 export function getActiveTasks(vaultPath: string, filters?: Omit<TaskFilterOptions, 'status'>): Task[] {
   const allTasks = listTasks(vaultPath, filters);
   return allTasks.filter(t => t.frontmatter.status === 'open' || t.frontmatter.status === 'in-progress');
+}
+
+/**
+ * List subtasks for a parent task slug.
+ */
+export function listSubtasks(vaultPath: string, parentSlug: string): Task[] {
+  return listTasks(vaultPath).filter(task => task.frontmatter.parent === parentSlug);
+}
+
+/**
+ * List tasks that depend on a given task slug.
+ */
+export function listDependentTasks(vaultPath: string, dependencySlug: string): Task[] {
+  return listTasks(vaultPath).filter(task => {
+    const dependencies = task.frontmatter.depends_on || [];
+    return dependencies.includes(dependencySlug);
+  });
 }
 
 /**

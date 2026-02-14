@@ -11,7 +11,7 @@ import {
   formatTaskList,
   formatTaskDetails
 } from './task.js';
-import { createTask, updateTask } from '../lib/task-utils.js';
+import { createTask, updateTask, completeTask } from '../lib/task-utils.js';
 
 function makeTempDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'clawvault-task-cmd-'));
@@ -64,6 +64,36 @@ describe('task command', () => {
       const tasks = taskList(tempDir, { owner: 'alice' });
       expect(tasks).toHaveLength(1);
       expect(tasks[0].frontmatter.owner).toBe('alice');
+    });
+
+    it('filters tasks with due dates sorted ascending', () => {
+      createTask(tempDir, 'Due Later', { due: '2026-05-01' });
+      createTask(tempDir, 'Due Sooner', { due: '2026-04-01' });
+
+      const dueTasks = taskList(tempDir, { due: true });
+      const dueTitles = dueTasks.map((task) => task.title);
+
+      expect(dueTitles).toEqual(['Due Sooner', 'Due Later']);
+    });
+
+    it('filters tasks by tag', () => {
+      createTask(tempDir, 'Tagged One', { tags: ['kanban'] });
+      createTask(tempDir, 'Tagged Two', { tags: ['platform'] });
+
+      const tagged = taskList(tempDir, { tag: 'kanban' });
+      expect(tagged).toHaveLength(1);
+      expect(tagged[0].title).toBe('Tagged One');
+    });
+
+    it('shows only overdue tasks that are not done', () => {
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      createTask(tempDir, 'Overdue Open', { due: yesterday });
+      const overdueDone = createTask(tempDir, 'Overdue Done', { due: yesterday });
+      completeTask(tempDir, overdueDone.slug);
+
+      const overdueTasks = taskList(tempDir, { overdue: true });
+      expect(overdueTasks.map((task) => task.slug)).toContain('overdue-open');
+      expect(overdueTasks.map((task) => task.slug)).not.toContain('overdue-done');
     });
   });
 
@@ -153,6 +183,21 @@ describe('task command', () => {
       expect(output).toContain('●'); // active
       expect(output).toContain('■'); // blocked
     });
+
+    it('shows compact metadata for due, tags, parent and dependencies', () => {
+      createTask(tempDir, 'Meta Task', {
+        due: '2026-02-25',
+        tags: ['kanban', 'cli'],
+        parent: 'epic-1',
+        depends_on: ['dep-a', 'dep-b']
+      });
+
+      const output = formatTaskList(taskList(tempDir));
+      expect(output).toContain('due:2026-02-25');
+      expect(output).toContain('#kanban,#cli');
+      expect(output).toContain('parent:epic-1');
+      expect(output).toContain('deps:dep-a|dep-b');
+    });
   });
 
   describe('formatTaskDetails', () => {
@@ -174,6 +219,21 @@ describe('task command', () => {
       expect(output).toContain('Due: 2026-02-20');
       expect(output).toContain('Created:');
       expect(output).toContain('File:');
+    });
+
+    it('formats enriched hierarchy details', () => {
+      const task = createTask(tempDir, 'Hierarchy Detail', {
+        description: 'Summary line',
+        estimate: '1w',
+        parent: 'epic-1',
+        depends_on: ['api-ready']
+      });
+
+      const output = formatTaskDetails(task);
+      expect(output).toContain('Description: Summary line');
+      expect(output).toContain('Estimate: 1w');
+      expect(output).toContain('Parent: epic-1');
+      expect(output).toContain('Depends on: api-ready');
     });
   });
 });

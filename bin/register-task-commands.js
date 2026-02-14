@@ -3,6 +3,20 @@
  * Registers task, backlog, blocked, and canvas commands
  */
 
+function parseCsvList(value) {
+  if (!value) return undefined;
+  const items = String(value)
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return items.length > 0 ? items : undefined;
+}
+
+function clearableValue(value, shouldClear) {
+  if (shouldClear) return null;
+  return value;
+}
+
 export function registerTaskCommands(
   program,
   { chalk, resolveVaultPath }
@@ -21,6 +35,11 @@ export function registerTaskCommands(
     .option('--project <project>', 'Project name')
     .option('--priority <priority>', 'Priority (critical, high, medium, low)')
     .option('--due <date>', 'Due date (YYYY-MM-DD)')
+    .option('--tags <tags>', 'Comma-separated tags')
+    .option('--description <description>', 'One-line task summary')
+    .option('--estimate <estimate>', 'Estimate (for example: 2h, 1d, 1w)')
+    .option('--parent <slug>', 'Parent task slug')
+    .option('--depends-on <slugs>', 'Comma-separated dependency slugs')
     .action(async (title, options) => {
       try {
         const vaultPath = resolveVaultPath(options.vault);
@@ -31,7 +50,12 @@ export function registerTaskCommands(
             owner: options.owner,
             project: options.project,
             priority: options.priority,
-            due: options.due
+            due: options.due,
+            tags: parseCsvList(options.tags),
+            description: options.description,
+            estimate: options.estimate,
+            parent: options.parent,
+            dependsOn: parseCsvList(options.dependsOn)
           }
         });
       } catch (err) {
@@ -49,6 +73,9 @@ export function registerTaskCommands(
     .option('--project <project>', 'Filter by project')
     .option('--status <status>', 'Filter by status (open, in-progress, blocked, done)')
     .option('--priority <priority>', 'Filter by priority')
+    .option('--due', 'Show only tasks with due dates (sorted by due date)')
+    .option('--tag <tag>', 'Filter by tag')
+    .option('--overdue', 'Show overdue tasks that are not done')
     .option('--json', 'Output as JSON')
     .action(async (options) => {
       try {
@@ -60,6 +87,9 @@ export function registerTaskCommands(
             project: options.project,
             status: options.status,
             priority: options.priority,
+            due: options.due,
+            tag: options.tag,
+            overdue: options.overdue,
             json: options.json
           }
         });
@@ -76,12 +106,28 @@ export function registerTaskCommands(
     .option('-v, --vault <path>', 'Vault path')
     .option('--status <status>', 'New status')
     .option('--owner <owner>', 'New owner')
+    .option('--clear-owner', 'Clear owner')
     .option('--project <project>', 'New project')
+    .option('--clear-project', 'Clear project')
     .option('--priority <priority>', 'New priority')
+    .option('--clear-priority', 'Clear priority')
     .option('--blocked-by <blocker>', 'What is blocking this task')
+    .option('--clear-blocked-by', 'Clear blocked-by field')
     .option('--due <date>', 'New due date')
+    .option('--clear-due', 'Clear due date')
+    .option('--tags <tags>', 'Comma-separated tags')
+    .option('--clear-tags', 'Clear tags')
+    .option('--description <description>', 'One-line task summary')
+    .option('--clear-description', 'Clear description')
+    .option('--estimate <estimate>', 'Estimate (for example: 2h, 1d, 1w)')
+    .option('--clear-estimate', 'Clear estimate')
+    .option('--parent <slug>', 'Parent task slug')
+    .option('--clear-parent', 'Clear parent task')
+    .option('--depends-on <slugs>', 'Comma-separated dependency slugs')
+    .option('--clear-depends-on', 'Clear dependencies')
     .option('--confidence <value>', 'Transition confidence (0-1)', parseFloat)
     .option('--reason <reason>', 'Reason for status change')
+    .option('--clear-reason', 'Clear reason')
     .action(async (slug, options) => {
       try {
         const vaultPath = resolveVaultPath(options.vault);
@@ -90,13 +136,18 @@ export function registerTaskCommands(
           slug,
           options: {
             status: options.status,
-            owner: options.owner,
-            project: options.project,
-            priority: options.priority,
-            blockedBy: options.blockedBy,
-            due: options.due,
+            owner: clearableValue(options.owner, options.clearOwner),
+            project: clearableValue(options.project, options.clearProject),
+            priority: clearableValue(options.priority, options.clearPriority),
+            blockedBy: clearableValue(options.blockedBy, options.clearBlockedBy),
+            due: clearableValue(options.due, options.clearDue),
+            tags: options.clearTags ? null : parseCsvList(options.tags),
+            description: clearableValue(options.description, options.clearDescription),
+            estimate: clearableValue(options.estimate, options.clearEstimate),
+            parent: clearableValue(options.parent, options.clearParent),
+            dependsOn: options.clearDependsOn ? null : parseCsvList(options.dependsOn),
             confidence: options.confidence,
-            reason: options.reason
+            reason: clearableValue(options.reason, options.clearReason)
           }
         });
       } catch (err) {

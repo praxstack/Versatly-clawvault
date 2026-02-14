@@ -34,6 +34,10 @@ export interface TaskAddOptions {
   due?: string;
   content?: string;
   tags?: string[];
+  description?: string;
+  estimate?: string;
+  parent?: string;
+  dependsOn?: string[];
 }
 
 export interface TaskListOptions {
@@ -41,18 +45,26 @@ export interface TaskListOptions {
   owner?: string;
   project?: string;
   priority?: TaskPriority;
+  due?: boolean;
+  tag?: string;
+  overdue?: boolean;
   json?: boolean;
 }
 
 export interface TaskUpdateOptions {
   status?: TaskStatus;
-  owner?: string;
-  project?: string;
-  priority?: TaskPriority;
-  blockedBy?: string;
-  due?: string;
+  owner?: string | null;
+  project?: string | null;
+  priority?: TaskPriority | null;
+  blockedBy?: string | null;
+  due?: string | null;
+  tags?: string[] | null;
+  description?: string | null;
+  estimate?: string | null;
+  parent?: string | null;
+  dependsOn?: string[] | null;
   confidence?: number;
-  reason?: string;
+  reason?: string | null;
 }
 
 export interface TaskTransitionsOptions {
@@ -75,7 +87,11 @@ export function taskAdd(vaultPath: string, title: string, options: TaskAddOption
     priority: options.priority,
     due: options.due,
     content: options.content,
-    tags: options.tags
+    tags: options.tags,
+    description: options.description,
+    estimate: options.estimate,
+    parent: options.parent,
+    depends_on: options.dependsOn
   });
 }
 
@@ -89,14 +105,19 @@ export function taskList(vaultPath: string, options: TaskListOptions = {}): Task
   if (options.owner) filters.owner = options.owner;
   if (options.project) filters.project = options.project;
   if (options.priority) filters.priority = options.priority;
+  if (options.due) filters.due = true;
+  if (options.tag) filters.tag = options.tag;
+  if (options.overdue) filters.overdue = true;
 
-  // By default, show open and in-progress tasks (not done)
-  if (!options.status) {
-    const allTasks = listTasks(vaultPath, filters);
-    return allTasks.filter(t => t.frontmatter.status !== 'done');
+  const listed = listTasks(vaultPath, filters);
+
+  // By default, show open and in-progress tasks (not done).
+  // Overdue list already excludes done tasks in listTasks.
+  if (!options.status && !options.overdue) {
+    return listed.filter(t => t.frontmatter.status !== 'done');
   }
 
-  return listTasks(vaultPath, filters);
+  return listed;
 }
 
 /**
@@ -113,12 +134,22 @@ export function taskUpdate(vaultPath: string, slug: string, options: TaskUpdateO
     project: options.project,
     priority: options.priority,
     blocked_by: options.blockedBy,
-    due: options.due
+    due: options.due,
+    tags: options.tags,
+    description: options.description,
+    estimate: options.estimate,
+    parent: options.parent,
+    depends_on: options.dependsOn,
+    confidence: options.confidence,
+    reason: options.reason
   });
 
   // Emit transition event if status changed
   if (options.status && oldStatus && options.status !== oldStatus) {
-    emitTransition(vaultPath, slug, oldStatus, options.status, options);
+    emitTransition(vaultPath, slug, oldStatus, options.status, {
+      confidence: options.confidence,
+      reason: options.reason ?? undefined
+    });
   }
 
   return task;
@@ -214,9 +245,12 @@ export function formatTaskList(tasks: Task[]): string {
     return 'No tasks found.\n';
   }
 
-  // Calculate column widths
-  const headers = ['STATUS', 'OWNER', 'PRIORITY', 'PROJECT', 'TITLE'];
-  const widths = [10, 12, 8, 16, 40];
+  const headers = ['STATUS', 'OWNER', 'PRIORITY', 'PROJECT', 'META', 'TITLE'];
+  const widths = [10, 12, 8, 14, 28, 36];
+  const truncate = (value: string, width: number): string => {
+    if (value.length <= width) return value;
+    return value.slice(0, width - 3) + '...';
+  };
 
   // Build header row
   let output = headers.map((h, i) => h.padEnd(widths[i])).join('  ') + '\n';
@@ -229,15 +263,22 @@ export function formatTaskList(tasks: Task[]): string {
     const owner = task.frontmatter.owner || '-';
     const priority = task.frontmatter.priority || 'low';
     const project = task.frontmatter.project || '-';
-    const title = task.title.length > widths[4] 
-      ? task.title.slice(0, widths[4] - 3) + '...'
-      : task.title;
+    const metaParts: string[] = [];
+    if (task.frontmatter.due) metaParts.push(`due:${task.frontmatter.due.split('T')[0]}`);
+    if (task.frontmatter.tags?.length) metaParts.push(task.frontmatter.tags.map(tag => `#${tag}`).join(','));
+    if (task.frontmatter.parent) metaParts.push(`parent:${task.frontmatter.parent}`);
+    if (task.frontmatter.depends_on?.length) {
+      metaParts.push(`deps:${task.frontmatter.depends_on.join('|')}`);
+    }
+    const meta = metaParts.length > 0 ? metaParts.join(' ') : '-';
+    const title = truncate(task.title, widths[5]);
 
     const row = [
       status.padEnd(widths[0]),
       owner.padEnd(widths[1]),
       priority.padEnd(widths[2]),
       project.padEnd(widths[3]),
+      truncate(meta, widths[4]).padEnd(widths[4]),
       title
     ];
 
@@ -266,6 +307,18 @@ export function formatTaskDetails(task: Task): string {
   if (task.frontmatter.priority) {
     output += `Priority: ${task.frontmatter.priority}\n`;
   }
+  if (task.frontmatter.description) {
+    output += `Description: ${task.frontmatter.description}\n`;
+  }
+  if (task.frontmatter.estimate) {
+    output += `Estimate: ${task.frontmatter.estimate}\n`;
+  }
+  if (task.frontmatter.parent) {
+    output += `Parent: ${task.frontmatter.parent}\n`;
+  }
+  if (task.frontmatter.depends_on && task.frontmatter.depends_on.length > 0) {
+    output += `Depends on: ${task.frontmatter.depends_on.join(', ')}\n`;
+  }
   if (task.frontmatter.due) {
     output += `Due: ${task.frontmatter.due}\n`;
   }
@@ -274,6 +327,15 @@ export function formatTaskDetails(task: Task): string {
   }
   if (task.frontmatter.tags && task.frontmatter.tags.length > 0) {
     output += `Tags: ${task.frontmatter.tags.join(', ')}\n`;
+  }
+  if (task.frontmatter.escalation) {
+    output += 'Escalation: true\n';
+  }
+  if (task.frontmatter.confidence !== undefined) {
+    output += `Confidence: ${task.frontmatter.confidence}\n`;
+  }
+  if (task.frontmatter.reason) {
+    output += `Reason: ${task.frontmatter.reason}\n`;
   }
   
   output += `Created: ${task.frontmatter.created}\n`;

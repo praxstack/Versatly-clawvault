@@ -39,6 +39,27 @@ export type { CompatCheck, CompatReport, CompatStatus, CompatCommandOptions } fr
 export { graphCommand, graphSummary } from './commands/graph.js';
 export type { GraphSummary } from './commands/graph.js';
 export {
+  kanbanCommand,
+  syncKanbanBoard,
+  importKanbanBoard,
+  buildKanbanLanes,
+  generateKanbanMarkdown,
+  parseKanbanMarkdown,
+  formatKanbanCard,
+  extractCardSlug
+} from './commands/kanban.js';
+export type {
+  KanbanGroupBy,
+  KanbanSyncOptions,
+  KanbanImportOptions,
+  KanbanLane,
+  KanbanSyncResult,
+  KanbanImportChange,
+  KanbanImportResult,
+  ParsedKanbanLane,
+  ParsedKanbanBoard
+} from './commands/kanban.js';
+export {
   contextCommand,
   buildContext,
   formatContextMarkdown,
@@ -207,6 +228,10 @@ export {
   buildTemplateVariables
 } from './lib/template-engine.js';
 export type { TemplateVariables } from './lib/template-engine.js';
+export {
+  listSubtasks,
+  listDependentTasks
+} from './lib/task-utils.js';
 
 // Type exports
 export type {

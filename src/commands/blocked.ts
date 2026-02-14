@@ -29,7 +29,7 @@ export interface BlockedOptions {
 export function blockedList(vaultPath: string, options: BlockedOptions = {}): Task[] {
   let tasks = getBlockedTasks(vaultPath, options.project);
   if (options.escalated) {
-    tasks = tasks.filter(t => (t.frontmatter as any).escalation === true);
+    tasks = tasks.filter(t => t.frontmatter.escalation === true);
   }
   return tasks;
 }

@@ -10,6 +10,8 @@ import { registerTemplateCommands } from '../register-template-commands.js';
 import { registerVaultOperationsCommands } from '../register-vault-operations-commands.js';
 import { registerConfigCommands } from '../register-config-commands.js';
 import { registerRouteCommands } from '../register-route-commands.js';
+import { registerTaskCommands } from '../register-task-commands.js';
+import { registerKanbanCommands } from '../register-kanban-commands.js';
 
 export const chalkStub = {
   cyan: (value) => value,
@@ -96,6 +98,14 @@ export function registerAllCommandModules(program = new Command()) {
     resolveVaultPath: stubResolveVaultPath
   });
   registerRouteCommands(program, {
+    chalk: chalkStub,
+    resolveVaultPath: stubResolveVaultPath
+  });
+  registerTaskCommands(program, {
+    chalk: chalkStub,
+    resolveVaultPath: stubResolveVaultPath
+  });
+  registerKanbanCommands(program, {
     chalk: chalkStub,
     resolveVaultPath: stubResolveVaultPath
   });

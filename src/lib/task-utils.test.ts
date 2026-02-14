@@ -22,6 +22,8 @@ import {
   getBlockedTasks,
   getActiveTasks,
   getRecentlyCompletedTasks,
+  listSubtasks,
+  listDependentTasks,
   getStatusIcon,
   getStatusDisplay
 } from './task-utils.js';
@@ -111,6 +113,22 @@ describe('task-utils', () => {
       expect(content).toContain('[[pedro]]');
       expect(content).toContain('[[versatly]]');
     });
+
+    it('persists enriched optional frontmatter fields', () => {
+      const task = createTask(tempDir, 'Enriched Task', {
+        description: 'One line summary',
+        estimate: '2h',
+        parent: 'parent-task',
+        depends_on: ['dep-a', 'dep-b'],
+        tags: ['backend', 'kanban']
+      });
+
+      expect(task.frontmatter.description).toBe('One line summary');
+      expect(task.frontmatter.estimate).toBe('2h');
+      expect(task.frontmatter.parent).toBe('parent-task');
+      expect(task.frontmatter.depends_on).toEqual(['dep-a', 'dep-b']);
+      expect(task.frontmatter.tags).toEqual(['backend', 'kanban']);
+    });
   });
 
   describe('readTask', () => {
@@ -164,6 +182,36 @@ describe('task-utils', () => {
       expect(tasks[1].frontmatter.priority).toBe('high');
       expect(tasks[2].frontmatter.priority).toBe('low');
     });
+
+    it('filters tasks that have due dates', () => {
+      createTask(tempDir, 'Due Task', { due: '2026-03-01' });
+      const dueTasks = listTasks(tempDir, { due: true });
+      expect(dueTasks.some((task) => task.slug === 'due-task')).toBe(true);
+      expect(dueTasks.every((task) => !!task.frontmatter.due)).toBe(true);
+    });
+
+    it('filters by tag', () => {
+      createTask(tempDir, 'Tagged Task', { tags: ['kanban', 'cli'] });
+      const tagged = listTasks(tempDir, { tag: 'kanban' });
+      expect(tagged.some((task) => task.slug === 'tagged-task')).toBe(true);
+      expect(tagged.every((task) => (task.frontmatter.tags || []).includes('kanban'))).toBe(true);
+    });
+
+    it('filters overdue tasks and excludes done tasks', () => {
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+      createTask(tempDir, 'Overdue Active', { due: yesterday });
+      const doneOverdue = createTask(tempDir, 'Overdue Done', { due: yesterday });
+      completeTask(tempDir, doneOverdue.slug);
+      createTask(tempDir, 'Not Overdue', { due: tomorrow });
+
+      const overdue = listTasks(tempDir, { overdue: true });
+      expect(overdue.map((task) => task.slug)).toContain('overdue-active');
+      expect(overdue.map((task) => task.slug)).not.toContain('overdue-done');
+      expect(overdue.map((task) => task.slug)).not.toContain('not-overdue');
+      expect(overdue.every((task) => task.frontmatter.status !== 'done')).toBe(true);
+    });
   });
 
   describe('updateTask', () => {
@@ -196,6 +244,37 @@ describe('task-utils', () => {
 
     it('throws for non-existent task', () => {
       expect(() => updateTask(tempDir, 'non-existent', { status: 'done' })).toThrow('Task not found');
+    });
+
+    it('sets and clears enriched frontmatter fields', () => {
+      createTask(tempDir, 'Enriched Update');
+      const updated = updateTask(tempDir, 'enriched-update', {
+        description: 'Detailed summary',
+        estimate: '1d',
+        parent: 'epic-parent',
+        depends_on: ['dep-one', 'dep-two'],
+        tags: ['ops', 'migration']
+      });
+
+      expect(updated.frontmatter.description).toBe('Detailed summary');
+      expect(updated.frontmatter.estimate).toBe('1d');
+      expect(updated.frontmatter.parent).toBe('epic-parent');
+      expect(updated.frontmatter.depends_on).toEqual(['dep-one', 'dep-two']);
+      expect(updated.frontmatter.tags).toEqual(['ops', 'migration']);
+
+      const cleared = updateTask(tempDir, 'enriched-update', {
+        description: null,
+        estimate: null,
+        parent: null,
+        depends_on: null,
+        tags: null
+      });
+
+      expect(cleared.frontmatter.description).toBeUndefined();
+      expect(cleared.frontmatter.estimate).toBeUndefined();
+      expect(cleared.frontmatter.parent).toBeUndefined();
+      expect(cleared.frontmatter.depends_on).toBeUndefined();
+      expect(cleared.frontmatter.tags).toBeUndefined();
     });
   });
 
@@ -303,6 +382,23 @@ describe('task-utils', () => {
       const done = getRecentlyCompletedTasks(tempDir);
       expect(done).toHaveLength(1);
       expect(done[0].frontmatter.status).toBe('done');
+    });
+  });
+
+  describe('hierarchy helpers', () => {
+    it('lists subtasks and dependency-linked tasks', () => {
+      createTask(tempDir, 'Parent Task');
+      createTask(tempDir, 'Child Task One', { parent: 'parent-task' });
+      createTask(tempDir, 'Child Task Two', { parent: 'parent-task' });
+      createTask(tempDir, 'Blocked by Parent', { depends_on: ['parent-task'] });
+
+      const subtasks = listSubtasks(tempDir, 'parent-task');
+      expect(subtasks).toHaveLength(2);
+      expect(subtasks.every((task) => task.frontmatter.parent === 'parent-task')).toBe(true);
+
+      const dependentTasks = listDependentTasks(tempDir, 'parent-task');
+      expect(dependentTasks).toHaveLength(1);
+      expect(dependentTasks[0].slug).toBe('blocked-by-parent');
     });
   });
 
