@@ -1,77 +1,85 @@
-# Agent Task: Observer Auto-Task Detection (v2.4.0)
+# Canvas Template System for ClawVault CLI
 
 ## Overview
-Extend ClawVault's observation pipeline to automatically detect tasks, commitments, and TODOs from conversation transcripts. When the observer compresses a session, it should extract actionable items and route them to the task/backlog system.
+Extend `clawvault canvas` to support templates. Currently it generates a single hardcoded dashboard layout. Add a `--template` flag to select from built-in templates, and a template engine that makes it easy to add new ones.
 
 ## What Exists
-- `src/observer/compressor.ts` — LLM-based session compression with `CRITICAL_RE`, `NOTABLE_RE` regex post-processing
-- `src/observer/router.ts` — routes observations to vault categories based on type
-- `src/lib/task-utils.ts` — task CRUD (createTask, listTasks, updateTask, completeTask)
-- `src/commands/backlog.ts` — backlog management
-- Tasks are markdown files in `tasks/` with frontmatter (status, owner, project, priority)
-- Backlog items are markdown files in `backlog/`
+- `src/commands/canvas.ts` — generates `dashboard.canvas` with hardcoded layout
+- `src/lib/canvas-layout.ts` — layout constants, node/group builders, JSON Canvas types
+- `src/lib/vault-stats.ts` — collects vault statistics
+- `src/lib/task-utils.ts` — task CRUD
+- `src/lib/memory-graph.ts` — graph index loading
 
 ## What to Build
 
-### 1. Task Extraction in Compressor (`src/observer/compressor.ts`)
+### 1. Template Engine (`src/lib/canvas-templates.ts`)
 
-Add a new regex and LLM prompt extension to detect:
-- Explicit TODOs: "TODO:", "we need to", "don't forget", "remember to", "make sure to"
-- Commitments: "I'll", "I will", "let me", "going to", "plan to", "should"
-- Unresolved questions: "need to figure out", "TBD", "to be determined"
-- Deadlines: "by Friday", "before the demo", "deadline is"
+Define a `CanvasTemplate` interface:
+```typescript
+interface CanvasTemplate {
+  id: string;
+  name: string;
+  description: string;
+  generate(vaultPath: string, options: CanvasTemplateOptions): Canvas;
+}
 
-New observation types to add: `task`, `todo`, `commitment-unresolved`
+interface CanvasTemplateOptions {
+  project?: string;      // filter by project
+  dateRange?: { from: string; to: string };
+  width?: number;
+  height?: number;
+}
+```
 
-### 2. Auto-Route Tasks (`src/observer/router.ts`)
+Registry pattern: `registerTemplate(template)`, `getTemplate(id)`, `listTemplates()`.
 
-When an observation has type `task` or `todo`:
-- Create a backlog item via `createTask()` from `src/lib/task-utils.ts` with status `open`
-- Set `source: observer` in frontmatter to distinguish from manual tasks
-- Include the original session context (which session, approximate timestamp)
+### 2. Built-in Templates
 
-When an observation has type `commitment-unresolved`:
-- Check if a matching task/backlog item already exists (fuzzy title match)
-- If not, create a backlog item flagged as `commitment`
-- If it exists but is still open, update its `lastSeen` date
+**a) `default`** — current dashboard (move existing `generateCanvas` logic here)
 
-### 3. Dedup Logic
+**b) `project-board`** — Kanban-style project view
+- 4 column groups: Open | In Progress | Blocked | Done
+- File nodes for each task (linking to task .md files)
+- Filter by `--project` flag
+- Color-coded by priority
 
-Before creating a task, check existing tasks/backlog for similar titles:
-- Normalize: lowercase, strip punctuation, compare first 50 chars
-- If >80% similar (simple Jaccard on words), skip creation and log a dedup hit
-- This prevents "TODO: fix the tests" from creating 10 duplicate backlog items
+**c) `brain`** — Knowledge graph overview
+- Center group: vault name + key stats
+- Radial groups for top 6 categories (by file count)
+- File nodes for top 5 entities per category
+- Edges between entities that share wiki-links
 
-### 4. New CLI Flag
+**d) `sprint`** — Sprint/weekly focus
+- Top row: active task count, blocked count, completion %
+- Decision list from last 7 days (file nodes to decision .md files)
+- Open loops: tasks open >7 days
+- Recent observations summary
 
-Add `--extract-tasks` flag to `clawvault observe`:
-- Default: true (always extract)
-- `--no-extract-tasks` to disable
-- When enabled, after compression, run task extraction on the observations
+### 3. Update `src/commands/canvas.ts`
 
-### 5. Tests
+Add `--template` option:
+```bash
+clawvault canvas                              # default template
+clawvault canvas --template project-board     # kanban view
+clawvault canvas --template brain             # graph overview
+clawvault canvas --template sprint            # weekly focus
+clawvault canvas --template project-board --project clawvault  # filtered
+clawvault canvas --list-templates             # show available templates
+```
 
-Add tests in `src/observer/compressor.test.ts`:
-- Test TODO regex patterns detect all variants
-- Test commitment regex patterns
-- Test dedup logic
-- Test that extracted tasks end up in backlog/
+### 4. Tests
 
-Add tests in `src/observer/router.test.ts`:
-- Test task routing creates proper backlog files
-- Test dedup prevents duplicates
-
-## Reference Files
-- Pattern to follow: `src/observer/compressor.ts` (existing regex + LLM flow)
-- Task creation: `src/lib/task-utils.ts`
-- Router: `src/observer/router.ts`
-- Existing tests: `src/observer/compressor.test.ts`, `src/observer/router.test.ts`
+Add `src/lib/canvas-templates.test.ts`:
+- Each template generates valid canvas JSON (has nodes array, edges array)
+- Project filter works
+- Template registry works (register, get, list)
+- Default template matches current output
 
 ## Constraints
 - Zero new dependencies
-- Must pass all existing tests (`npm test`)
-- Don't modify task frontmatter schema — use existing fields
-- Add `source` field to task frontmatter (string, e.g. "observer", "manual")
+- All existing tests must pass
+- Canvas output must be valid JSON Canvas spec 1.0
+- Don't modify canvas-layout.ts types — extend if needed
 - TypeScript strict mode
 
 ## Build & Test
@@ -79,10 +87,3 @@ Add tests in `src/observer/router.test.ts`:
 npm run build
 npm test
 ```
-
-## What Done Looks Like
-1. `clawvault observe` on a session with "TODO: review the PR" creates a backlog item
-2. Running observe twice on same session doesn't create duplicate tasks
-3. Commitments like "I'll deploy tomorrow" get captured
-4. All 346+ existing tests still pass + new tests added
-5. `clawvault task list` shows observer-created tasks with `source: observer`
