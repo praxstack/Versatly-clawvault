@@ -52,15 +52,23 @@ export class ClawVault {
   /**
    * Initialize a new vault
    */
-  async init(options: Partial<VaultConfig> = {}): Promise<void> {
+  async init(options: Partial<VaultConfig> = {}, initFlags?: { skipBases?: boolean; skipTasks?: boolean; skipGraph?: boolean }): Promise<void> {
     if (!hasQmd()) {
       throw new QmdUnavailableError();
     }
     const vaultPath = this.config.path;
+    const flags = initFlags || {};
     
     // Merge options
     this.config = { ...this.config, ...options };
     this.applyQmdConfig();
+
+    // If skipTasks, remove tasks/backlog from categories
+    if (flags.skipTasks) {
+      this.config.categories = this.config.categories.filter(
+        c => !['tasks', 'backlog'].includes(c)
+      );
+    }
     
     // Create vault directory
     if (!fs.existsSync(vaultPath)) {
@@ -110,10 +118,14 @@ export class ClawVault {
     };
     fs.writeFileSync(configPath, JSON.stringify(meta, null, 2));
 
-    // Generate Obsidian Bases files for task management views
-    this.createBasesFiles();
+    // Generate Obsidian Bases files for task management views (only if tasks category exists)
+    if (!flags.skipBases && this.config.categories.includes('tasks')) {
+      this.createBasesFiles();
+    }
 
-    await this.syncMemoryGraphIndex({ forceFull: true });
+    if (!flags.skipGraph) {
+      await this.syncMemoryGraphIndex({ forceFull: true });
+    }
     this.initialized = true;
   }
 
@@ -811,6 +823,8 @@ export class ClawVault {
   }
 
   private async createWelcomeNote(): Promise<void> {
+    // Only create if inbox category exists
+    if (!this.config.categories.includes('inbox')) return;
     const inboxPath = path.join(this.config.path, 'inbox', 'welcome.md');
     if (fs.existsSync(inboxPath)) return;
     const now = new Date().toISOString().split('T')[0];
@@ -962,8 +976,8 @@ export async function findVault(startPath: string = process.cwd()): Promise<Claw
 /**
  * Create a new vault
  */
-export async function createVault(vaultPath: string, options: Partial<VaultConfig> = {}): Promise<ClawVault> {
+export async function createVault(vaultPath: string, options: Partial<VaultConfig> = {}, initFlags?: { skipBases?: boolean; skipTasks?: boolean; skipGraph?: boolean }): Promise<ClawVault> {
   const vault = new ClawVault(vaultPath);
-  await vault.init(options);
+  await vault.init(options, initFlags);
   return vault;
 }

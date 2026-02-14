@@ -22,22 +22,50 @@ export function registerCoreCommands(
     .option('--minimal', 'Create minimal vault (memory categories only, no tasks/bases/graph)')
     .action(async (vaultPath, options) => {
       const targetPath = vaultPath || '.';
-      console.log(chalk.cyan(`\n🐘 Initializing ClawVault at ${path.resolve(targetPath)}...\n`));
+      const resolvedPath = path.resolve(targetPath);
+      console.log(chalk.cyan(`\n🐘 Initializing ClawVault at ${resolvedPath}...\n`));
+
+      // Check for existing vault
+      const existingConfig = path.join(resolvedPath, '.clawvault.json');
+      if (fs.existsSync(existingConfig)) {
+        console.error(chalk.red(`Error: A ClawVault already exists at ${resolvedPath}`));
+        console.error(chalk.dim('  Use --force to reinitialize (not yet supported) or choose a different path.'));
+        process.exit(1);
+      }
 
       try {
-        const vault = await createVault(targetPath, {
-          name: options.name || path.basename(path.resolve(targetPath)),
-          qmdCollection: options.qmdCollection
-        });
+        // Resolve --minimal shorthand
+        const isMinimal = !!options.minimal;
+        const skipBases = isMinimal || options.bases === false;
+        const skipTasks = isMinimal || !!options.noTasks;
+        const skipGraph = isMinimal || !!options.noGraph;
 
-        const categories = vault.getCategories();
-        const memoryCategories = categories.filter(c => !['templates', 'tasks', 'backlog'].includes(c));
-        const workCategories = categories.filter(c => ['tasks', 'backlog'].includes(c));
+        // Resolve custom categories
+        const { DEFAULT_CATEGORIES } = await import('../dist/index.js');
+        let categories = [...DEFAULT_CATEGORIES];
+        if (options.categories) {
+          const customCats = options.categories.split(',').map(c => c.trim()).filter(Boolean);
+          categories = customCats;
+        }
+
+        const vault = await createVault(targetPath, {
+          name: options.name || path.basename(resolvedPath),
+          qmdCollection: options.qmdCollection,
+          categories
+        }, { skipBases, skipTasks, skipGraph });
+
+        const vaultCategories = vault.getCategories();
+        const memoryCategories = vaultCategories.filter(c => !['templates', 'tasks', 'backlog'].includes(c));
+        const workCategories = vaultCategories.filter(c => ['tasks', 'backlog'].includes(c));
 
         console.log(chalk.green('✓ Vault created'));
         console.log(chalk.dim(`  Memory:  ${memoryCategories.join(', ')}`));
-        console.log(chalk.dim(`  Work:    ${workCategories.join(', ')}`));
+        if (workCategories.length > 0) {
+          console.log(chalk.dim(`  Work:    ${workCategories.join(', ')}`));
+        }
         console.log(chalk.dim(`  Ledger:  ledger/raw, ledger/observations, ledger/reflections`));
+        if (skipBases) console.log(chalk.dim('  Bases:   skipped'));
+        if (skipGraph) console.log(chalk.dim('  Graph:   skipped'));
 
         console.log(chalk.cyan('\nSetting up qmd collection...'));
         try {
@@ -53,6 +81,38 @@ export function registerCoreCommands(
           console.log(chalk.green('✓ qmd collection created'));
         } catch {
           console.log(chalk.yellow('⚠ qmd collection may already exist'));
+        }
+
+        // Apply theme if requested
+        if (options.theme && options.theme !== 'none') {
+          try {
+            const { setupCommand } = await import('../dist/commands/setup.js');
+            await setupCommand({
+              graphColors: true,
+              bases: false,
+              canvas: false,
+              theme: options.theme,
+              vault: resolvedPath
+            });
+          } catch {
+            console.log(chalk.yellow(`⚠ Could not apply ${options.theme} theme`));
+          }
+        }
+
+        // Generate canvas if requested
+        if (options.canvas) {
+          try {
+            const { setupCommand } = await import('../dist/commands/setup.js');
+            await setupCommand({
+              graphColors: false,
+              bases: false,
+              canvas: options.canvas === true ? 'default' : options.canvas,
+              theme: 'none',
+              vault: resolvedPath
+            });
+          } catch {
+            console.log(chalk.yellow(`⚠ Could not generate canvas`));
+          }
         }
 
         console.log(chalk.green('\n✅ ClawVault ready!\n'));
