@@ -228,9 +228,28 @@ export class Compressor {
     const hasDateHeading = lines.some((line) => DATE_HEADING_RE.test(line));
     const result = hasDateHeading ? cleaned : `## ${this.formatDate(this.now())}\n\n${cleaned}`;
 
-    // Post-process: force-upgrade priorities based on keyword patterns
-    // LLM may under-classify decisions/errors as 🟢 — override that
-    return this.enforcePriorityRules(result);
+    // Post-process: fix wiki-link corruption, then enforce priority rules
+    // LLMs often fuse preceding words into wiki-links: "reque[[people/pedro]]"
+    const sanitized = this.sanitizeWikiLinks(result);
+    return this.enforcePriorityRules(sanitized);
+  }
+
+  /**
+   * Fix wiki-link corruption from LLM compression.
+   * LLMs often fuse preceding word fragments into wiki-links during rewriting:
+   *   "reque[[people/pedro]]" → "[[people/pedro]]"
+   *   "Linke[[agents/zeca]]" → "[[agents/zeca]]"
+   *   "taske[[people/pedro]]a" → "[[people/pedro]]"
+   * Also fixes trailing word fragments fused after closing brackets.
+   */
+  private sanitizeWikiLinks(markdown: string): string {
+    // Fix word fragments fused BEFORE opening [[ — e.g. "reque[[foo]]" → " [[foo]]"
+    let result = markdown.replace(/\w+\[\[/g, ' [[');
+    // Fix word fragments fused AFTER closing ]] — e.g. "[[foo]]sted" → "[[foo]]"
+    result = result.replace(/\]\]\w+/g, ']]');
+    // Clean up any double spaces introduced
+    result = result.replace(/ {2,}/g, ' ');
+    return result;
   }
 
   /**
