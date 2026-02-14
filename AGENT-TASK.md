@@ -1,146 +1,95 @@
-# Canvas Dashboard Stats Enhancement
+# WebDAV Support for clawvault serve
 
 ## Overview
 
-Enhance `clawvault canvas` to include operational stats about ClawVault usage — observation runs, reflections generated, tasks completed, session lifecycle events, and more. The dashboard should give an at-a-glance picture of how actively the vault is being used.
+Add WebDAV protocol support to the existing `clawvault serve` HTTP server so Obsidian mobile (via Remotely Save plugin) can sync vault files over Tailscale. The server already binds to Tailscale IP on port 7283 — add WebDAV handlers alongside the existing JSON API routes.
 
 ## What to Build
 
-### 1. Vault Activity Stats Section in Canvas
+### 1. WebDAV Handler (`src/lib/webdav.ts`)
 
-Add a new group to the canvas dashboard called "📈 Vault Activity" that shows:
+Implement WebDAV methods on a `/webdav/` path prefix:
 
-- **Observations**: Total observation count, date range (first → latest), average observations per day
-- **Reflections**: Total reflection count, latest reflection date, weeks covered
-- **Tasks**: Total created, completed, completion rate, avg time to completion
-- **Sessions**: Total checkpoints, total handoffs, last checkpoint date
-- **Captures**: Total documents in inbox (pending triage), total documents across all categories
+- **GET** `/webdav/{path}` — serve file contents
+- **PUT** `/webdav/{path}` — write/create file (create parent dirs if needed)
+- **DELETE** `/webdav/{path}` — delete file
+- **MKCOL** `/webdav/{path}` — create directory
+- **PROPFIND** `/webdav/{path}` — list directory contents or file properties (return XML)
+- **OPTIONS** `/webdav/{path}` — return allowed methods + DAV header
+- **HEAD** `/webdav/{path}` — file metadata without body
+- **MOVE** `/webdav/{path}` — rename/move file (Destination header)
+- **COPY** `/webdav/{path}` — copy file
 
-### 2. Stats Collection Utility
+All paths are relative to the vault root. The handler receives the vault path from the serve command.
 
-Create `src/lib/vault-stats.ts` with a `collectVaultStats(vaultPath: string): VaultStats` function that gathers all the data by reading the filesystem:
-
-```typescript
-interface VaultStats {
-  observations: {
-    total: number;
-    firstDate: string | null;
-    latestDate: string | null;
-    avgPerDay: number;
-  };
-  reflections: {
-    total: number;
-    latestDate: string | null;
-    weeksCovered: number;
-  };
-  tasks: {
-    total: number;
-    open: number;
-    inProgress: number;
-    blocked: number;
-    completed: number;
-    completionRate: number; // 0-100
-  };
-  sessions: {
-    checkpoints: number;
-    handoffs: number;
-    lastCheckpoint: string | null;
-  };
-  documents: {
-    total: number;
-    byCategory: Record<string, number>;
-    inboxPending: number;
-  };
-  ledger: {
-    rawTranscripts: number;
-    totalLedgerSizeMB: number;
-  };
-}
+**PROPFIND response format** (XML, minimal but spec-compliant):
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<D:multistatus xmlns:D="DAV:">
+  <D:response>
+    <D:href>/webdav/tasks/my-task.md</D:href>
+    <D:propstat>
+      <D:prop>
+        <D:getcontentlength>1234</D:getcontentlength>
+        <D:getlastmodified>Fri, 14 Feb 2026 08:00:00 GMT</D:getlastmodified>
+        <D:resourcetype/>
+      </D:prop>
+      <D:status>HTTP/1.1 200 OK</D:status>
+    </D:propstat>
+  </D:response>
+</D:multistatus>
 ```
 
-**How to gather each stat:**
-- Observations: count files in `ledger/observations/` (glob `*.md`)
-- Reflections: count files in `ledger/reflections/` (glob `*.md`), parse filenames for week numbers
-- Tasks: use existing `listTasks()` from `src/lib/task-utils.ts`, count by status
-- Sessions: count files matching `*checkpoint*` and `*handoff*` patterns in `handoffs/` and root
-- Documents: count `.md` files per category directory
-- Ledger: count files in `ledger/raw/`, sum file sizes
+For directories, `<D:resourcetype><D:collection/></D:resourcetype>`.
 
-### 3. Integration into Canvas Command
+### 2. Integration with Existing Server
 
-In `src/commands/canvas.ts`, add the vault activity group to the dashboard layout. Position it as a new section (suggest: bottom of right column or a third column).
+In `src/lib/tailscale.ts` (or wherever `clawvault serve` creates the HTTP server), add routing:
+- If request path starts with `/webdav/`, route to WebDAV handler
+- Existing API routes continue to work unchanged
+- Add `DAV: 1, 2` header to OPTIONS responses on `/webdav/`
 
-Use text nodes with formatted stats:
+### 3. Security
 
-```
-**Vault Activity**
+- The server already only binds to Tailscale IP (100.x.x.x) — that's the security boundary
+- Add optional Basic Auth for WebDAV (configured in `.clawvault.json` under `webdav.auth`)
+- If no auth configured, allow unauthenticated access (Tailscale network is trusted)
+- NEVER serve `.clawvault/` internals or `.git/` via WebDAV — blocklist these paths
 
-Observations: 47 (Feb 3 → Feb 14)
-Avg: 3.9/day
+### 4. Tests (`src/lib/webdav.test.ts`)
 
-Reflections: 2
-Latest: Week 07 (2026)
-
-Tasks: 8 total
-✓ 3 done | ● 2 active | ○ 2 open | ⊘ 1 blocked
-Completion: 37%
-
-Documents: 409 across 16 categories
-Inbox: 5 pending triage
-```
-
-### 4. Tests
-
-Add tests in `src/lib/vault-stats.test.ts`:
-- Test with empty vault (all zeros)
-- Test with populated vault (mock files in temp dir)
-- Test date parsing from observation filenames
-- Test task status counting
-
-Add tests in `src/commands/canvas.test.ts` (extend existing):
-- Verify canvas output includes vault activity group
-- Verify stats are rendered correctly
-
-## File Structure
-
-```
-src/lib/vault-stats.ts          # NEW: stats collection
-src/lib/vault-stats.test.ts     # NEW: stats tests
-src/commands/canvas.ts           # MODIFY: add stats group
-src/commands/canvas.test.ts      # MODIFY: extend tests
-```
+Test each WebDAV method:
+- GET existing file → 200 + content
+- GET missing file → 404
+- PUT new file → 201, verify file exists
+- PUT existing file → 204, verify content updated
+- DELETE file → 204, verify removed
+- MKCOL → 201, verify directory created
+- PROPFIND on directory → 207 multistatus XML with children
+- PROPFIND on file → 207 with single response
+- OPTIONS → includes DAV header
+- Path traversal blocked (../../../etc/passwd → 403)
+- .clawvault/ and .git/ paths → 403
 
 ## Constraints
 
-- Zero new dependencies — use only `fs`, `path`, `glob` (already a dependency)
-- Follow existing code patterns in `src/lib/task-utils.ts` for file reading
-- Follow existing canvas layout patterns in `src/lib/canvas-layout.ts` for node creation
-- Stats collection must be synchronous (filesystem reads only, no async needed)
-- Handle missing directories gracefully (return 0/null, don't throw)
-- Do NOT modify any existing tests — only add new ones
-- Do NOT modify `src/types.ts`
-
-## Testing
-
-```bash
-npm run build    # Must succeed
-npm test         # All existing tests must still pass
-```
-
-Reference test patterns: `src/lib/task-utils.test.ts`, `src/commands/canvas.test.ts`
+- Zero new dependencies — use Node built-in `http`, `fs`, `path`
+- XML generation: string templates, no XML library needed
+- Follow existing patterns in `src/lib/tailscale.ts`
+- Must not break existing API routes or tests
+- `npm run build && npm test` must pass
 
 ## Reference Files
 
-- Canvas generation: `src/commands/canvas.ts`
-- Canvas layout utilities: `src/lib/canvas-layout.ts`
-- Task utilities (pattern to follow): `src/lib/task-utils.ts`
+- Existing server: `src/lib/tailscale.ts`
+- Existing server tests: `src/lib/tailscale.test.ts`
 - Types: `src/types.ts`
-- Ledger utilities: `src/lib/ledger.ts`
 
 ## What Done Looks Like
 
-1. `clawvault canvas` generates a dashboard that includes vault activity stats
-2. Stats are accurate (match actual file counts)
+1. `clawvault serve` serves WebDAV at `/webdav/`
+2. Obsidian Remotely Save plugin can connect and sync
 3. All existing tests pass
-4. New tests cover stats collection
-5. Build succeeds with no TypeScript errors
+4. New WebDAV tests cover all methods
+5. Path traversal is blocked
+6. Build succeeds
