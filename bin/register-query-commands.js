@@ -167,6 +167,11 @@ export function registerQueryCommands(
     .command('observe')
     .description('Observe session files and build observational memory')
     .option('--watch <path>', 'Watch session file or directory')
+    .option('--active', 'Observe active OpenClaw sessions incrementally')
+    .option('--agent <id>', 'OpenClaw agent ID (default: OPENCLAW_AGENT_ID or clawdious)')
+    .option('--min-new <bytes>', 'Override minimum new-content threshold in bytes')
+    .option('--sessions-dir <path>', 'Override OpenClaw sessions directory')
+    .option('--dry-run', 'Show active observation candidates without compressing')
     .option('--threshold <n>', 'Compression token threshold', '30000')
     .option('--reflect-threshold <n>', 'Reflection token threshold', '40000')
     .option('--model <model>', 'LLM model override')
@@ -178,15 +183,26 @@ export function registerQueryCommands(
         const { observeCommand } = await import('../dist/commands/observe.js');
         const threshold = Number.parseInt(options.threshold, 10);
         const reflectThreshold = Number.parseInt(options.reflectThreshold, 10);
+        const minNew = options.minNew === undefined
+          ? undefined
+          : Number.parseInt(options.minNew, 10);
         if (Number.isNaN(threshold) || threshold <= 0) {
           throw new Error(`Invalid --threshold value: ${options.threshold}`);
         }
         if (Number.isNaN(reflectThreshold) || reflectThreshold <= 0) {
           throw new Error(`Invalid --reflect-threshold value: ${options.reflectThreshold}`);
         }
+        if (options.minNew !== undefined && (Number.isNaN(minNew) || minNew <= 0)) {
+          throw new Error(`Invalid --min-new value: ${options.minNew}`);
+        }
 
         await observeCommand({
           watch: options.watch,
+          active: options.active,
+          agent: options.agent,
+          minNew,
+          sessionsDir: options.sessionsDir,
+          dryRun: options.dryRun,
           threshold,
           reflectThreshold,
           model: options.model,

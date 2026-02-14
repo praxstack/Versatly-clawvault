@@ -3,10 +3,11 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-const { parseSessionFileMock, processMessagesMock, flushMock } = vi.hoisted(() => ({
+const { parseSessionFileMock, processMessagesMock, flushMock, observeActiveSessionsMock } = vi.hoisted(() => ({
   parseSessionFileMock: vi.fn(),
   processMessagesMock: vi.fn(),
-  flushMock: vi.fn()
+  flushMock: vi.fn(),
+  observeActiveSessionsMock: vi.fn()
 }));
 
 vi.mock('../observer/session-parser.js', () => ({
@@ -35,6 +36,10 @@ vi.mock('../observer/watcher.js', () => ({
       return;
     }
   }
+}));
+
+vi.mock('../observer/active-session-observer.js', () => ({
+  observeActiveSessions: observeActiveSessionsMock
 }));
 
 import { observeCommand } from './observe.js';
@@ -75,5 +80,51 @@ describe('observeCommand', () => {
 
     logSpy.mockRestore();
     fs.rmSync(path.dirname(sessionPath), { recursive: true, force: true });
+  });
+
+  it('routes --active execution to active session observer', async () => {
+    observeActiveSessionsMock.mockResolvedValue({
+      agentId: 'clawdious',
+      sessionsDir: '/tmp/sessions',
+      checkedSessions: 2,
+      candidateSessions: 1,
+      observedSessions: 1,
+      cursorUpdates: 1,
+      dryRun: false,
+      totalNewBytes: 2048,
+      candidates: [
+        {
+          sessionId: 'abc',
+          sessionKey: 'agent:clawdious:main',
+          sourceLabel: 'main',
+          filePath: '/tmp/sessions/abc.jsonl',
+          fileSize: 2048,
+          startOffset: 0,
+          newBytes: 2048,
+          thresholdBytes: 1
+        }
+      ]
+    });
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    await observeCommand({
+      vaultPath: '/tmp/vault',
+      active: true,
+      agent: 'clawdious',
+      minNew: 1,
+      threshold: 10,
+      reflectThreshold: 20
+    });
+
+    expect(observeActiveSessionsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        vaultPath: path.resolve('/tmp/vault'),
+        agentId: 'clawdious',
+        minNewBytes: 1
+      })
+    );
+    expect(processMessagesMock).not.toHaveBeenCalled();
+
+    logSpy.mockRestore();
   });
 });

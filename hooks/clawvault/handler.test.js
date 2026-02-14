@@ -17,6 +17,26 @@ function makeVaultFixture() {
   return root;
 }
 
+function makeOpenClawSessionFixture(agentId, sessionId, transcriptBytes = 0) {
+  const stateRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'clawvault-openclaw-'));
+  const sessionsDir = path.join(stateRoot, 'agents', agentId, 'sessions');
+  fs.mkdirSync(sessionsDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(sessionsDir, 'sessions.json'),
+    JSON.stringify({
+      [`agent:${agentId}:main`]: {
+        sessionId,
+        updatedAt: Date.now()
+      }
+    }),
+    'utf-8'
+  );
+  const transcriptPath = path.join(sessionsDir, `${sessionId}.jsonl`);
+  const payload = transcriptBytes > 0 ? 'x'.repeat(transcriptBytes) : '';
+  fs.writeFileSync(transcriptPath, payload, 'utf-8');
+  return { stateRoot, sessionsDir, transcriptPath };
+}
+
 async function loadHandler() {
   vi.resetModules();
   const mod = await import('./handler.js');
@@ -26,6 +46,9 @@ async function loadHandler() {
 afterEach(() => {
   vi.clearAllMocks();
   delete process.env.CLAWVAULT_PATH;
+  delete process.env.OPENCLAW_STATE_DIR;
+  delete process.env.OPENCLAW_HOME;
+  delete process.env.OPENCLAW_AGENT_ID;
 });
 
 describe('clawvault hook handler', () => {
@@ -155,6 +178,65 @@ describe('clawvault hook handler', () => {
 
     const contextCall = execFileSyncMock.mock.calls.find((call) => call[1]?.[0] === 'context');
     expect(contextCall?.[1]).toEqual(expect.arrayContaining(['--profile', 'auto']));
+
+    fs.rmSync(vaultPath, { recursive: true, force: true });
+  });
+
+  it('triggers active observation on heartbeat when threshold is crossed', async () => {
+    const vaultPath = makeVaultFixture();
+    const sessionId = 'heartbeat-session-1';
+    const openClawFixture = makeOpenClawSessionFixture('clawdious', sessionId, 70 * 1024);
+    process.env.CLAWVAULT_PATH = vaultPath;
+    process.env.OPENCLAW_STATE_DIR = openClawFixture.stateRoot;
+
+    fs.mkdirSync(path.join(vaultPath, '.clawvault'), { recursive: true });
+    fs.writeFileSync(
+      path.join(vaultPath, '.clawvault', 'observe-cursors.json'),
+      JSON.stringify({
+        [sessionId]: {
+          lastObservedOffset: 0,
+          lastObservedAt: '2026-02-14T00:00:00.000Z',
+          sessionKey: 'agent:clawdious:main',
+          lastFileSize: 0
+        }
+      }),
+      'utf-8'
+    );
+
+    execFileSyncMock.mockReturnValue('');
+
+    const handler = await loadHandler();
+    await handler({
+      type: 'gateway',
+      action: 'heartbeat'
+    });
+
+    expect(execFileSyncMock).toHaveBeenCalledWith(
+      'clawvault',
+      expect.arrayContaining(['observe', '--active', '--agent', 'clawdious']),
+      expect.objectContaining({ shell: false })
+    );
+
+    fs.rmSync(vaultPath, { recursive: true, force: true });
+    fs.rmSync(openClawFixture.stateRoot, { recursive: true, force: true });
+  });
+
+  it('forces active observation flush on compaction events', async () => {
+    const vaultPath = makeVaultFixture();
+    process.env.CLAWVAULT_PATH = vaultPath;
+    execFileSyncMock.mockReturnValue('');
+
+    const handler = await loadHandler();
+    await handler({
+      eventName: 'compaction:memoryFlush',
+      sessionKey: 'agent:clawdious:main'
+    });
+
+    expect(execFileSyncMock).toHaveBeenCalledWith(
+      'clawvault',
+      expect.arrayContaining(['observe', '--active', '--min-new', '1']),
+      expect.objectContaining({ shell: false })
+    );
 
     fs.rmSync(vaultPath, { recursive: true, force: true });
   });

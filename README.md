@@ -77,6 +77,9 @@ Automatically compress conversations into prioritized observations:
 # One-shot: compress a conversation file
 clawvault observe --compress session.md
 
+# Active sessions: incremental observe from OpenClaw transcripts
+clawvault observe --active
+
 # Watch mode: monitor a directory for new session files
 clawvault observe --watch ./sessions/
 
@@ -90,6 +93,8 @@ Observations use emoji priorities:
 - 🟢 **Info** — routine updates, deployments, general progress
 
 Critical and notable observations are automatically routed to vault categories (`decisions/`, `lessons/`, `people/`, etc.). The system uses LLM compression (Gemini, Anthropic, or OpenAI) with a rule-based fallback.
+
+For long-running OpenClaw sessions, `observe --active` tracks per-session byte cursors in `.clawvault/observe-cursors.json` and only compresses new transcript deltas once threshold windows are crossed.
 
 Integrated into the sleep/wake lifecycle:
 ```bash

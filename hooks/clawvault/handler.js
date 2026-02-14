@@ -3,7 +3,9 @@
  * 
  * Provides automatic context death resilience:
  * - gateway:startup → detect context death, inject recovery info
+ * - gateway:heartbeat → cheap active-session threshold checks
  * - command:new → auto-checkpoint before session reset
+ * - compaction:memoryFlush → force active-session flush before compaction
  * - session:start → inject relevant context for first user prompt
  * 
  * SECURITY: Uses execFileSync (no shell) to prevent command injection
@@ -11,6 +13,7 @@
 
 import { execFileSync } from 'child_process';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 
 const MAX_CONTEXT_RESULTS = 4;
@@ -19,6 +22,12 @@ const MAX_CONTEXT_SNIPPET_LENGTH = 220;
 const MAX_RECAP_RESULTS = 6;
 const MAX_RECAP_SNIPPET_LENGTH = 220;
 const EVENT_NAME_SEPARATOR_RE = /[.:/]/g;
+const OBSERVE_CURSOR_FILE = 'observe-cursors.json';
+const ONE_KIB = 1024;
+const ONE_MIB = ONE_KIB * ONE_KIB;
+const SMALL_SESSION_THRESHOLD_BYTES = 50 * ONE_KIB;
+const MEDIUM_SESSION_THRESHOLD_BYTES = 150 * ONE_KIB;
+const LARGE_SESSION_THRESHOLD_BYTES = 300 * ONE_KIB;
 
 // Sanitize string for safe display (prevent prompt injection via control chars)
 function sanitizeForDisplay(str) {
@@ -72,6 +81,128 @@ function extractAgentIdFromSessionKey(sessionKey) {
   const agentId = match[1].trim();
   if (!/^[a-zA-Z0-9_-]{1,100}$/.test(agentId)) return '';
   return agentId;
+}
+
+function sanitizeAgentId(agentId) {
+  if (typeof agentId !== 'string') return '';
+  const normalized = agentId.trim();
+  if (!/^[a-zA-Z0-9_-]{1,100}$/.test(normalized)) return '';
+  return normalized;
+}
+
+function normalizeAbsoluteEnvPath(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const resolved = path.resolve(trimmed);
+  if (!path.isAbsolute(resolved)) return null;
+  return resolved;
+}
+
+function getOpenClawAgentsDir() {
+  const stateDir = normalizeAbsoluteEnvPath(process.env.OPENCLAW_STATE_DIR);
+  if (stateDir) {
+    return path.join(stateDir, 'agents');
+  }
+
+  const openClawHome = normalizeAbsoluteEnvPath(process.env.OPENCLAW_HOME);
+  if (openClawHome) {
+    return path.join(openClawHome, 'agents');
+  }
+
+  return path.join(os.homedir(), '.openclaw', 'agents');
+}
+
+function getObserveCursorPath(vaultPath) {
+  return path.join(vaultPath, '.clawvault', OBSERVE_CURSOR_FILE);
+}
+
+function loadObserveCursors(vaultPath) {
+  const cursorPath = getObserveCursorPath(vaultPath);
+  if (!fs.existsSync(cursorPath)) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(fs.readFileSync(cursorPath, 'utf-8'));
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {};
+    }
+    return parsed;
+  } catch {
+    return {};
+  }
+}
+
+function getScaledObservationThresholdBytes(fileSizeBytes) {
+  if (!Number.isFinite(fileSizeBytes) || fileSizeBytes <= 0) {
+    return SMALL_SESSION_THRESHOLD_BYTES;
+  }
+  if (fileSizeBytes < ONE_MIB) {
+    return SMALL_SESSION_THRESHOLD_BYTES;
+  }
+  if (fileSizeBytes <= 5 * ONE_MIB) {
+    return MEDIUM_SESSION_THRESHOLD_BYTES;
+  }
+  return LARGE_SESSION_THRESHOLD_BYTES;
+}
+
+function parseSessionIndex(agentId) {
+  const sessionsDir = path.join(getOpenClawAgentsDir(), agentId, 'sessions');
+  const sessionsJsonPath = path.join(sessionsDir, 'sessions.json');
+  if (!fs.existsSync(sessionsJsonPath)) {
+    return { sessionsDir, index: {} };
+  }
+
+  try {
+    const parsed = JSON.parse(fs.readFileSync(sessionsJsonPath, 'utf-8'));
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { sessionsDir, index: {} };
+    }
+    return { sessionsDir, index: parsed };
+  } catch {
+    return { sessionsDir, index: {} };
+  }
+}
+
+function shouldObserveActiveSessions(vaultPath, agentId) {
+  const cursors = loadObserveCursors(vaultPath);
+  const { sessionsDir, index } = parseSessionIndex(agentId);
+  const entries = Object.entries(index);
+  if (entries.length === 0) {
+    return false;
+  }
+
+  for (const [sessionKey, value] of entries) {
+    if (!value || typeof value !== 'object') continue;
+    const sessionId = typeof value.sessionId === 'string' ? value.sessionId.trim() : '';
+    if (!/^[a-zA-Z0-9._-]{1,200}$/.test(sessionId)) continue;
+
+    const filePath = path.join(sessionsDir, `${sessionId}.jsonl`);
+    let stat;
+    try {
+      stat = fs.statSync(filePath);
+    } catch {
+      continue;
+    }
+    if (!stat.isFile()) continue;
+
+    const fileSize = stat.size;
+    const cursorEntry = cursors[sessionId];
+    const previousOffset = Number.isFinite(cursorEntry?.lastObservedOffset)
+      ? Math.max(0, Number(cursorEntry.lastObservedOffset))
+      : 0;
+    const startOffset = previousOffset <= fileSize ? previousOffset : 0;
+    const newBytes = Math.max(0, fileSize - startOffset);
+    const thresholdBytes = getScaledObservationThresholdBytes(fileSize);
+
+    if (newBytes >= thresholdBytes) {
+      console.log(`[clawvault] Active observe trigger: ${sessionKey} (+${newBytes}B >= ${thresholdBytes}B)`);
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function extractTextFromMessage(message) {
@@ -268,6 +399,26 @@ function eventMatches(event, type, action) {
   return false;
 }
 
+function eventIncludesToken(event, token) {
+  const normalizedToken = normalizeEventToken(token);
+  if (!normalizedToken) return false;
+
+  const values = [
+    event?.type,
+    event?.action,
+    event?.event,
+    event?.name,
+    event?.hook,
+    event?.trigger,
+    event?.eventName
+  ];
+
+  return values
+    .map((value) => normalizeEventToken(value))
+    .filter(Boolean)
+    .some((value) => value.includes(normalizedToken));
+}
+
 // Validate vault path - must be absolute and exist
 function validateVaultPath(vaultPath) {
   if (!vaultPath || typeof vaultPath !== 'string') return null;
@@ -320,13 +471,14 @@ function findVaultPath() {
 }
 
 // Run clawvault command safely (no shell)
-function runClawvault(args) {
+function runClawvault(args, options = {}) {
+  const timeoutMs = Number.isFinite(options.timeoutMs) ? Math.max(1000, Number(options.timeoutMs)) : 15000;
   try {
     // Use execFileSync to avoid shell injection
     // Arguments are passed as array, not interpolated into shell
     const output = execFileSync('clawvault', args, {
       encoding: 'utf-8',
-      timeout: 15000,
+      timeout: timeoutMs,
       stdio: ['pipe', 'pipe', 'pipe'],
       // Explicitly no shell
       shell: false
@@ -364,6 +516,32 @@ function parseRecoveryOutput(output) {
   }
   
   return { hadDeath, workingOn };
+}
+
+function resolveAgentIdForEvent(event) {
+  const fromSessionKey = extractAgentIdFromSessionKey(extractSessionKey(event));
+  if (fromSessionKey) return fromSessionKey;
+
+  const fromEnv = sanitizeAgentId(process.env.OPENCLAW_AGENT_ID);
+  if (fromEnv) return fromEnv;
+
+  return 'clawdious';
+}
+
+function runActiveObservation(vaultPath, agentId, options = {}) {
+  const args = ['observe', '--active', '--agent', agentId, '-v', vaultPath];
+  if (Number.isFinite(options.minNewBytes) && Number(options.minNewBytes) > 0) {
+    args.push('--min-new', String(Math.floor(Number(options.minNewBytes))));
+  }
+
+  const result = runClawvault(args, { timeoutMs: 120000 });
+  if (!result.success) {
+    console.warn(`[clawvault] Active observation failed (${options.reason || 'unknown reason'})`);
+    return false;
+  }
+
+  console.log(`[clawvault] Active observation complete (${options.reason || 'triggered'})`);
+  return true;
 }
 
 // Handle gateway startup - check for context death
@@ -436,6 +614,12 @@ async function handleNew(event) {
   } else {
     console.warn('[clawvault] Auto-checkpoint failed');
   }
+
+  const agentId = resolveAgentIdForEvent(event);
+  runActiveObservation(vaultPath, agentId, {
+    minNewBytes: 1,
+    reason: 'command:new flush'
+  });
 }
 
 // Handle session start - inject dynamic context for first prompt
@@ -500,11 +684,63 @@ async function handleSessionStart(event) {
   }
 }
 
+// Handle heartbeat events - cheap stat-based trigger for active observation
+async function handleHeartbeat(event) {
+  const vaultPath = findVaultPath();
+  if (!vaultPath) {
+    console.log('[clawvault] No vault found, skipping heartbeat observation check');
+    return;
+  }
+
+  const agentId = resolveAgentIdForEvent(event);
+  if (!shouldObserveActiveSessions(vaultPath, agentId)) {
+    console.log('[clawvault] Heartbeat: no sessions crossed active-observe threshold');
+    return;
+  }
+
+  runActiveObservation(vaultPath, agentId, { reason: 'heartbeat threshold crossed' });
+}
+
+// Handle context compaction - force flush any pending session deltas
+async function handleContextCompaction(event) {
+  const vaultPath = findVaultPath();
+  if (!vaultPath) {
+    console.log('[clawvault] No vault found, skipping compaction observation');
+    return;
+  }
+
+  const agentId = resolveAgentIdForEvent(event);
+  runActiveObservation(vaultPath, agentId, {
+    minNewBytes: 1,
+    reason: 'context compaction'
+  });
+}
+
 // Main handler - route events
 const handler = async (event) => {
   try {
     if (eventMatches(event, 'gateway', 'startup')) {
       await handleStartup(event);
+      return;
+    }
+
+    if (
+      eventMatches(event, 'gateway', 'heartbeat')
+      || eventMatches(event, 'session', 'heartbeat')
+      || eventIncludesToken(event, 'heartbeat')
+    ) {
+      await handleHeartbeat(event);
+      return;
+    }
+
+    if (
+      eventMatches(event, 'compaction', 'memoryflush')
+      || eventMatches(event, 'context', 'compaction')
+      || eventMatches(event, 'context', 'compact')
+      || eventIncludesToken(event, 'compaction')
+      || eventIncludesToken(event, 'memoryflush')
+    ) {
+      await handleContextCompaction(event);
       return;
     }
 
