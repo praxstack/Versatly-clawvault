@@ -17,7 +17,7 @@ function makeTempVault(): string {
 }
 
 function writeObservation(vaultPath: string, fileName: string, content: string): void {
-  const observationsDir = path.join(vaultPath, 'observations');
+  const observationsDir = path.join(vaultPath, 'ledger', 'observations', '2026', '02');
   fs.mkdirSync(observationsDir, { recursive: true });
   fs.writeFileSync(path.join(observationsDir, fileName), content, 'utf-8');
 }
@@ -32,9 +32,9 @@ afterEach(() => {
 describe('observation-reader', () => {
   it('reads only most recent observation files for the requested day count', () => {
     const vaultPath = makeTempVault();
-    writeObservation(vaultPath, '2026-02-09.md', '## 2026-02-09\n\n🟢 10:00 old');
-    writeObservation(vaultPath, '2026-02-10.md', '## 2026-02-10\n\n🟡 10:00 middle');
-    writeObservation(vaultPath, '2026-02-11.md', '## 2026-02-11\n\n🔴 10:00 newest');
+    writeObservation(vaultPath, '09.md', '## 2026-02-09\n\n- [fact|c=0.70|i=0.20] 10:00 old');
+    writeObservation(vaultPath, '10.md', '## 2026-02-10\n\n- [project|c=0.78|i=0.55] 10:00 middle');
+    writeObservation(vaultPath, '11.md', '## 2026-02-11\n\n- [decision|c=0.92|i=0.90] 10:00 newest');
 
     const markdown = readObservations(vaultPath, 2);
     expect(markdown).toContain('2026-02-11');
@@ -51,30 +51,42 @@ describe('observation-reader', () => {
     const markdown = [
       '## 2026-02-11',
       '',
-      '🔴 09:15 Chose PostgreSQL for reliability',
-      '🟡 10:20 Noted migration pattern',
+      '- [decision|c=0.95|i=0.90] 09:15 Chose PostgreSQL for reliability',
+      '- [lesson|c=0.80|i=0.55] 10:20 Noted migration pattern',
       '',
       '## 2026-02-10',
       '',
-      '🟢 08:00 General note'
+      '- [fact|c=0.70|i=0.20] 08:00 General note'
     ].join('\n');
 
     const lines = parseObservationLines(markdown);
     expect(lines).toEqual([
       {
-        priority: '🔴',
+        type: 'decision',
+        confidence: 0.95,
+        importance: 0.9,
         content: '09:15 Chose PostgreSQL for reliability',
-        date: '2026-02-11'
+        date: '2026-02-11',
+        format: 'scored',
+        priority: undefined
       },
       {
-        priority: '🟡',
+        type: 'lesson',
+        confidence: 0.8,
+        importance: 0.55,
         content: '10:20 Noted migration pattern',
-        date: '2026-02-11'
+        date: '2026-02-11',
+        format: 'scored',
+        priority: undefined
       },
       {
-        priority: '🟢',
+        type: 'fact',
+        confidence: 0.7,
+        importance: 0.2,
         content: '08:00 General note',
-        date: '2026-02-10'
+        date: '2026-02-10',
+        format: 'scored',
+        priority: undefined
       }
     ]);
   });
@@ -83,14 +95,14 @@ describe('observation-reader', () => {
     const markdown = [
       '## 2026-02-11',
       '',
-      '🔴 09:15 Critical decision',
-      '🟡 10:20 Notable pattern',
-      '🟢 11:30 Routine update'
+      '- [decision|c=0.95|i=0.90] 09:15 Critical decision',
+      '- [lesson|c=0.80|i=0.55] 10:20 Notable pattern',
+      '- [fact|c=0.70|i=0.20] 11:30 Routine update'
     ].join('\n');
 
     const criticalAndNotable = filterByPriority(markdown, '🟡');
-    expect(criticalAndNotable).toContain('🔴 09:15 Critical decision');
-    expect(criticalAndNotable).toContain('🟡 10:20 Notable pattern');
-    expect(criticalAndNotable).not.toContain('🟢 11:30 Routine update');
+    expect(criticalAndNotable).toContain('09:15 Critical decision');
+    expect(criticalAndNotable).toContain('10:20 Notable pattern');
+    expect(criticalAndNotable).not.toContain('11:30 Routine update');
   });
 });

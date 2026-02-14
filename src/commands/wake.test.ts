@@ -100,14 +100,13 @@ describe('wake', () => {
 
     const result = await wake({ vaultPath, brief: true, handoffLimit: 2 });
 
-    expect(result.observations).toContain('🔴 09:00 Database migration failed');
-    expect(result.observations).toContain('🟡 10:00 User prefers npm scripts');
-    expect(result.observations).toContain('🟡 17:10 Decided to split observer parser');
-    expect(result.observations).not.toContain('🟢');
+    expect(result.observations).toContain('Database migration failed');
+    expect(result.observations).toContain('User prefers npm scripts');
+    expect(result.observations).toContain('Decided to split observer parser');
     expect(result.recapMarkdown).toContain('## Recent Observations');
-    expect(result.recapMarkdown).toContain('🔴 09:00 Database migration failed');
+    expect(result.recapMarkdown).toContain('Database migration failed');
     expect(result.summary).toContain('Continue observer integration');
-    expect(result.summary).toContain('🔴 09:00 Database migration failed');
+    expect(result.summary).toContain('Database migration failed');
 
     fs.rmSync(vaultPath, { recursive: true, force: true });
   });
@@ -133,7 +132,7 @@ describe('wake', () => {
 
     const result = await wake({ vaultPath });
 
-    expect(result.observations).toContain('No critical or notable observations');
+    expect(result.observations).toContain('No structural or potentially important observations');
     expect(result.recapMarkdown).toContain('## Recent Observations');
     expect(result.summary).toBe('Core API');
 
@@ -171,11 +170,9 @@ describe('wake', () => {
     formatRecapMock.mockReturnValue('# Who I Was\n\nBase recap');
 
     const result = await wake({ vaultPath, brief: true, handoffLimit: 2 });
-    const renderedRed = (result.observations.match(/^- 🔴 /gm) ?? []).length;
-    const renderedYellow = (result.observations.match(/^- 🟡 /gm) ?? []).length;
+    const rendered = (result.observations.match(/^- \[/gm) ?? []).length;
 
-    expect(renderedRed).toBe(20);
-    expect(renderedYellow).toBe(10);
+    expect(rendered).toBe(30);
     expect(result.observations).toContain('... and 10 more observations (use `clawvault context` to query)');
 
     fs.rmSync(vaultPath, { recursive: true, force: true });

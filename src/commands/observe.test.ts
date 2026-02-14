@@ -16,8 +16,8 @@ vi.mock('../observer/session-parser.js', () => ({
 
 vi.mock('../observer/observer.js', () => ({
   Observer: class {
-    async processMessages(messages: string[]): Promise<void> {
-      await processMessagesMock(messages);
+    async processMessages(messages: string[], options?: unknown): Promise<void> {
+      await processMessagesMock(messages, options);
     }
 
     async flush(): Promise<{ observations: string; routingSummary: string }> {
@@ -75,7 +75,13 @@ describe('observeCommand', () => {
     });
 
     expect(parseSessionFileMock).toHaveBeenCalledWith(path.resolve(sessionPath));
-    expect(processMessagesMock).toHaveBeenCalledWith(['user: line one', 'assistant: line two']);
+    expect(processMessagesMock).toHaveBeenCalledWith(
+      ['user: line one', 'assistant: line two'],
+      expect.objectContaining({
+        source: 'openclaw',
+        transcriptId: path.basename(path.resolve(sessionPath))
+      })
+    );
     expect(flushMock).toHaveBeenCalledTimes(1);
 
     logSpy.mockRestore();

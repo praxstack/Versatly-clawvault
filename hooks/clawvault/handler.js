@@ -544,6 +544,49 @@ function runActiveObservation(vaultPath, agentId, options = {}) {
   return true;
 }
 
+function extractEventTimestamp(event) {
+  const candidates = [
+    event?.timestamp,
+    event?.scheduledAt,
+    event?.time,
+    event?.context?.timestamp,
+    event?.context?.scheduledAt
+  ];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const parsed = new Date(candidate);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed;
+    }
+  }
+  return null;
+}
+
+function isSundayMidnightUtc(date) {
+  return date.getUTCDay() === 0 && date.getUTCHours() === 0 && date.getUTCMinutes() === 0;
+}
+
+async function handleWeeklyReflect(event) {
+  const vaultPath = findVaultPath();
+  if (!vaultPath) {
+    console.log('[clawvault] No vault found, skipping weekly reflection');
+    return;
+  }
+
+  const timestamp = extractEventTimestamp(event) || new Date();
+  if (!isSundayMidnightUtc(timestamp)) {
+    console.log('[clawvault] Weekly reflect skipped (not Sunday midnight UTC)');
+    return;
+  }
+
+  const result = runClawvault(['reflect', '-v', vaultPath], { timeoutMs: 120000 });
+  if (!result.success) {
+    console.warn('[clawvault] Weekly reflection failed');
+    return;
+  }
+  console.log('[clawvault] Weekly reflection complete');
+}
+
 // Handle gateway startup - check for context death
 async function handleStartup(event) {
   const vaultPath = findVaultPath();
@@ -721,6 +764,14 @@ const handler = async (event) => {
   try {
     if (eventMatches(event, 'gateway', 'startup')) {
       await handleStartup(event);
+      return;
+    }
+
+    if (
+      eventMatches(event, 'cron', 'weekly')
+      || eventIncludesToken(event, 'cron:weekly')
+    ) {
+      await handleWeeklyReflect(event);
       return;
     }
 

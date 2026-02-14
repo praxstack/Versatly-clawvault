@@ -134,4 +134,115 @@ export function registerMaintenanceCommands(program, { chalk }) {
         process.exit(1);
       }
     });
+
+  // === REBUILD ===
+  program
+    .command('rebuild')
+    .description('Rebuild observations from ledger/raw transcripts')
+    .option('--from <date>', 'Start date (YYYY-MM-DD)')
+    .option('--to <date>', 'End date (YYYY-MM-DD)')
+    .option('-v, --vault <path>', 'Vault path')
+    .action(async (options) => {
+      try {
+        const { rebuildCommand } = await import('../dist/commands/rebuild.js');
+        await rebuildCommand({
+          vaultPath: options.vault,
+          from: options.from,
+          to: options.to
+        });
+      } catch (err) {
+        console.error(chalk.red(`Error: ${err.message}`));
+        process.exit(1);
+      }
+    });
+
+  // === ARCHIVE ===
+  program
+    .command('archive')
+    .description('Archive old observations into ledger/archive')
+    .option('--older-than <days>', 'Archive observations older than this many days', '14')
+    .option('--dry-run', 'Show archive candidates without writing')
+    .option('-v, --vault <path>', 'Vault path')
+    .action(async (options) => {
+      try {
+        const { archiveCommand } = await import('../dist/commands/archive.js');
+        const olderThan = Number.parseInt(options.olderThan, 10);
+        if (!Number.isFinite(olderThan) || olderThan <= 0) {
+          throw new Error(`Invalid --older-than value: ${options.olderThan}`);
+        }
+        await archiveCommand({
+          vaultPath: options.vault,
+          olderThan,
+          dryRun: options.dryRun
+        });
+      } catch (err) {
+        console.error(chalk.red(`Error: ${err.message}`));
+        process.exit(1);
+      }
+    });
+
+  // === MIGRATE-OBSERVATIONS ===
+  program
+    .command('migrate-observations')
+    .description('Convert legacy emoji observations to scored format')
+    .option('--dry-run', 'Show migration candidates without writing')
+    .option('-v, --vault <path>', 'Vault path')
+    .action(async (options) => {
+      try {
+        const { migrateObservationsCommand } = await import('../dist/commands/migrate-observations.js');
+        await migrateObservationsCommand({
+          vaultPath: options.vault,
+          dryRun: options.dryRun
+        });
+      } catch (err) {
+        console.error(chalk.red(`Error: ${err.message}`));
+        process.exit(1);
+      }
+    });
+
+  // === REPLAY ===
+  program
+    .command('replay')
+    .description('Replay historical conversation exports through observe pipeline')
+    .requiredOption('--source <platform>', 'Source platform (chatgpt|claude|opencode|openclaw)')
+    .requiredOption('--input <path>', 'Input export file or directory')
+    .option('--from <date>', 'Start date (YYYY-MM-DD)')
+    .option('--to <date>', 'End date (YYYY-MM-DD)')
+    .option('--dry-run', 'Preview replay candidates without writing')
+    .option('-v, --vault <path>', 'Vault path')
+    .action(async (options) => {
+      try {
+        const { replayCommand } = await import('../dist/commands/replay.js');
+        await replayCommand({
+          source: options.source,
+          inputPath: options.input,
+          from: options.from,
+          to: options.to,
+          dryRun: options.dryRun,
+          vaultPath: options.vault
+        });
+      } catch (err) {
+        console.error(chalk.red(`Error: ${err.message}`));
+        process.exit(1);
+      }
+    });
+
+  // === SYNC-BD ===
+  program
+    .command('sync-bd')
+    .description('Sync active Beads tasks into views/now.md (optional)')
+    .option('--dry-run', 'Show sync output without writing')
+    .option('-v, --vault <path>', 'Vault path')
+    .action(async (options) => {
+      try {
+        const { syncBdCommand } = await import('../dist/commands/sync-bd.js');
+        await syncBdCommand({
+          vaultPath: options.vault,
+          dryRun: options.dryRun
+        });
+      } catch (err) {
+        console.error(chalk.red(`Error: ${err.message}`));
+        process.exit(1);
+      }
+    });
 }

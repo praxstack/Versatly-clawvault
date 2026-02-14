@@ -33,6 +33,7 @@ export interface ContextOptions {
   includeObservations?: boolean;
   budget?: number;
   profile?: ContextProfileOption;
+  maxHops?: number;
 }
 
 export interface ContextEntry {
@@ -103,25 +104,25 @@ interface PrioritizedContextItem {
 }
 
 interface ContextProfileOrdering {
-  order: Array<'red' | 'daily' | 'search' | 'graph' | 'yellow' | 'green'>;
+  order: Array<'structural' | 'daily' | 'search' | 'graph' | 'potential' | 'contextual'>;
   caps: Partial<Record<ContextEntry['source'], number>>;
 }
 
 const PROFILE_ORDERING: Record<ContextProfile, ContextProfileOrdering> = {
   default: {
-    order: ['red', 'daily', 'search', 'graph', 'yellow', 'green'],
+    order: ['structural', 'daily', 'search', 'graph', 'potential', 'contextual'],
     caps: {}
   },
   planning: {
-    order: ['search', 'graph', 'red', 'yellow', 'daily', 'green'],
+    order: ['search', 'graph', 'structural', 'potential', 'daily', 'contextual'],
     caps: { observation: 12, graph: 12 }
   },
   incident: {
-    order: ['red', 'search', 'yellow', 'daily', 'graph', 'green'],
+    order: ['structural', 'search', 'potential', 'daily', 'graph', 'contextual'],
     caps: { observation: 20, graph: 8 }
   },
   handoff: {
-    order: ['daily', 'red', 'yellow', 'search', 'graph', 'green'],
+    order: ['daily', 'structural', 'potential', 'search', 'graph', 'contextual'],
     caps: { 'daily-note': 2, observation: 15 }
   }
 };
@@ -199,10 +200,18 @@ function asDate(value: string | null, fallback: Date = new Date(0)): Date {
   return Number.isNaN(parsed.getTime()) ? fallback : parsed;
 }
 
-function observationPriorityToRank(priority: string): number {
-  if (priority === '🔴') return 1;
-  if (priority === '🟡') return 4;
+function observationImportanceToRank(importance: number): number {
+  if (importance >= 0.8) return 1;
+  if (importance >= 0.4) return 4;
   return 5;
+}
+
+function toLedgerObservationPath(date: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return `ledger/observations/${date}.md`;
+  }
+  const [year, month, day] = date.split('-');
+  return `ledger/observations/${year}/${month}/${day}.md`;
 }
 
 function isLikelyDailyNote(document: Document): boolean {
@@ -300,7 +309,7 @@ function buildObservationContextItems(vaultPath: string, queryKeywords: string[]
   const items: PrioritizedContextItem[] = [];
 
   for (const [index, observation] of parsed.entries()) {
-    const priority = observationPriorityToRank(observation.priority);
+    const priority = observationImportanceToRank(observation.importance);
     const modifiedDate = asDate(observation.date, new Date());
     const date = observation.date || modifiedDate.toISOString().slice(0, 10);
     const snippet = estimateSnippet(observation.content);
@@ -308,16 +317,16 @@ function buildObservationContextItems(vaultPath: string, queryKeywords: string[]
     items.push({
       priority,
       entry: {
-        title: `${observation.priority} observation (${date}) #${index + 1}`,
-        path: `observations/${date}.md`,
+        title: `[${observation.type}|i=${observation.importance.toFixed(2)}] observation (${date}) #${index + 1}`,
+        path: toLedgerObservationPath(date),
         category: 'observations',
         score: computeKeywordOverlapScore(queryKeywords, observation.content),
         snippet,
         modified: modifiedDate.toISOString(),
         age: formatRelativeAge(modifiedDate),
         source: 'observation',
-        signals: ['observation_priority', 'keyword_overlap'],
-        rationale: `Observation priority ${observation.priority} matched task keywords.`
+        signals: ['observation_importance', `type:${observation.type}`, 'keyword_overlap'],
+        rationale: `Observation type ${observation.type} with importance ${observation.importance.toFixed(2)} matched task keywords.`
       }
     });
   }
@@ -380,9 +389,15 @@ function buildGraphContextItems(params: {
   documents: Document[];
   searchItems: PrioritizedContextItem[];
   limit: number;
+  maxHops: number;
 }): PrioritizedContextItem[] {
-  const { graph, vaultPath, documents, searchItems, limit } = params;
-  if (searchItems.length === 0 || graph.nodes.length === 0 || graph.edges.length === 0) {
+  const { graph, vaultPath, documents, searchItems, limit, maxHops } = params;
+  if (
+    searchItems.length === 0
+    || graph.nodes.length === 0
+    || graph.edges.length === 0
+    || maxHops <= 0
+  ) {
     return [];
   }
 
@@ -403,45 +418,68 @@ function buildGraphContextItems(params: {
   const candidates = new Map<string, PrioritizedContextItem>();
 
   for (const anchor of anchors) {
-    const connectedEdges = adjacency.get(anchor.nodeId) ?? [];
-    for (const edge of connectedEdges) {
-      const neighborId = edge.source === anchor.nodeId ? edge.target : edge.source;
-      if (neighborId === anchor.nodeId) continue;
+    const visited = new Set<string>([anchor.nodeId]);
+    const queue: Array<{ nodeId: string; hop: number }> = [{ nodeId: anchor.nodeId, hop: 0 }];
 
-      const neighborNode = graphNodeById.get(neighborId);
-      if (!neighborNode || neighborNode.type === 'tag') continue;
+    while (queue.length > 0) {
+      const current = queue.shift() as { nodeId: string; hop: number };
+      if (current.hop >= maxHops) {
+        continue;
+      }
 
-      const neighborDoc = docByNodeId.get(neighborId);
-      const neighborPath = neighborDoc
-        ? path.relative(vaultPath, neighborDoc.path).split(path.sep).join('/')
-        : (neighborNode.path ?? neighborNode.id);
-      const neighborTitle = neighborDoc?.title ?? neighborNode.title;
-      const modifiedAt = neighborDoc?.modified ?? (neighborNode.modifiedAt ? new Date(neighborNode.modifiedAt) : new Date(0));
-      const snippet = neighborDoc?.content
-        ? estimateSnippet(neighborDoc.content)
-        : `Connected via ${edge.type}${edge.label ? ` (${edge.label})` : ''}.`;
-      const score = Math.max(0.05, Math.min(1, anchor.item.entry.score * edgeWeight(edge)));
-      const key = `${neighborId}|${edge.type}|${edge.label ?? ''}`;
-      const existing = candidates.get(key);
-
-      const candidate: PrioritizedContextItem = {
-        priority: 3,
-        entry: {
-          title: neighborTitle,
-          path: neighborPath,
-          category: neighborDoc?.category ?? neighborNode.category,
-          score,
-          snippet,
-          modified: modifiedAt.toISOString(),
-          age: formatRelativeAge(modifiedAt),
-          source: 'graph',
-          signals: ['graph_neighbor', `edge:${edge.type}`],
-          rationale: `Connected to "${anchor.item.entry.title}" via ${edge.type}${edge.label ? ` (${edge.label})` : ''}.`
+      const connectedEdges = adjacency.get(current.nodeId) ?? [];
+      for (const edge of connectedEdges) {
+        const neighborId = edge.source === current.nodeId ? edge.target : edge.source;
+        if (visited.has(neighborId)) {
+          continue;
         }
-      };
+        visited.add(neighborId);
+        queue.push({ nodeId: neighborId, hop: current.hop + 1 });
 
-      if (!existing || existing.entry.score < candidate.entry.score) {
-        candidates.set(key, candidate);
+        if (neighborId === anchor.nodeId) continue;
+
+        const neighborNode = graphNodeById.get(neighborId);
+        if (
+          !neighborNode
+          || neighborNode.type === 'tag'
+          || neighborNode.type === 'unresolved'
+          || neighborNode.missing === true
+        ) {
+          continue;
+        }
+
+        const neighborDoc = docByNodeId.get(neighborId);
+        if (!neighborDoc) {
+          continue;
+        }
+
+        const neighborPath = path.relative(vaultPath, neighborDoc.path).split(path.sep).join('/');
+        const modifiedAt = neighborDoc.modified;
+        const snippet = estimateSnippet(neighborDoc.content);
+        const hopPenalty = Math.pow(0.85, Math.max(0, current.hop));
+        const score = Math.max(0.05, Math.min(1, anchor.item.entry.score * edgeWeight(edge) * hopPenalty));
+        const key = neighborId;
+        const existing = candidates.get(key);
+
+        const candidate: PrioritizedContextItem = {
+          priority: 3,
+          entry: {
+            title: neighborDoc.title,
+            path: neighborPath,
+            category: neighborDoc.category,
+            score,
+            snippet,
+            modified: modifiedAt.toISOString(),
+            age: formatRelativeAge(modifiedAt),
+            source: 'graph',
+            signals: ['graph_neighbor', `edge:${edge.type}`, `hop:${current.hop + 1}`],
+            rationale: `Connected to "${anchor.item.entry.title}" within ${current.hop + 1} hop(s) via ${edge.type}${edge.label ? ` (${edge.label})` : ''}.`
+          }
+        };
+
+        if (!existing || existing.entry.score < candidate.entry.score) {
+          candidates.set(key, candidate);
+        }
       }
     }
   }
@@ -556,6 +594,7 @@ export async function buildContext(task: string, options: ContextOptions): Promi
   const limit = Math.max(1, options.limit ?? DEFAULT_LIMIT);
   const recent = options.recent ?? true;
   const includeObservations = options.includeObservations ?? true;
+  const maxHops = Math.max(1, Math.floor(options.maxHops ?? 2));
   const profile = resolveContextProfile(options.profile, normalizedTask);
   const queryKeywords = extractKeywords(normalizedTask);
   const allDocuments = await vault.list();
@@ -576,25 +615,26 @@ export async function buildContext(task: string, options: ContextOptions): Promi
     vaultPath: vault.getPath(),
     documents: allDocuments,
     searchItems,
-    limit
+    limit,
+    maxHops
   });
 
   const byScoreDesc = (left: PrioritizedContextItem, right: PrioritizedContextItem): number =>
     right.entry.score - left.entry.score;
 
-  const redObservations = observationItems.filter((item) => item.priority === 1).sort(byScoreDesc);
-  const yellowObservations = observationItems.filter((item) => item.priority === 4).sort(byScoreDesc);
-  const greenObservations = observationItems.filter((item) => item.priority === 5).sort(byScoreDesc);
+  const structuralObservations = observationItems.filter((item) => item.priority === 1).sort(byScoreDesc);
+  const potentialObservations = observationItems.filter((item) => item.priority === 4).sort(byScoreDesc);
+  const contextualObservations = observationItems.filter((item) => item.priority === 5).sort(byScoreDesc);
   const sortedDailyItems = [...dailyItems].sort(byScoreDesc);
   const sortedSearchItems = [...searchItems].sort(byScoreDesc);
   const sortedGraphItems = [...graphItems].sort(byScoreDesc);
-  const grouped: Record<'red' | 'daily' | 'search' | 'graph' | 'yellow' | 'green', PrioritizedContextItem[]> = {
-    red: redObservations,
+  const grouped: Record<'structural' | 'daily' | 'search' | 'graph' | 'potential' | 'contextual', PrioritizedContextItem[]> = {
+    structural: structuralObservations,
     daily: sortedDailyItems,
     search: sortedSearchItems,
     graph: sortedGraphItems,
-    yellow: yellowObservations,
-    green: greenObservations
+    potential: potentialObservations,
+    contextual: contextualObservations
   };
   const ordering = PROFILE_ORDERING[profile];
   const ordered = dedupeContextItems(
@@ -658,6 +698,7 @@ export function registerContextCommand(program: Command): void {
     .option('--include-observations', 'Include observation memories in output', true)
     .option('--budget <number>', 'Optional token budget for assembled context')
     .option('--profile <profile>', 'Context profile (default|planning|incident|handoff|auto)', 'default')
+    .option('--max-hops <n>', 'Maximum graph expansion hops', '2')
     .option('-v, --vault <path>', 'Vault path')
     .action(async (
       task: string,
@@ -668,6 +709,7 @@ export function registerContextCommand(program: Command): void {
         includeObservations?: boolean;
         budget?: string;
         profile?: string;
+        maxHops: string;
         vault?: string;
       }
     ) => {
@@ -676,6 +718,7 @@ export function registerContextCommand(program: Command): void {
         ? parsePositiveInteger(rawOptions.budget, 'budget')
         : undefined;
       const limit = parsePositiveInteger(rawOptions.limit, 'limit');
+      const maxHops = parsePositiveInteger(rawOptions.maxHops, 'max-hops');
       const vaultPath = rawOptions.vault
         ?? process.env.CLAWVAULT_PATH
         ?? process.cwd();
@@ -687,7 +730,8 @@ export function registerContextCommand(program: Command): void {
         recent: rawOptions.recent ?? true,
         includeObservations: rawOptions.includeObservations ?? true,
         budget,
-        profile: normalizeContextProfileInput(rawOptions.profile)
+        profile: normalizeContextProfileInput(rawOptions.profile),
+        maxHops
       });
     });
 }

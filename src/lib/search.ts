@@ -279,6 +279,13 @@ export class SearchEngine {
       const relativePath = this.vaultPath 
         ? path.relative(this.vaultPath, filePath)
         : filePath;
+      const normalizedRelativePath = relativePath.split(path.sep).join('/');
+      if (
+        normalizedRelativePath.startsWith('ledger/archive/')
+        || normalizedRelativePath.includes('/ledger/archive/')
+      ) {
+        continue;
+      }
       
       // Get document from cache or create minimal one
       const docId = relativePath.replace(/\.md$/, '');

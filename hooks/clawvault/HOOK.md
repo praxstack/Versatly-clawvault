@@ -4,7 +4,7 @@ description: "Context resilience - recovery detection, auto-checkpoint, and sess
 metadata:
   openclaw:
     emoji: "🐘"
-    events: ["gateway:startup", "gateway:heartbeat", "command:new", "session:start", "compaction:memoryFlush"]
+    events: ["gateway:startup", "gateway:heartbeat", "command:new", "session:start", "compaction:memoryFlush", "cron.weekly"]
     requires:
       bins: ["clawvault"]
 ---
@@ -18,6 +18,7 @@ Integrates ClawVault's context death resilience into OpenClaw:
 - **On /new command**: Auto-checkpoints before session reset
 - **On context compaction**: Forces incremental observation flush before context is lost
 - **On session start**: Injects relevant vault context for the initial prompt
+- **On weekly cron**: Runs `clawvault reflect` every Sunday midnight (UTC)
 
 ## Installation
 
@@ -63,7 +64,7 @@ Injection format:
 
 ### Event Compatibility
 
-The hook accepts canonical OpenClaw events (`gateway:startup`, `gateway:heartbeat`, `command:new`, `session:start`, `compaction:memoryFlush`) and tolerates alias payload shapes (`event`, `eventName`, `name`, `hook`, `trigger`) to remain robust across runtime wrappers.
+The hook accepts canonical OpenClaw events (`gateway:startup`, `gateway:heartbeat`, `command:new`, `session:start`, `compaction:memoryFlush`, `cron.weekly`) and tolerates alias payload shapes (`event`, `eventName`, `name`, `hook`, `trigger`) to remain robust across runtime wrappers.
 
 ## No Configuration Needed
 

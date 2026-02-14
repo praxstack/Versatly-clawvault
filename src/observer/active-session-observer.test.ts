@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { listLedgerObservationFiles } from '../lib/ledger.js';
 import {
   getScaledObservationThresholdBytes,
   observeActiveSessions,
@@ -98,10 +99,9 @@ describe('active-session-observer', () => {
       }>;
       expect(cursors[sessionId]?.lastObservedOffset).toBeGreaterThan(0);
 
-      const observationsDir = path.join(vaultPath, 'observations');
-      const observationFiles = fs.readdirSync(observationsDir).filter((name) => name.endsWith('.md'));
+      const observationFiles = listLedgerObservationFiles(vaultPath);
       expect(observationFiles.length).toBeGreaterThan(0);
-      const observationContent = fs.readFileSync(path.join(observationsDir, observationFiles[0]), 'utf-8');
+      const observationContent = fs.readFileSync(observationFiles[0].path, 'utf-8');
       expect(observationContent).toContain('[main]');
 
       const secondRun = await observeActiveSessions({

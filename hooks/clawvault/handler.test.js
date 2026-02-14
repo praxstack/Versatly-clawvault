@@ -240,4 +240,24 @@ describe('clawvault hook handler', () => {
 
     fs.rmSync(vaultPath, { recursive: true, force: true });
   });
+
+  it('runs weekly reflection on cron.weekly at Sunday midnight', async () => {
+    const vaultPath = makeVaultFixture();
+    process.env.CLAWVAULT_PATH = vaultPath;
+    execFileSyncMock.mockReturnValue('');
+
+    const handler = await loadHandler();
+    await handler({
+      eventName: 'cron.weekly',
+      timestamp: '2026-02-15T00:00:00.000Z'
+    });
+
+    expect(execFileSyncMock).toHaveBeenCalledWith(
+      'clawvault',
+      expect.arrayContaining(['reflect', '-v', vaultPath]),
+      expect.objectContaining({ shell: false })
+    );
+
+    fs.rmSync(vaultPath, { recursive: true, force: true });
+  });
 });

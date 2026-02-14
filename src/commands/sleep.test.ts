@@ -63,8 +63,8 @@ vi.mock('../observer/session-parser.js', () => ({
 
 vi.mock('../observer/observer.js', () => ({
   Observer: class {
-    async processMessages(messages: string[]): Promise<void> {
-      await processMessagesMock(messages);
+    async processMessages(messages: string[], options?: unknown): Promise<void> {
+      await processMessagesMock(messages, options);
     }
 
     async flush(): Promise<{ observations: string; routingSummary: string }> {
@@ -126,7 +126,13 @@ describe('sleep', () => {
     });
 
     expect(parseSessionFileMock).toHaveBeenCalledWith(path.resolve(transcriptPath));
-    expect(processMessagesMock).toHaveBeenCalledWith(['user: ship feature', 'assistant: completed']);
+    expect(processMessagesMock).toHaveBeenCalledWith(
+      ['user: ship feature', 'assistant: completed'],
+      expect.objectContaining({
+        source: 'openclaw',
+        transcriptId: path.basename(path.resolve(transcriptPath))
+      })
+    );
     expect(flushMock).toHaveBeenCalledTimes(1);
     expect(result.observationRoutingSummary).toBe('Routed 1 observations → projects: 1');
     fs.rmSync(path.dirname(transcriptPath), { recursive: true, force: true });

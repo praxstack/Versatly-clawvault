@@ -7,6 +7,7 @@ import { parseSessionFile } from '../observer/session-parser.js';
 import { SessionWatcher } from '../observer/watcher.js';
 import { observeActiveSessions } from '../observer/active-session-observer.js';
 import { resolveVaultPath } from '../lib/config.js';
+import { getObservationPath } from '../lib/ledger.js';
 
 export interface ObserveCommandOptions {
   watch?: string;
@@ -68,13 +69,17 @@ async function runOneShotCompression(
   }
 
   const messages = parseSessionFile(resolved);
-  await observer.processMessages(messages);
+  const transcriptStat = fs.statSync(resolved);
+  await observer.processMessages(messages, {
+    source: 'openclaw',
+    transcriptId: path.basename(resolved),
+    timestamp: transcriptStat.mtime
+  });
 
   // Force flush to capture everything
   const { observations, routingSummary } = await observer.flush();
 
-  const datePart = new Date().toISOString().split('T')[0];
-  const outputPath = path.join(vaultPath, 'observations', `${datePart}.md`);
+  const outputPath = getObservationPath(vaultPath, new Date());
   console.log(`Observations updated: ${outputPath}`);
   if (routingSummary) {
     console.log(routingSummary);

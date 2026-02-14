@@ -1,5 +1,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import {
+  normalizeObservationContent,
+  parseObservationLine,
+  parseObservationMarkdown,
+  renderScoredObservationLine,
+  type ObservationType
+} from '../lib/observation-format.js';
 
 /**
  * Routes observations into the appropriate vault category files.
@@ -10,7 +17,9 @@ interface RoutedItem {
   category: string;
   title: string;
   content: string;
-  priority: '🔴' | '🟡' | '🟢';
+  type: ObservationType;
+  confidence: number;
+  importance: number;
   date: string;
 }
 
@@ -63,8 +72,16 @@ const CATEGORY_PATTERNS: Array<{ category: string; patterns: RegExp[] }> = [
   },
 ];
 
-const OBSERVATION_LINE_RE = /^(🔴|🟡|🟢)\s+(\d{2}:\d{2})?\s*(.+)$/u;
-const DATE_HEADING_RE = /^##\s+(\d{4}-\d{2}-\d{2})\s*$/;
+const TYPE_TO_CATEGORY: Record<ObservationType, string> = {
+  decision: 'decisions',
+  preference: 'preferences',
+  fact: 'facts',
+  commitment: 'commitments',
+  milestone: 'projects',
+  lesson: 'lessons',
+  relationship: 'people',
+  project: 'projects'
+};
 
 export class Router {
   private readonly vaultPath: string;
@@ -75,7 +92,7 @@ export class Router {
 
   /**
    * Takes observation markdown and routes items to appropriate vault categories.
-   * Only routes 🔴 and 🟡 items — 🟢 stays only in observations.
+   * Routes only items with importance >= 0.4.
    * Returns a summary of what was routed where.
    */
   route(observationMarkdown: string): { routed: RoutedItem[]; summary: string } {
@@ -83,13 +100,20 @@ export class Router {
     const routed: RoutedItem[] = [];
 
     for (const item of items) {
-      // Only route critical and notable items
-      if (item.priority === '🟢') continue;
+      if (item.importance < 0.4) continue;
 
-      const category = this.categorize(item.content);
+      const category = this.categorize(item.type, item.content);
       if (!category) continue;
 
-      const routedItem: RoutedItem = { category, title: item.title, content: item.content, priority: item.priority, date: item.date };
+      const routedItem: RoutedItem = {
+        category,
+        title: item.title,
+        content: item.content,
+        type: item.type,
+        confidence: item.confidence,
+        importance: item.importance,
+        date: item.date
+      };
       routed.push(routedItem);
       this.appendToCategory(category, routedItem);
     }
@@ -98,31 +122,31 @@ export class Router {
     return { routed, summary };
   }
 
-  private parseObservations(markdown: string): Array<{ priority: '🔴' | '🟡' | '🟢'; content: string; date: string; title: string }> {
-    const results: Array<{ priority: '🔴' | '🟡' | '🟢'; content: string; date: string; title: string }> = [];
-    let currentDate = new Date().toISOString().split('T')[0];
-
-    for (const line of markdown.split(/\r?\n/)) {
-      const dateMatch = line.match(DATE_HEADING_RE);
-      if (dateMatch) {
-        currentDate = dateMatch[1];
-        continue;
-      }
-
-      const obsMatch = line.match(OBSERVATION_LINE_RE);
-      if (!obsMatch) continue;
-
-      const priority = obsMatch[1] as '🔴' | '🟡' | '🟢';
-      const content = obsMatch[3].trim();
-      const title = content.slice(0, 80).replace(/[^a-zA-Z0-9\s-]/g, '').trim();
-
-      results.push({ priority, content, date: currentDate, title });
-    }
-
-    return results;
+  private parseObservations(markdown: string): Array<{
+    type: ObservationType;
+    confidence: number;
+    importance: number;
+    content: string;
+    date: string;
+    title: string;
+  }> {
+    const records = parseObservationMarkdown(markdown);
+    return records.map((record) => ({
+      type: record.type,
+      confidence: record.confidence,
+      importance: record.importance,
+      content: record.content,
+      date: record.date,
+      title: record.content.slice(0, 80).replace(/[^a-zA-Z0-9\s-]/g, '').trim()
+    }));
   }
 
-  private categorize(content: string): string | null {
+  private categorize(type: ObservationType, content: string): string | null {
+    const typedCategory = TYPE_TO_CATEGORY[type];
+    if (typedCategory) {
+      return typedCategory;
+    }
+
     for (const { category, patterns } of CATEGORY_PATTERNS) {
       if (patterns.some((p) => p.test(content))) {
         return category;
@@ -132,12 +156,9 @@ export class Router {
   }
 
   private normalizeForDedup(content: string): string {
-    return content
-      .replace(/^\d{2}:\d{2}\s+/, '')
-      .replace(/\[\[[^\]]*\]\]/g, (m) => m.replace(/\[\[|\]\]/g, ''))
-      .replace(/\s+/g, ' ')
-      .trim()
-      .toLowerCase();
+    return normalizeObservationContent(
+      content.replace(/\[\[[^\]]*\]\]/g, (match) => match.replace(/\[\[|\]\]/g, ''))
+    );
   }
 
   /**
@@ -211,14 +232,17 @@ export class Router {
     const normalizedNew = this.normalizeForDedup(item.content);
     const existingLines = existing.split(/\r?\n/);
     for (const line of existingLines) {
-      const lineContent = line.replace(/^-\s*(?:🔴|🟡|🟢)\s*/, '');
-      if (this.normalizeForDedup(lineContent) === normalizedNew) return;
+      const lineContent = line.replace(/^-\s*/, '').trim();
+      const parsed = parseObservationLine(lineContent, item.date);
+      const candidate = parsed ? parsed.content : lineContent;
+      if (this.normalizeForDedup(candidate) === normalizedNew) return;
     }
 
     // Also check similarity (>80% overlap = likely duplicate)
     for (const line of existingLines) {
-      const lineContent = line.replace(/^-\s*(?:🔴|🟡|🟢)\s*/, '');
-      const normalizedExisting = this.normalizeForDedup(lineContent);
+      const lineContent = line.replace(/^-\s*/, '').trim();
+      const parsed = parseObservationLine(lineContent, item.date);
+      const normalizedExisting = this.normalizeForDedup(parsed ? parsed.content : lineContent);
       if (normalizedExisting.length > 10 && normalizedNew.length > 10) {
         const shorter = normalizedNew.length < normalizedExisting.length ? normalizedNew : normalizedExisting;
         const longer = normalizedNew.length >= normalizedExisting.length ? normalizedNew : normalizedExisting;
@@ -227,7 +251,12 @@ export class Router {
     }
 
     const linkedContent = this.addWikiLinks(item.content);
-    const entry = `- ${item.priority} ${linkedContent}`;
+    const entry = renderScoredObservationLine({
+      type: item.type,
+      confidence: item.confidence,
+      importance: item.importance,
+      content: linkedContent
+    });
     const entitySlug = this.extractEntitySlug(item.content, category);
     const headerLabel = entitySlug ? `${category}/${entitySlug}` : category;
     const header = existing ? '' : `# ${headerLabel} — ${item.date}\n`;

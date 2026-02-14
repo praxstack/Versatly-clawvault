@@ -3,16 +3,20 @@ import * as path from 'path';
 import { Compressor } from './compressor.js';
 import { Reflector } from './reflector.js';
 import { Router } from './router.js';
-
-type ObservationPriority = '🔴' | '🟡' | '🟢';
-
-interface ObservationLine {
-  priority: ObservationPriority;
-  content: string;
-}
-
-const DATE_HEADING_RE = /^##\s+(\d{4}-\d{2}-\d{2})\s*$/;
-const OBSERVATION_LINE_RE = /^(🔴|🟡|🟢)\s+(.+)$/u;
+import {
+  ensureLedgerStructure,
+  ensureParentDir,
+  getLegacyObservationPath,
+  getObservationPath,
+  getRawTranscriptPath,
+  toDateKey
+} from '../lib/ledger.js';
+import {
+  normalizeObservationContent,
+  parseObservationMarkdown,
+  renderObservationMarkdown,
+  type ObservationType
+} from '../lib/observation-format.js';
 
 export interface ObserverCompressor {
   compress(messages: string[], existingObservations: string): Promise<string>;
@@ -29,16 +33,26 @@ export interface ObserverOptions {
   compressor?: ObserverCompressor;
   reflector?: ObserverReflector;
   now?: () => Date;
+  rawCapture?: boolean;
+}
+
+export interface ObserverProcessOptions {
+  source?: string;
+  sessionKey?: string;
+  transcriptId?: string;
+  timestamp?: Date;
 }
 
 export class Observer {
   private readonly vaultPath: string;
-  private readonly observationsDir: string;
   private readonly tokenThreshold: number;
+  // Kept for backwards API compatibility with callers that still pass this.
+  // Reflection now runs explicitly via clawvault reflect.
   private readonly reflectThreshold: number;
   private readonly compressor: ObserverCompressor;
   private readonly reflector: ObserverReflector;
   private readonly now: () => Date;
+  private readonly rawCapture: boolean;
 
   private readonly router: Router;
   private pendingMessages: string[] = [];
@@ -47,23 +61,27 @@ export class Observer {
 
   constructor(vaultPath: string, options: ObserverOptions = {}) {
     this.vaultPath = path.resolve(vaultPath);
-    this.observationsDir = path.join(this.vaultPath, 'observations');
     this.tokenThreshold = options.tokenThreshold ?? 30000;
     this.reflectThreshold = options.reflectThreshold ?? 40000;
     this.now = options.now ?? (() => new Date());
     this.compressor = options.compressor ?? new Compressor({ model: options.model, now: this.now });
     this.reflector = options.reflector ?? new Reflector({ now: this.now });
+    this.rawCapture = options.rawCapture ?? true;
 
     this.router = new Router(vaultPath);
 
-    fs.mkdirSync(this.observationsDir, { recursive: true });
+    ensureLedgerStructure(this.vaultPath);
     this.observationsCache = this.readTodayObservations();
   }
 
-  async processMessages(messages: string[]): Promise<void> {
+  async processMessages(messages: string[], options: ObserverProcessOptions = {}): Promise<void> {
     const incoming = messages.map((message) => message.trim()).filter(Boolean);
     if (incoming.length === 0) {
       return;
+    }
+
+    if (this.rawCapture) {
+      this.persistRawMessages(incoming, options);
     }
 
     this.pendingMessages.push(...incoming);
@@ -72,8 +90,9 @@ export class Observer {
       return;
     }
 
-    const todayPath = this.getObservationPath(this.now());
-    const existingRaw = this.readObservationFile(todayPath);
+    const today = this.now();
+    const todayPath = getObservationPath(this.vaultPath, today);
+    const existingRaw = this.readObservationForDate(today);
     const existing = this.deduplicateObservationMarkdown(existingRaw);
     if (existingRaw.trim() !== existing) {
       this.writeObservationFile(todayPath, existing);
@@ -94,8 +113,6 @@ export class Observer {
     if (summary) {
       this.lastRoutingSummary = summary;
     }
-
-    await this.reflectIfNeeded();
   }
 
   /**
@@ -107,8 +124,9 @@ export class Observer {
       return { observations: this.observationsCache, routingSummary: this.lastRoutingSummary };
     }
 
-    const todayPath = this.getObservationPath(this.now());
-    const existingRaw = this.readObservationFile(todayPath);
+    const today = this.now();
+    const todayPath = getObservationPath(this.vaultPath, today);
+    const existingRaw = this.readObservationForDate(today);
     const existing = this.deduplicateObservationMarkdown(existingRaw);
     if (existingRaw.trim() !== existing) {
       this.writeObservationFile(todayPath, existing);
@@ -122,7 +140,6 @@ export class Observer {
       this.observationsCache = compressed;
       const { summary } = this.router.route(compressed);
       this.lastRoutingSummary = summary;
-      await this.reflectIfNeeded();
     }
 
     return { observations: this.observationsCache, routingSummary: this.lastRoutingSummary };
@@ -137,14 +154,17 @@ export class Observer {
     return Math.ceil(input.length / 4);
   }
 
-  private getObservationPath(date: Date): string {
-    const datePart = date.toISOString().split('T')[0];
-    return path.join(this.observationsDir, `${datePart}.md`);
+  private readTodayObservations(): string {
+    return this.readObservationForDate(this.now());
   }
 
-  private readTodayObservations(): string {
-    const todayPath = this.getObservationPath(this.now());
-    return this.readObservationFile(todayPath);
+  private readObservationForDate(date: Date): string {
+    const ledgerPath = getObservationPath(this.vaultPath, date);
+    const ledgerValue = this.readObservationFile(ledgerPath);
+    if (ledgerValue) {
+      return ledgerValue;
+    }
+    return this.readObservationFile(getLegacyObservationPath(this.vaultPath, toDateKey(date)));
   }
 
   private readObservationFile(filePath: string): string {
@@ -155,136 +175,78 @@ export class Observer {
   }
 
   private writeObservationFile(filePath: string, content: string): void {
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    ensureParentDir(filePath);
     fs.writeFileSync(filePath, `${content.trim()}\n`, 'utf-8');
   }
 
-  private getObservationFiles(): string[] {
-    if (!fs.existsSync(this.observationsDir)) {
-      return [];
-    }
-
-    return fs.readdirSync(this.observationsDir)
-      .filter((name) => name.endsWith('.md'))
-      .sort((a, b) => a.localeCompare(b))
-      .map((name) => path.join(this.observationsDir, name));
-  }
-
-  private readObservationCorpus(): string {
-    const files = this.getObservationFiles();
-    if (files.length === 0) {
-      return '';
-    }
-    return files
-      .map((filePath) => this.readObservationFile(filePath))
-      .filter(Boolean)
-      .join('\n\n');
-  }
-
   private deduplicateObservationMarkdown(markdown: string): string {
-    const parsed = this.parseSections(markdown);
-    if (parsed.size === 0) {
+    const parsed = parseObservationMarkdown(markdown);
+    if (parsed.length === 0) {
       return markdown.trim();
     }
 
-    for (const [date, lines] of parsed.entries()) {
-      const seen = new Set<string>();
-      const deduped: ObservationLine[] = [];
-      for (const line of lines) {
-        const normalized = this.normalizeObservationContent(line.content);
-        if (!normalized || seen.has(normalized)) {
-          continue;
-        }
-        seen.add(normalized);
-        deduped.push(line);
+    const grouped = new Map<string, Array<{
+      type: ObservationType;
+      confidence: number;
+      importance: number;
+      content: string;
+    }>>();
+
+    for (const record of parsed) {
+      const bucket = grouped.get(record.date) ?? [];
+      const normalized = normalizeObservationContent(record.content);
+      const existingIndex = bucket.findIndex(
+        (line) => normalizeObservationContent(line.content) === normalized
+      );
+
+      if (existingIndex === -1) {
+        bucket.push({
+          type: record.type,
+          confidence: record.confidence,
+          importance: record.importance,
+          content: record.content
+        });
+      } else {
+        const existing = bucket[existingIndex];
+        bucket[existingIndex] = {
+          type: record.importance >= existing.importance ? record.type : existing.type,
+          confidence: Math.max(existing.confidence, record.confidence),
+          importance: Math.max(existing.importance, record.importance),
+          content: existing.content.length >= record.content.length ? existing.content : record.content
+        };
       }
-      parsed.set(date, deduped);
+
+      grouped.set(record.date, bucket);
     }
 
-    return this.renderSections(parsed);
+    return renderObservationMarkdown(grouped);
   }
 
-  private parseSections(markdown: string): Map<string, ObservationLine[]> {
-    const sections = new Map<string, ObservationLine[]>();
-    let currentDate: string | null = null;
+  private persistRawMessages(
+    messages: string[],
+    options: ObserverProcessOptions
+  ): void {
+    const source = this.sanitizeSource(options.source ?? 'openclaw');
+    const messageTimestamp = options.timestamp ?? this.now();
+    const rawPath = getRawTranscriptPath(this.vaultPath, source, messageTimestamp);
+    ensureParentDir(rawPath);
 
-    for (const rawLine of markdown.split(/\r?\n/)) {
-      const dateMatch = rawLine.match(DATE_HEADING_RE);
-      if (dateMatch) {
-        currentDate = dateMatch[1];
-        if (!sections.has(currentDate)) {
-          sections.set(currentDate, []);
-        }
-        continue;
-      }
-
-      if (!currentDate) {
-        continue;
-      }
-
-      const lineMatch = rawLine.match(OBSERVATION_LINE_RE);
-      if (!lineMatch) {
-        continue;
-      }
-
-      const current = sections.get(currentDate) ?? [];
-      current.push({
-        priority: lineMatch[1] as ObservationPriority,
-        content: lineMatch[2].trim()
-      });
-      sections.set(currentDate, current);
-    }
-
-    return sections;
+    const records = messages.map((message) => JSON.stringify({
+      recordedAt: this.now().toISOString(),
+      timestamp: messageTimestamp.toISOString(),
+      source,
+      sessionKey: options.sessionKey ?? null,
+      transcriptId: options.transcriptId ?? null,
+      message
+    }));
+    fs.appendFileSync(rawPath, `${records.join('\n')}\n`, 'utf-8');
   }
 
-  private renderSections(sections: Map<string, ObservationLine[]>): string {
-    const chunks: string[] = [];
-    const dates = [...sections.keys()].sort((a, b) => a.localeCompare(b));
-
-    for (const date of dates) {
-      const lines = sections.get(date) ?? [];
-      if (lines.length === 0) {
-        continue;
-      }
-      chunks.push(`## ${date}`);
-      chunks.push('');
-      for (const line of lines) {
-        chunks.push(`${line.priority} ${line.content}`);
-      }
-      chunks.push('');
+  private sanitizeSource(source: string): string {
+    const normalized = source.trim().toLowerCase();
+    if (/^[a-z0-9_-]{1,64}$/.test(normalized)) {
+      return normalized;
     }
-
-    return chunks.join('\n').trim();
-  }
-
-  private normalizeObservationContent(content: string): string {
-    return content
-      .replace(/^\d{2}:\d{2}\s+/, '')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .toLowerCase();
-  }
-
-  private async reflectIfNeeded(): Promise<void> {
-    const corpus = this.readObservationCorpus();
-    if (this.estimateTokens(corpus) < this.reflectThreshold) {
-      return;
-    }
-
-    for (const filePath of this.getObservationFiles()) {
-      const current = this.readObservationFile(filePath);
-      if (!current) continue;
-
-      const reflected = this.reflector.reflect(current).trim();
-      if (!reflected) {
-        fs.rmSync(filePath, { force: true });
-        continue;
-      }
-
-      this.writeObservationFile(filePath, reflected);
-    }
-
-    this.observationsCache = this.readTodayObservations();
+    return 'openclaw';
   }
 }

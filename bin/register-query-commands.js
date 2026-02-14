@@ -132,14 +132,19 @@ export function registerQueryCommands(
     .option('--include-observations', 'Include observation memories in output', true)
     .option('--budget <number>', 'Optional token budget for assembled context')
     .option('--profile <profile>', 'Context profile (default|planning|incident|handoff|auto)', 'default')
+    .option('--max-hops <n>', 'Maximum graph expansion hops', '2')
     .option('-v, --vault <path>', 'Vault path')
     .action(async (task, options) => {
       try {
         const vaultPath = resolveVaultPath(options.vault);
         const format = options.format === 'json' ? 'json' : 'markdown';
         const parsedBudget = options.budget ? Number.parseInt(options.budget, 10) : undefined;
+        const parsedMaxHops = Number.parseInt(options.maxHops, 10);
         if (options.budget && (!Number.isFinite(parsedBudget) || parsedBudget <= 0)) {
           throw new Error(`Invalid --budget value: ${options.budget}`);
+        }
+        if (!Number.isFinite(parsedMaxHops) || parsedMaxHops <= 0) {
+          throw new Error(`Invalid --max-hops value: ${options.maxHops}`);
         }
 
         const { contextCommand } = await import('../dist/commands/context.js');
@@ -150,7 +155,8 @@ export function registerQueryCommands(
           recent: options.recent,
           includeObservations: options.includeObservations,
           budget: parsedBudget,
-          profile: options.profile
+          profile: options.profile,
+          maxHops: parsedMaxHops
         });
       } catch (err) {
         if (err instanceof QmdUnavailableError) {
@@ -209,6 +215,31 @@ export function registerQueryCommands(
           compress: options.compress,
           daemon: options.daemon,
           vaultPath: resolveVaultPath(options.vault)
+        });
+      } catch (err) {
+        console.error(chalk.red(`Error: ${err.message}`));
+        process.exit(1);
+      }
+    });
+
+  // === REFLECT ===
+  program
+    .command('reflect')
+    .description('Promote stable observations into weekly reflections')
+    .option('--days <n>', 'Observation window in days', '14')
+    .option('--dry-run', 'Show reflection output candidates without writing')
+    .option('-v, --vault <path>', 'Vault path')
+    .action(async (options) => {
+      try {
+        const { reflectCommand } = await import('../dist/commands/reflect.js');
+        const days = Number.parseInt(options.days, 10);
+        if (!Number.isFinite(days) || days <= 0) {
+          throw new Error(`Invalid --days value: ${options.days}`);
+        }
+        await reflectCommand({
+          vaultPath: resolveVaultPath(options.vault),
+          days,
+          dryRun: options.dryRun
         });
       } catch (err) {
         console.error(chalk.red(`Error: ${err.message}`));

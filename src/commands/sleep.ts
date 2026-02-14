@@ -8,6 +8,7 @@ import type { Document, HandoffDocument } from '../types.js';
 import { clearDirtyFlag } from './checkpoint.js';
 import { Observer } from '../observer/observer.js';
 import { parseSessionFile } from '../observer/session-parser.js';
+import { runReflection } from '../observer/reflection-service.js';
 
 export type PromptFn = (question: string) => Promise<string>;
 
@@ -23,6 +24,7 @@ export interface SleepOptions {
   index?: boolean;
   git?: boolean;
   sessionTranscript?: string;
+  reflect?: boolean;
   prompt?: PromptFn;
   cwd?: string;
 }
@@ -245,12 +247,29 @@ export async function sleep(options: SleepOptions): Promise<SleepResult> {
     if (transcriptPath) {
       const observer = new Observer(vault.getPath());
       const messages = parseSessionFile(transcriptPath);
-      await observer.processMessages(messages);
+      const transcriptStat = fs.statSync(transcriptPath);
+      await observer.processMessages(messages, {
+        source: 'openclaw',
+        transcriptId: path.basename(transcriptPath),
+        timestamp: transcriptStat.mtime
+      });
       const { routingSummary } = await observer.flush();
       observationRoutingSummary = routingSummary || undefined;
     }
   } catch {
     // Observational memory should never block session handoff completion.
+  }
+
+  if (options.reflect) {
+    try {
+      await runReflection({
+        vaultPath: vault.getPath(),
+        days: 14,
+        dryRun: false
+      });
+    } catch {
+      // Reflection is best-effort and should not block handoff completion.
+    }
   }
 
   return { handoff, document, git, observationRoutingSummary };

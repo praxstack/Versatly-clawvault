@@ -144,7 +144,7 @@ export class ClawVault {
     
     const files = await glob('**/*.md', {
       cwd: this.config.path,
-      ignore: ['**/node_modules/**', '**/.*']
+      ignore: ['**/node_modules/**', '**/.*', '**/ledger/archive/**']
     });
 
     for (const file of files) {

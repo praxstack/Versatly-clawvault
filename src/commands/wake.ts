@@ -1,6 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { ClawVault } from '../lib/vault.js';
+import { listObservationFiles } from '../lib/ledger.js';
+import { parseObservationMarkdown } from '../lib/observation-format.js';
 import type { SessionRecap } from '../types.js';
 import { clearDirtyFlag } from './checkpoint.js';
 import { recover, type RecoveryInfo } from './recover.js';
@@ -22,14 +24,14 @@ export interface WakeResult {
 }
 
 const DEFAULT_HANDOFF_LIMIT = 3;
-const OBSERVATION_HIGHLIGHT_RE = /^(🔴|🟡)\s+(.+)$/u;
 const MAX_WAKE_RED_OBSERVATIONS = 20;
 const MAX_WAKE_YELLOW_OBSERVATIONS = 10;
 const MAX_WAKE_OUTPUT_LINES = 100;
 
 interface ObservationHighlight {
   date: string;
-  priority: '🔴' | '🟡';
+  type: string;
+  importance: number;
   text: string;
 }
 
@@ -56,51 +58,57 @@ export function buildWakeSummary(recovery: RecoveryInfo, recap: SessionRecap): s
   return workSummary || 'No recent work summary found.';
 }
 
-function formatDateKey(date: Date): string {
-  return date.toISOString().split('T')[0];
-}
-
 function readRecentObservationHighlights(vaultPath: string): ObservationHighlight[] {
   const now = new Date();
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const fileByDate = new Map(
+    listObservationFiles(vaultPath, {
+      includeLegacy: true,
+      includeArchive: false,
+      dedupeByDate: true
+    }).map((entry) => [entry.date, entry.path])
+  );
   const highlights: ObservationHighlight[] = [];
 
   // Read up to 7 days with temporal decay:
-  // Day 0 (today): all 🔴 and 🟡
-  // Day 1 (yesterday): all 🔴, top 5 🟡
-  // Day 2-3: 🔴 only
-  // Day 4-6: 🔴 only, max 3
+  // Day 0 (today): all structural and potential
+  // Day 1 (yesterday): all structural, top 5 potential
+  // Day 2-3: structural only
+  // Day 4-6: structural only, max 3
   for (let daysAgo = 0; daysAgo < 7; daysAgo++) {
-    const date = new Date(now);
-    date.setDate(now.getDate() - daysAgo);
-    const dateKey = formatDateKey(date);
-    const filePath = path.join(vaultPath, 'observations', `${dateKey}.md`);
-    if (!fs.existsSync(filePath)) continue;
+    const date = new Date(today);
+    date.setUTCDate(today.getUTCDate() - daysAgo);
+    const dateKey = date.toISOString().slice(0, 10);
+    const filePath = fileByDate.get(dateKey);
+    if (!filePath || !fs.existsSync(filePath)) continue;
     const content = fs.readFileSync(filePath, 'utf-8');
+    const parsed = parseObservationMarkdown(content).filter((record) => record.importance >= 0.4);
 
-    const dayRed: ObservationHighlight[] = [];
-    const dayYellow: ObservationHighlight[] = [];
-
-    for (const line of content.split(/\r?\n/)) {
-      const match = line.trim().match(OBSERVATION_HIGHLIGHT_RE);
-      if (!match?.[2]) continue;
+    const dayStructural: ObservationHighlight[] = [];
+    const dayPotential: ObservationHighlight[] = [];
+    for (const record of parsed) {
       const item: ObservationHighlight = {
         date: dateKey,
-        priority: match[1] as '🔴' | '🟡',
-        text: match[2].trim()
+        type: record.type,
+        importance: record.importance,
+        text: record.content.trim()
       };
-      if (item.priority === '🔴') dayRed.push(item);
-      else dayYellow.push(item);
+      if (record.importance >= 0.8) {
+        dayStructural.push(item);
+      } else {
+        dayPotential.push(item);
+      }
     }
 
     // Apply temporal decay
     if (daysAgo === 0) {
-      highlights.push(...dayRed, ...dayYellow);
+      highlights.push(...dayStructural, ...dayPotential);
     } else if (daysAgo === 1) {
-      highlights.push(...dayRed, ...dayYellow.slice(0, 5));
+      highlights.push(...dayStructural, ...dayPotential.slice(0, 5));
     } else if (daysAgo <= 3) {
-      highlights.push(...dayRed);
+      highlights.push(...dayStructural);
     } else {
-      highlights.push(...dayRed.slice(0, 3));
+      highlights.push(...dayStructural.slice(0, 3));
     }
   }
 
@@ -119,18 +127,21 @@ function compareByRecency(left: ObservationHighlight, right: ObservationHighligh
   if (left.date !== right.date) {
     return right.date.localeCompare(left.date);
   }
+  if (left.importance !== right.importance) {
+    return right.importance - left.importance;
+  }
   return timeFromObservationText(right.text) - timeFromObservationText(left.text);
 }
 
 function formatRecentObservations(highlights: ObservationHighlight[]): string {
   if (highlights.length === 0) {
-    return '_No critical or notable observations from today or yesterday._';
+    return '_No structural or potentially important observations from the recent window._';
   }
 
   const sorted = [...highlights].sort(compareByRecency);
-  const red = sorted.filter((item) => item.priority === '🔴').slice(0, MAX_WAKE_RED_OBSERVATIONS);
-  const yellow = sorted.filter((item) => item.priority === '🟡').slice(0, MAX_WAKE_YELLOW_OBSERVATIONS);
-  const visible = [...red, ...yellow].sort(compareByRecency);
+  const structural = sorted.filter((item) => item.importance >= 0.8).slice(0, MAX_WAKE_RED_OBSERVATIONS);
+  const potential = sorted.filter((item) => item.importance >= 0.4 && item.importance < 0.8).slice(0, MAX_WAKE_YELLOW_OBSERVATIONS);
+  const visible = [...structural, ...potential].sort(compareByRecency);
   const omittedCount = Math.max(0, highlights.length - visible.length);
 
   const byDate = new Map<string, ObservationHighlight[]>();
@@ -153,7 +164,7 @@ function formatRecentObservations(highlights: ObservationHighlight[]): string {
       if (lines.length >= bodyLineBudget) {
         break;
       }
-      lines.push(`- ${item.priority} ${item.text}`);
+      lines.push(`- [${item.type}|i=${item.importance.toFixed(2)}] ${item.text}`);
     }
     if (lines.length < bodyLineBudget) {
       lines.push('');
@@ -176,8 +187,8 @@ async function generateExecutiveSummary(
   const apiKey = process.env.GEMINI_API_KEY || process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
 
-  const redItems = highlights.filter(h => h.priority === '🔴').map(h => h.text).slice(0, 10);
-  const yellowItems = highlights.filter(h => h.priority === '🟡').map(h => h.text).slice(0, 5);
+  const structuralItems = highlights.filter((h) => h.importance >= 0.8).map((h) => h.text).slice(0, 10);
+  const potentialItems = highlights.filter((h) => h.importance >= 0.4 && h.importance < 0.8).map((h) => h.text).slice(0, 5);
   const projects = recap.activeProjects.slice(0, 8);
   const commitments = recap.pendingCommitments.slice(0, 5);
   const lastWork = recovery.checkpoint?.workingOn || recap.recentHandoffs[0]?.workingOn?.join(', ') || '';
@@ -195,8 +206,8 @@ async function generateExecutiveSummary(
     `Next steps: ${nextSteps || '(none)'}`,
     `Active projects (${projects.length}): ${projects.join(', ') || '(none)'}`,
     `Pending commitments: ${commitments.join(', ') || '(none)'}`,
-    `Critical observations: ${redItems.join(' | ') || '(none)'}`,
-    `Notable observations: ${yellowItems.join(' | ') || '(none)'}`,
+    `Structural observations: ${structuralItems.join(' | ') || '(none)'}`,
+    `Potential observations: ${potentialItems.join(' | ') || '(none)'}`,
     '',
     'Write the briefing now. Be concise.'
   ].join('\n');
@@ -243,7 +254,9 @@ export async function wake(options: WakeOptions): Promise<WakeResult> {
   // Generate executive summary via LLM (best-effort, non-blocking)
   const execSummary = options.noSummary ? null : await generateExecutiveSummary(recovery, recap, highlights);
 
-  const highlightSummaryItems = highlights.map((item) => `${item.priority} ${item.text}`);
+  const highlightSummaryItems = highlights.map(
+    (item) => `[${item.type}|i=${item.importance.toFixed(2)}] ${item.text}`
+  );
   const wakeSummary = formatSummaryItems(highlightSummaryItems);
   const baseSummary = buildWakeSummary(recovery, recap);
   const fullBaseSummary = wakeSummary ? `${baseSummary} | ${wakeSummary}` : baseSummary;

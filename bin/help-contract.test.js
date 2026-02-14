@@ -8,6 +8,8 @@ describe('CLI help contract', () => {
     expect(help).toContain('context');
     expect(help).toContain('compat');
     expect(help).toContain('graph');
+    expect(help).toContain('reflect');
+    expect(help).toContain('replay');
     expect(help).toContain('repair-session');
     expect(help).toContain('template');
   });

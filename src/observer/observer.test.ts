@@ -28,7 +28,7 @@ describe('Observer', () => {
     const vaultPath = makeTempVault();
     const now = withFixedNow('2026-02-11T14:30:00.000Z');
     const compressSpy = vi.fn(async (_messages: string[], _existingObservations: string) => (
-      '## 2026-02-11\n\n🟢 14:30 buffered'
+      '## 2026-02-11\n\n- [fact|c=0.70|i=0.20] 14:30 buffered'
     ));
     const compressor: ObserverCompressor = {
       compress: (messages, existingObservations) => compressSpy(messages, existingObservations)
@@ -68,7 +68,7 @@ describe('Observer', () => {
         reflectThreshold: 99999,
         now,
         compressor: {
-          compress: async () => '## 2026-02-11\n\n🔴 09:05 User chose PostgreSQL for reliability'
+          compress: async () => '## 2026-02-11\n\n- [decision|c=0.92|i=0.90] 09:05 User chose PostgreSQL for reliability'
         },
         reflector: { reflect: (value: string) => value }
       });
@@ -76,18 +76,18 @@ describe('Observer', () => {
       await observer.processMessages(['decision recorded']);
       const output = observer.getObservations();
       expect(output).toContain('## 2026-02-11');
-      expect(output).toContain('🔴 09:05 User chose PostgreSQL for reliability');
+      expect(output).toContain('[decision|c=0.92|i=0.90] 09:05 User chose PostgreSQL for reliability');
 
-      const expectedPath = path.join(vaultPath, 'observations', '2026-02-11.md');
+      const expectedPath = path.join(vaultPath, 'ledger', 'observations', '2026', '02', '11.md');
       expect(fs.existsSync(expectedPath)).toBe(true);
       const fileContent = fs.readFileSync(expectedPath, 'utf-8');
-      expect(fileContent).toContain('🔴 09:05 User chose PostgreSQL for reliability');
+      expect(fileContent).toContain('[decision|c=0.92|i=0.90] 09:05 User chose PostgreSQL for reliability');
     } finally {
       fs.rmSync(vaultPath, { recursive: true, force: true });
     }
   });
 
-  it('produces emoji-priority observation format with fallback compression', async () => {
+  it('produces scored observation format with fallback compression', async () => {
     const vaultPath = makeTempVault();
     process.env.ANTHROPIC_API_KEY = '';
     process.env.OPENAI_API_KEY = '';
@@ -108,8 +108,8 @@ describe('Observer', () => {
 
       const observations = observer.getObservations();
       expect(observations).toContain('## 2026-02-11');
-      expect(observations).toMatch(/🔴.*(?:decided|chose|PostgreSQL)/i);
-      expect(observations).toMatch(/🔴.*(?:error|fail|crash|bug)/i);
+      expect(observations).toMatch(/\[[a-z]+\|c=\d\.\d{2}\|i=0\.(8\d|9\d)\].*(?:decided|chose|PostgreSQL)/i);
+      expect(observations).toMatch(/\[[a-z]+\|c=\d\.\d{2}\|i=0\.(8\d|9\d)\].*(?:error|fail|crash|bug)/i);
     } finally {
       fs.rmSync(vaultPath, { recursive: true, force: true });
     }
@@ -118,16 +118,21 @@ describe('Observer', () => {
   it('deduplicates existing and newly compressed observations', async () => {
     const vaultPath = makeTempVault();
     const now = withFixedNow('2026-02-11T10:00:00.000Z');
-    const observationPath = path.join(vaultPath, 'observations', '2026-02-11.md');
+    const observationPath = path.join(vaultPath, 'ledger', 'observations', '2026', '02', '11.md');
     fs.mkdirSync(path.dirname(observationPath), { recursive: true });
     fs.writeFileSync(
       observationPath,
-      '## 2026-02-11\n\n🟢 09:00 Keep deployment logs\n🟢 09:01 Keep deployment logs\n',
+      [
+        '## 2026-02-11',
+        '',
+        '- [fact|c=0.70|i=0.20] 09:00 Keep deployment logs',
+        '- [fact|c=0.70|i=0.20] 09:01 Keep deployment logs'
+      ].join('\n'),
       'utf-8'
     );
 
     const compressSpy = vi.fn(async (_messages: string[], existing: string) => (
-      `${existing}\n🟢 10:00 Added rollback checklist\n🟢 10:01 Added rollback checklist`
+      `${existing}\n- [fact|c=0.72|i=0.20] 10:00 Added rollback checklist\n- [fact|c=0.72|i=0.20] 10:01 Added rollback checklist`
     ));
 
     try {
@@ -145,8 +150,8 @@ describe('Observer', () => {
 
       expect(compressSpy).toHaveBeenCalledTimes(1);
       const existingPassedToCompressor = compressSpy.mock.calls[0][1] as string;
-      expect(existingPassedToCompressor).toContain('🟢 09:00 Keep deployment logs');
-      expect(existingPassedToCompressor).not.toContain('🟢 09:01 Keep deployment logs');
+      expect(existingPassedToCompressor).toContain('09:00 Keep deployment logs');
+      expect(existingPassedToCompressor).not.toContain('09:01 Keep deployment logs');
 
       const updated = fs.readFileSync(observationPath, 'utf-8');
       expect((updated.match(/Keep deployment logs/g) ?? []).length).toBe(1);

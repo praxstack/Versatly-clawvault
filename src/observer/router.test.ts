@@ -18,10 +18,10 @@ describe('Router', () => {
     const markdown = [
       '## 2026-02-11',
       '',
-      '🟡 09:00 talked to Pedro about deployment cutover',
-      '🟡 09:10 met with Maria to review logs',
-      '🟡 09:20 Justin from ops mentioned latency spikes',
-      '🟡 09:30 Alex said rollback drills are complete'
+      '- [relationship|c=0.80|i=0.60] 09:00 talked to Pedro about deployment cutover',
+      '- [relationship|c=0.80|i=0.60] 09:10 met with Maria to review logs',
+      '- [relationship|c=0.80|i=0.60] 09:20 Justin from ops mentioned latency spikes',
+      '- [relationship|c=0.80|i=0.60] 09:30 Alex said rollback drills are complete'
     ].join('\n');
 
     try {
@@ -62,7 +62,7 @@ describe('Router', () => {
     const markdown = [
       '## 2026-02-11',
       '',
-      '🟡 09:00 decided to use PostgreSQL over SQLite',
+      '- [decision|c=0.90|i=0.88] 09:00 decided to use PostgreSQL over SQLite',
     ].join('\n');
 
     try {

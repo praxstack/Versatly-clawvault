@@ -54,6 +54,7 @@ export function registerSessionLifecycleCommands(
     .option('-f, --feeling <state>', 'Emotional/energy state')
     .option('-s, --session <key>', 'Session key')
     .option('--session-transcript <path>', 'Session transcript path for auto-observe')
+    .option('--reflect', 'Run weekly reflection pass after sleep handoff')
     .option('--index', 'Update qmd index after handoff')
     .option('--no-git', 'Skip git commit prompt')
     .option('-v, --vault <path>', 'Vault path')
@@ -70,6 +71,7 @@ export function registerSessionLifecycleCommands(
           feeling: options.feeling,
           sessionKey: options.session,
           sessionTranscript: options.sessionTranscript,
+          reflect: options.reflect,
           vaultPath,
           index: options.index,
           git: options.git

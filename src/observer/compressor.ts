@@ -1,18 +1,19 @@
+import {
+  DATE_HEADING_RE,
+  inferObservationType,
+  normalizeObservationContent,
+  parseObservationMarkdown,
+  renderObservationMarkdown,
+  type ParsedObservationRecord,
+  type ObservationType
+} from '../lib/observation-format.js';
+
 export interface CompressorOptions {
   model?: string;
   now?: () => Date;
   fetchImpl?: typeof fetch;
 }
 
-type Priority = '🔴' | '🟡' | '🟢';
-
-interface ObservationLine {
-  priority: Priority;
-  content: string;
-}
-
-const DATE_HEADING_RE = /^##\s+(\d{4}-\d{2}-\d{2})\s*$/;
-const OBSERVATION_LINE_RE = /^(🔴|🟡|🟢)\s+(.+)$/u;
 const CRITICAL_RE =
   /(?:\b(?:decision|decided|chose|chosen|selected|picked|opted|switched to)\s*:?|\bdecid(?:e|ed|ing|ion)\b|\berror\b|\bfail(?:ed|ure|ing)?\b|\bblock(?:ed|er)?\b|\bbreaking(?:\s+change)?s?\b|\bcritical\b|\b\w+\s+chosen\s+(?:for|over|as)\b|\bpublish(?:ed)?\b.*@?\d+\.\d+|\bmerge[d]?\s+(?:PR|pull\s+request)\b|\bshipped\b|\breleased?\b.*v?\d+\.\d+|\bsigned\b.*\b(?:contract|agreement|deal)\b|\bpricing\b.*\$|\bdemo\b.*\b(?:completed?|done|finished)\b|\bmeeting\b.*\b(?:completed?|done|finished)\b|\bstrategy\b.*\b(?:pivot|change|shift)\b)/i;
 const DEADLINE_WITH_DATE_RE = /(?:(?:\bdeadline\b|\bdue(?:\s+date)?\b|\bcutoff\b).*(?:\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2})|(?:\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}).*(?:\bdeadline\b|\bdue(?:\s+date)?\b|\bcutoff\b))/i;
@@ -79,11 +80,12 @@ export class Compressor {
       'Rules:',
       '- Output markdown only.',
       '- Group observations by date heading: ## YYYY-MM-DD',
-      '- Each line must follow: <emoji> <HH:MM> <observation>',
-      '- Priority emojis: 🔴 critical, 🟡 notable, 🟢 info',
-      '- 🔴 for: decisions, blockers, deadlines, breaking changes, commitments to people, version releases, merged PRs, shipped features, client meetings/demos, pricing/contract decisions, strategy changes, signed agreements',
-      '- 🟡 for: preferences, architecture discussions, trade-offs, milestones, people interactions, notable context, production deploys, new tools built, config changes, proposals sent, content published, infrastructure changes',
-      '- 🟢 for: routine tasks, intermediate build steps, general progress, minor fixes',
+      '- Each observation line MUST follow: - [type|c=<0.00-1.00>|i=<0.00-1.00>] <observation>',
+      '- Allowed type tags: decision, preference, fact, commitment, milestone, lesson, relationship, project',
+      '- i >= 0.80 for structural/persistent observations (major decisions, blockers, releases, commitments)',
+      '- i 0.40-0.79 for potentially important observations (notable context, preferences, milestones)',
+      '- i < 0.40 for contextual/routine observations',
+      '- Confidence c reflects extraction certainty, not importance.',
       '- Preserve source tags when present (e.g., [main], [telegram-dm], [discord], [telegram-group]).',
       '',
       'QUALITY FILTERS (important):',
@@ -100,19 +102,16 @@ export class Compressor {
       '',
       'PROJECT MILESTONES (critical — these are the most valuable observations):',
       'Projects are NOT just code. Milestones include business, strategy, client, and operational events.',
-      '- 🔴 ALWAYS for: version releases/publishes, PR merges, shipped features, signed contracts, pricing decisions, client meetings/demos, strategy pivots, partnership agreements, major config changes',
-      '- 🟡 ALWAYS for: production deploys, new tools/commands built, pitch decks sent, proposals delivered, infrastructure changes, domain/DNS changes, onboarding steps, content published (blog posts, landing pages)',
+      '- Use milestone/decision/commitment types for strategic events with high importance.',
+      '- Use preference/lesson/relationship/project/fact when appropriate.',
       '- Examples:',
-      '  "🔴 14:00 Published clawvault@2.1.0 to npm with active session observer"',
-      '  "🔴 14:00 Artemisa demo completed — #1 pain point confirmed: quick estimates"',
-      '  "🔴 14:00 Pricing decision: $33K one-time + $3K/mo for Artemisa"',
-      '  "🔴 14:00 Merged PR #2: Active session observation into master"',
-      '  "🟡 14:00 Deployed pitch deck to artemisa-pitch-deck.vercel.app"',
-      '  "🟡 14:00 Moved docs.clawvault.dev domain to new Vercel project"',
+      '  "- [decision|c=0.95|i=0.90] 14:00 Pricing decision: $33K one-time + $3K/mo for Artemisa"',
+      '  "- [milestone|c=0.93|i=0.88] 14:00 Published clawvault@2.1.0 to npm"',
+      '  "- [project|c=0.84|i=0.58] 14:00 Deployed pitch deck to artemisa-pitch-deck.vercel.app"',
       '- Do NOT collapse multiple milestones into one line — each matters for history.',
       '',
       'COMMITMENT FORMAT (when someone promises/agrees to something):',
-      '- Use: "🔴 HH:MM [COMMITMENT] <who> committed to <what> by <when>" (include deadline if mentioned)',
+      '- Prefer: "- [commitment|c=...|i=...] HH:MM [COMMITMENT] <who> committed to <what> by <when>"',
       '',
       'Keep observations concise and factual. Aim for signal, not completeness.',
       '',
@@ -234,7 +233,7 @@ export class Compressor {
       .trim();
 
     const lines = cleaned.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-    const hasObservationLine = lines.some((line) => OBSERVATION_LINE_RE.test(line));
+    const hasObservationLine = lines.some((line) => line.startsWith('- [') || /^(?:-\s*)?(🔴|🟡|🟢)\s+/.test(line));
     if (!hasObservationLine) {
       return '';
     }
@@ -242,10 +241,10 @@ export class Compressor {
     const hasDateHeading = lines.some((line) => DATE_HEADING_RE.test(line));
     const result = hasDateHeading ? cleaned : `## ${this.formatDate(this.now())}\n\n${cleaned}`;
 
-    // Post-process: fix wiki-link corruption, then enforce priority rules
+    // Post-process: fix wiki-link corruption, then enforce importance rules
     // LLMs often fuse preceding words into wiki-links: "reque[[people/pedro]]"
     const sanitized = this.sanitizeWikiLinks(result);
-    return this.enforcePriorityRules(sanitized);
+    return this.enforceImportanceRules(sanitized);
   }
 
   /**
@@ -266,31 +265,69 @@ export class Compressor {
     return result;
   }
 
-  /**
-   * Post-process LLM output to enforce priority rules.
-   * Lines matching critical rules get upgraded to 🔴, notable rules to 🟡.
-   */
-  private enforcePriorityRules(markdown: string): string {
-    return markdown.split(/\r?\n/).map((line) => {
-      const match = line.match(OBSERVATION_LINE_RE);
-      if (!match) return line;
+  private enforceImportanceRules(markdown: string): string {
+    const parsed = parseObservationMarkdown(markdown);
+    if (parsed.length === 0) {
+      return '';
+    }
 
-      const currentPriority = match[1] as Priority;
-      const content = match[2];
+    const grouped = new Map<string, Array<{
+      type: ObservationType;
+      confidence: number;
+      importance: number;
+      content: string;
+    }>>();
 
-      if (this.isCriticalContent(content) && currentPriority !== '🔴') {
-        return line.replace(/^🟡|^🟢/u, '🔴');
+    for (const record of parsed) {
+      const adjusted = this.enforceImportanceForRecord(record);
+      const bucket = grouped.get(record.date) ?? [];
+      bucket.push(adjusted);
+      grouped.set(record.date, bucket);
+    }
+
+    return renderObservationMarkdown(grouped);
+  }
+
+  private enforceImportanceForRecord(record: ParsedObservationRecord): {
+    type: ObservationType;
+    confidence: number;
+    importance: number;
+    content: string;
+  } {
+    let importance = record.importance;
+    let confidence = record.confidence;
+    let type = record.type;
+
+    if (this.isCriticalContent(record.content)) {
+      importance = Math.max(importance, 0.85);
+      confidence = Math.max(confidence, 0.85);
+      if (type === 'fact') {
+        type = inferObservationType(record.content);
       }
-      if (this.isNotableContent(content) && currentPriority === '🟢') {
-        return line.replace(/^🟢/u, '🟡');
-      }
+    } else if (this.isNotableContent(record.content)) {
+      importance = Math.max(importance, 0.5);
+      confidence = Math.max(confidence, 0.75);
+    }
 
-      return line;
-    }).join('\n');
+    if (type === 'decision' || type === 'commitment' || type === 'milestone') {
+      importance = Math.max(importance, 0.6);
+    }
+
+    return {
+      type,
+      confidence: this.clamp01(confidence),
+      importance: this.clamp01(importance),
+      content: record.content
+    };
   }
 
   private fallbackCompression(messages: string[]): string {
-    const sections = new Map<string, ObservationLine[]>();
+    const sections = new Map<string, Array<{
+      type: ObservationType;
+      confidence: number;
+      importance: number;
+      content: string;
+    }>>();
     const seen = new Set<string>();
 
     for (const message of messages) {
@@ -299,131 +336,135 @@ export class Compressor {
 
       const date = this.extractDate(message) ?? this.formatDate(this.now());
       const time = this.extractTime(message) ?? this.formatTime(this.now());
-      const priority = this.inferPriority(normalized);
       const line = `${time} ${normalized}`;
-      const dedupeKey = `${date}|${priority}|${this.normalizeText(line)}`;
+      const type = inferObservationType(line);
+      const importance = this.inferImportance(line, type);
+      const confidence = this.inferConfidence(line, type, importance);
+      const dedupeKey = `${date}|${type}|${normalizeObservationContent(line)}`;
       if (seen.has(dedupeKey)) continue;
       seen.add(dedupeKey);
 
       const bucket = sections.get(date) ?? [];
-      bucket.push({ priority, content: line });
+      bucket.push({ type, confidence, importance, content: line });
       sections.set(date, bucket);
     }
 
     if (sections.size === 0) {
       const date = this.formatDate(this.now());
-      sections.set(date, [{ priority: '🟢', content: `${this.formatTime(this.now())} Processed session updates.` }]);
+      sections.set(date, [{
+        type: 'fact',
+        confidence: 0.7,
+        importance: 0.2,
+        content: `${this.formatTime(this.now())} Processed session updates.`
+      }]);
     }
 
     return this.renderSections(sections);
   }
 
   private mergeObservations(existing: string, incoming: string): string {
-    const existingSections = this.parseSections(existing);
-    const incomingSections = this.parseSections(incoming);
+    const existingRecords = parseObservationMarkdown(existing);
+    const incomingRecords = parseObservationMarkdown(incoming);
 
-    if (incomingSections.size === 0) {
+    if (incomingRecords.length === 0) {
       return existing.trim();
     }
 
-    if (existingSections.size === 0) {
-      return this.renderSections(incomingSections);
-    }
+    const merged = new Map<string, Array<{
+      type: ObservationType;
+      confidence: number;
+      importance: number;
+      content: string;
+    }>>();
 
-    for (const [date, lines] of existingSections.entries()) {
-      existingSections.set(date, this.deduplicateObservationLines(lines));
-    }
-
-    for (const [date, lines] of incomingSections.entries()) {
-      const current = this.deduplicateObservationLines(existingSections.get(date) ?? []);
-      const seen = new Set(current.map((line) => this.normalizeObservationContent(line.content)));
-      for (const line of lines) {
-        const normalized = this.normalizeObservationContent(line.content);
-        if (!normalized || seen.has(normalized)) {
-          continue;
-        }
-        seen.add(normalized);
-        current.push(line);
-      }
-      existingSections.set(date, current);
-    }
-
-    return this.renderSections(existingSections);
-  }
-
-  private deduplicateObservationLines(lines: ObservationLine[]): ObservationLine[] {
-    const deduped: ObservationLine[] = [];
-    const seen = new Set<string>();
-    for (const line of lines) {
-      const normalized = this.normalizeObservationContent(line.content);
-      if (!normalized || seen.has(normalized)) {
-        continue;
-      }
-      seen.add(normalized);
-      deduped.push(line);
-    }
-    return deduped;
-  }
-
-  private normalizeObservationContent(content: string): string {
-    return content
-      .replace(/^\d{2}:\d{2}\s+/, '')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .toLowerCase();
-  }
-
-  private parseSections(markdown: string): Map<string, ObservationLine[]> {
-    const sections = new Map<string, ObservationLine[]>();
-    let currentDate: string | null = null;
-
-    for (const rawLine of markdown.split(/\r?\n/)) {
-      const dateMatch = rawLine.match(DATE_HEADING_RE);
-      if (dateMatch) {
-        currentDate = dateMatch[1];
-        if (!sections.has(currentDate)) {
-          sections.set(currentDate, []);
-        }
-        continue;
-      }
-
-      if (!currentDate) continue;
-      const lineMatch = rawLine.match(OBSERVATION_LINE_RE);
-      if (!lineMatch) continue;
-
-      const bucket = sections.get(currentDate) ?? [];
-      bucket.push({
-        priority: lineMatch[1] as Priority,
-        content: lineMatch[2].trim()
+    for (const record of existingRecords) {
+      this.mergeRecord(merged, {
+        date: record.date,
+        type: record.type,
+        confidence: record.confidence,
+        importance: record.importance,
+        content: record.content
       });
-      sections.set(currentDate, bucket);
+    }
+    for (const record of incomingRecords) {
+      this.mergeRecord(merged, {
+        date: record.date,
+        type: record.type,
+        confidence: record.confidence,
+        importance: record.importance,
+        content: record.content
+      });
     }
 
-    return sections;
+    return this.renderSections(merged);
   }
 
-  private renderSections(sections: Map<string, ObservationLine[]>): string {
-    const chunks: string[] = [];
-    const sortedDates = [...sections.keys()].sort((a, b) => a.localeCompare(b));
-
-    for (const date of sortedDates) {
-      const lines = sections.get(date) ?? [];
-      if (lines.length === 0) continue;
-      chunks.push(`## ${date}`);
-      chunks.push('');
-      for (const line of lines) {
-        chunks.push(`${line.priority} ${line.content}`);
-      }
-      chunks.push('');
+  private mergeRecord(
+    sections: Map<string, Array<{
+      type: ObservationType;
+      confidence: number;
+      importance: number;
+      content: string;
+    }>>,
+    input: {
+      date: string;
+      type: ObservationType;
+      confidence: number;
+      importance: number;
+      content: string;
+    }
+  ): void {
+    const bucket = sections.get(input.date) ?? [];
+    const key = normalizeObservationContent(input.content);
+    const index = bucket.findIndex((line) => normalizeObservationContent(line.content) === key);
+    if (index === -1) {
+      bucket.push({
+        type: input.type,
+        confidence: this.clamp01(input.confidence),
+        importance: this.clamp01(input.importance),
+        content: input.content.trim()
+      });
+      sections.set(input.date, bucket);
+      return;
     }
 
-    return chunks.join('\n').trim();
+    const existing = bucket[index];
+    bucket[index] = {
+      type: input.importance >= existing.importance ? input.type : existing.type,
+      confidence: this.clamp01(Math.max(existing.confidence, input.confidence)),
+      importance: this.clamp01(Math.max(existing.importance, input.importance)),
+      content: existing.content.length >= input.content.length ? existing.content : input.content
+    };
+    sections.set(input.date, bucket);
   }
 
-  private inferPriority(text: string): Priority {
-    if (this.isCriticalContent(text)) return '🔴';
-    if (this.isNotableContent(text)) return '🟡';
-    return '🟢';
+  private renderSections(
+    sections: Map<string, Array<{
+      type: ObservationType;
+      confidence: number;
+      importance: number;
+      content: string;
+    }>>
+  ): string {
+    return renderObservationMarkdown(sections);
+  }
+
+  private inferImportance(text: string, type: ObservationType): number {
+    if (this.isCriticalContent(text)) return 0.9;
+    if (this.isNotableContent(text)) return 0.6;
+    if (type === 'decision' || type === 'commitment' || type === 'milestone') return 0.55;
+    if (type === 'preference' || type === 'lesson' || type === 'relationship' || type === 'project') return 0.45;
+    return 0.2;
+  }
+
+  private inferConfidence(text: string, type: ObservationType, importance: number): number {
+    let confidence = 0.72;
+    if (importance >= 0.8) confidence += 0.12;
+    if (type === 'decision' || type === 'commitment' || type === 'milestone') confidence += 0.06;
+    if (/\b(?:decided|chose|committed|deadline|released|merged)\b/i.test(text)) {
+      confidence += 0.05;
+    }
+    return this.clamp01(confidence);
   }
 
   private isCriticalContent(text: string): boolean {
@@ -461,5 +502,12 @@ export class Compressor {
 
   private formatTime(date: Date): string {
     return date.toISOString().slice(11, 16);
+  }
+
+  private clamp01(value: number): number {
+    if (!Number.isFinite(value)) return 0;
+    if (value < 0) return 0;
+    if (value > 1) return 1;
+    return value;
   }
 }

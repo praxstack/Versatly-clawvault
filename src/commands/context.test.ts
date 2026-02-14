@@ -87,8 +87,22 @@ describe('buildContext budget handling', () => {
     ]);
     readObservationsMock.mockReturnValue('## 2026-02-11');
     parseObservationLinesMock.mockReturnValue([
-      { priority: '🔴', content: 'Critical deployment gate remains open', date: '2026-02-11' },
-      { priority: '🟢', content: 'Low priority chatter '.repeat(50), date: '2026-02-11' }
+      {
+        type: 'decision',
+        confidence: 0.95,
+        importance: 0.9,
+        content: 'Critical deployment gate remains open',
+        date: '2026-02-11',
+        format: 'scored'
+      },
+      {
+        type: 'fact',
+        confidence: 0.7,
+        importance: 0.2,
+        content: 'Low priority chatter '.repeat(50),
+        date: '2026-02-11',
+        format: 'scored'
+      }
     ]);
     getMemoryGraphMock.mockResolvedValue({ nodes: [], edges: [] });
 
@@ -99,7 +113,7 @@ describe('buildContext budget handling', () => {
     });
 
     expect(estimateTokens(result.markdown)).toBeLessThanOrEqual(budget);
-    expect(result.markdown).toContain('🔴 observation (2026-02-11)');
+    expect(result.markdown).toContain('[decision|i=0.90] observation (2026-02-11)');
     expect(result.markdown).not.toContain('Low priority chatter');
   });
 });
@@ -111,8 +125,22 @@ describe('buildContext observation scoring', () => {
     vsearchMock.mockResolvedValue([]);
     readObservationsMock.mockReturnValue('## 2026-02-11');
     parseObservationLinesMock.mockReturnValue([
-      { priority: '🔴', content: '09:10 Postgres migration rollback failed', date: '2026-02-11' },
-      { priority: '🔴', content: '09:20 Team synced on release timeline', date: '2026-02-11' }
+      {
+        type: 'decision',
+        confidence: 0.94,
+        importance: 0.9,
+        content: '09:10 Postgres migration rollback failed',
+        date: '2026-02-11',
+        format: 'scored'
+      },
+      {
+        type: 'project',
+        confidence: 0.8,
+        importance: 0.9,
+        content: '09:20 Team synced on release timeline',
+        date: '2026-02-11',
+        format: 'scored'
+      }
     ]);
     getMemoryGraphMock.mockResolvedValue({ nodes: [], edges: [] });
 
@@ -187,7 +215,88 @@ describe('buildContext graph-aware retrieval', () => {
     expect(graphEntry).toBeTruthy();
     expect(graphEntry?.title).toBe('Core API');
     expect(graphEntry?.signals).toContain('graph_neighbor');
-    expect(graphEntry?.rationale).toContain('Connected to "Use Postgres" via wiki_link');
+    expect(graphEntry?.rationale).toContain('Connected to "Use Postgres"');
+  });
+
+  it('respects max-hops bound for graph expansion', async () => {
+    const modified = new Date('2026-02-11T08:00:00.000Z');
+    loadMock.mockResolvedValue(undefined);
+    listMock.mockResolvedValue([
+      {
+        path: '/vault/decisions/use-postgres.md',
+        title: 'Use Postgres',
+        category: 'decisions',
+        content: 'Anchor decision',
+        modified,
+        frontmatter: {}
+      },
+      {
+        path: '/vault/projects/core-api.md',
+        title: 'Core API',
+        category: 'projects',
+        content: 'One-hop neighbor',
+        modified,
+        frontmatter: {}
+      },
+      {
+        path: '/vault/projects/client-app.md',
+        title: 'Client App',
+        category: 'projects',
+        content: 'Two-hop neighbor',
+        modified,
+        frontmatter: {}
+      }
+    ]);
+    vsearchMock.mockResolvedValue([
+      {
+        score: 0.95,
+        snippet: 'Use Postgres for reliability',
+        document: {
+          path: '/vault/decisions/use-postgres.md',
+          title: 'Use Postgres',
+          category: 'decisions',
+          content: '',
+          modified,
+          frontmatter: {}
+        }
+      }
+    ]);
+    readObservationsMock.mockReturnValue('');
+    parseObservationLinesMock.mockReturnValue([]);
+    getMemoryGraphMock.mockResolvedValue({
+      nodes: [
+        { id: 'note:decisions/use-postgres', title: 'Use Postgres', type: 'decision', category: 'decisions', path: 'decisions/use-postgres.md', missing: false },
+        { id: 'note:projects/core-api', title: 'Core API', type: 'project', category: 'projects', path: 'projects/core-api.md', missing: false },
+        { id: 'note:projects/client-app', title: 'Client App', type: 'project', category: 'projects', path: 'projects/client-app.md', missing: false }
+      ],
+      edges: [
+        {
+          id: 'wiki_link:note:decisions/use-postgres->note:projects/core-api',
+          source: 'note:decisions/use-postgres',
+          target: 'note:projects/core-api',
+          type: 'wiki_link'
+        },
+        {
+          id: 'wiki_link:note:projects/core-api->note:projects/client-app',
+          source: 'note:projects/core-api',
+          target: 'note:projects/client-app',
+          type: 'wiki_link'
+        }
+      ]
+    });
+
+    const oneHop = await buildContext('postgres migration', {
+      vaultPath: '/vault',
+      maxHops: 1
+    });
+    expect(oneHop.context.some((entry) => entry.title === 'Core API')).toBe(true);
+    expect(oneHop.context.some((entry) => entry.title === 'Client App')).toBe(false);
+
+    const twoHops = await buildContext('postgres migration', {
+      vaultPath: '/vault',
+      maxHops: 2
+    });
+    expect(twoHops.context.some((entry) => entry.title === 'Client App')).toBe(true);
   });
 });
 
@@ -229,7 +338,14 @@ describe('buildContext profiles', () => {
     ]);
     readObservationsMock.mockReturnValue('## 2026-02-11');
     parseObservationLinesMock.mockReturnValue([
-      { priority: '🔴', content: '09:10 Critical outage update', date: '2026-02-11' }
+      {
+        type: 'decision',
+        confidence: 0.95,
+        importance: 0.9,
+        content: '09:10 Critical outage update',
+        date: '2026-02-11',
+        format: 'scored'
+      }
     ]);
     getMemoryGraphMock.mockResolvedValue({
       nodes: [
@@ -293,7 +409,14 @@ describe('buildContext profiles', () => {
     ]);
     readObservationsMock.mockReturnValue('## 2026-02-11');
     parseObservationLinesMock.mockReturnValue([
-      { priority: '🔴', content: '09:10 Critical outage update', date: '2026-02-11' }
+      {
+        type: 'decision',
+        confidence: 0.95,
+        importance: 0.9,
+        content: '09:10 Critical outage update',
+        date: '2026-02-11',
+        format: 'scored'
+      }
     ]);
     getMemoryGraphMock.mockResolvedValue({
       nodes: [

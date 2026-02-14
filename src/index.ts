@@ -28,6 +28,7 @@ import * as fs from 'fs';
 import type { Command } from 'commander';
 import { registerContextCommand } from './commands/context.js';
 import { registerObserveCommand } from './commands/observe.js';
+import { registerReflectCommand } from './commands/reflect.js';
 
 // Core exports
 export { ClawVault, createVault, findVault } from './lib/vault.js';
@@ -45,6 +46,22 @@ export {
 export type { ContextFormat, ContextProfile, ContextProfileOption, ContextOptions, ContextEntry, ContextResult } from './commands/context.js';
 export { observeCommand, registerObserveCommand } from './commands/observe.js';
 export type { ObserveCommandOptions } from './commands/observe.js';
+export { reflectCommand, registerReflectCommand } from './commands/reflect.js';
+export type { ReflectCommandOptions } from './commands/reflect.js';
+export { archiveCommand, registerArchiveCommand } from './commands/archive.js';
+export type { ArchiveCommandOptions } from './commands/archive.js';
+export { rebuildCommand, registerRebuildCommand } from './commands/rebuild.js';
+export type { RebuildCommandOptions } from './commands/rebuild.js';
+export { replayCommand, registerReplayCommand } from './commands/replay.js';
+export type { ReplayCommandOptions } from './commands/replay.js';
+export {
+  migrateObservations,
+  migrateObservationsCommand,
+  registerMigrateObservationsCommand
+} from './commands/migrate-observations.js';
+export type { MigrateObservationsOptions, MigrateObservationsResult } from './commands/migrate-observations.js';
+export { syncBdCommand, registerSyncBdCommand } from './commands/sync-bd.js';
+export type { SyncBdCommandOptions } from './commands/sync-bd.js';
 export {
   sessionRecapCommand,
   buildSessionRecap,
@@ -98,6 +115,10 @@ export type { ReflectorOptions } from './observer/reflector.js';
 export { SessionWatcher } from './observer/watcher.js';
 export type { SessionWatcherOptions } from './observer/watcher.js';
 export { parseSessionFile } from './observer/session-parser.js';
+export { runReflection } from './observer/reflection-service.js';
+export type { ReflectOptions, ReflectResult } from './observer/reflection-service.js';
+export { archiveObservations } from './observer/archive.js';
+export type { ArchiveObservationsOptions, ArchiveObservationsResult } from './observer/archive.js';
 
 export {
   renderTemplate,
@@ -139,5 +160,6 @@ export const VERSION = readPackageVersion();
 export function registerCommanderCommands(program: Command): Command {
   registerContextCommand(program);
   registerObserveCommand(program);
+  registerReflectCommand(program);
   return program;
 }

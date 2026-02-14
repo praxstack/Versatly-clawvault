@@ -295,6 +295,8 @@ function resolveTargetNodeId(rawTarget: string, registry: NoteRegistry): string 
     }
   }
 
+  // Graph guardrail: unresolved links stay unresolved.
+  // We never synthesize note nodes for files that do not exist on disk.
   return toUnresolvedNodeId(normalized);
 }
 
@@ -524,7 +526,7 @@ export async function buildOrUpdateMemoryGraphIndex(
   const existing = options.forceFull ? null : loadMemoryGraphIndex(vaultPath);
   const markdownFiles = await glob('**/*.md', {
     cwd: vaultPath,
-    ignore: ['**/node_modules/**', '**/.git/**', '**/.obsidian/**', '**/.trash/**']
+    ignore: ['**/node_modules/**', '**/.git/**', '**/.obsidian/**', '**/.trash/**', '**/ledger/archive/**']
   });
   const normalizedFiles = markdownFiles.map(normalizeRelativePath).sort((a, b) => a.localeCompare(b));
   const registry = buildNoteRegistry(normalizedFiles);

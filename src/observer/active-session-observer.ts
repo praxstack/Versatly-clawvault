@@ -503,7 +503,11 @@ export async function observeActiveSessions(
     const taggedMessages = messages.map((message) => `[${candidate.sourceLabel}] ${message}`);
 
     if (taggedMessages.length > 0) {
-      await observer.processMessages(taggedMessages);
+      await observer.processMessages(taggedMessages, {
+        source: 'openclaw',
+        sessionKey: candidate.sessionKey,
+        transcriptId: candidate.sessionId
+      });
       await observer.flush();
       observedSessions += 1;
     }
