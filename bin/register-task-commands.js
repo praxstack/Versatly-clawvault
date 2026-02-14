@@ -242,12 +242,20 @@ export function registerTaskCommands(
     .description('Generate Obsidian canvas dashboard')
     .option('-v, --vault <path>', 'Vault path')
     .option('--output <path>', 'Output file path (default: dashboard.canvas)')
+    .option('--template <id>', 'Canvas template ID (default, project-board, brain, sprint)')
+    .option('--project <project>', 'Project filter for template-aware canvases')
+    .option('--list-templates', 'List available canvas templates and exit')
     .action(async (options) => {
       try {
-        const vaultPath = resolveVaultPath(options.vault);
+        const vaultPath = options.listTemplates
+          ? (options.vault || '.')
+          : resolveVaultPath(options.vault);
         const { canvasCommand } = await import('../dist/commands/canvas.js');
         await canvasCommand(vaultPath, {
-          output: options.output
+          output: options.output,
+          template: options.template,
+          project: options.project,
+          listTemplates: options.listTemplates
         });
       } catch (err) {
         console.error(chalk.red(`Error: ${err.message}`));

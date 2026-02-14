@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { generateCanvas } from './canvas.js';
+import { canvasCommand, generateCanvas } from './canvas.js';
 import { createTask, updateTask, createBacklogItem, completeTask } from '../lib/task-utils.js';
 import { ensureLedgerStructure, getObservationPath, getReflectionsRoot } from '../lib/ledger.js';
 
@@ -271,6 +271,61 @@ describe('canvas command', () => {
       expect(docsNode).toBeDefined();
       expect(docsNode?.text).toContain('Total: 2');
       expect(docsNode?.text).toContain('Inbox: 2 pending triage');
+    });
+  });
+
+  describe('canvasCommand', () => {
+    it('lists templates without writing a canvas file', async () => {
+      const outputPath = path.join(tempDir, 'dashboard.canvas');
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+      let output = '';
+
+      try {
+        await canvasCommand(tempDir, { listTemplates: true });
+        output = logSpy.mock.calls.flat().join('\n');
+      } finally {
+        logSpy.mockRestore();
+      }
+
+      expect(output).toContain('Available canvas templates:');
+      expect(output).toContain('default');
+      expect(output).toContain('project-board');
+      expect(output).toContain('brain');
+      expect(output).toContain('sprint');
+      expect(fs.existsSync(outputPath)).toBe(false);
+    });
+
+    it('generates selected template with project filter', async () => {
+      const alphaTask = createTask(tempDir, 'Alpha Task', { project: 'alpha' });
+      createTask(tempDir, 'Beta Task', { project: 'beta' });
+      const outputPath = path.join(tempDir, 'project-board.canvas');
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+      try {
+        await canvasCommand(tempDir, {
+          template: 'project-board',
+          project: 'alpha',
+          output: outputPath
+        });
+      } finally {
+        logSpy.mockRestore();
+      }
+
+      expect(fs.existsSync(outputPath)).toBe(true);
+      const parsed = JSON.parse(fs.readFileSync(outputPath, 'utf-8')) as {
+        nodes: Array<{ type: string; file?: string }>;
+      };
+      const fileNodes = parsed.nodes
+        .filter((node) => node.type === 'file' && typeof node.file === 'string')
+        .map((node) => node.file as string);
+      expect(fileNodes).toContain(`tasks/${alphaTask.slug}.md`);
+      expect(fileNodes).not.toContain('tasks/beta-task.md');
+    });
+
+    it('throws for unknown template ids', async () => {
+      await expect(canvasCommand(tempDir, { template: 'unknown-template' }))
+        .rejects
+        .toThrow('Unknown canvas template');
     });
   });
 });
