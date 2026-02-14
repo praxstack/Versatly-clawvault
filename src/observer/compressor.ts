@@ -14,9 +14,9 @@ interface ObservationLine {
 const DATE_HEADING_RE = /^##\s+(\d{4}-\d{2}-\d{2})\s*$/;
 const OBSERVATION_LINE_RE = /^(🔴|🟡|🟢)\s+(.+)$/u;
 const CRITICAL_RE =
-  /(?:\b(?:decision|decided|chose|chosen|selected|picked|opted|switched to)\s*:?|\bdecid(?:e|ed|ing|ion)\b|\berror\b|\bfail(?:ed|ure|ing)?\b|\bblock(?:ed|er)?\b|\bbreaking(?:\s+change)?s?\b|\bcritical\b|\b\w+\s+chosen\s+(?:for|over|as)\b)/i;
+  /(?:\b(?:decision|decided|chose|chosen|selected|picked|opted|switched to)\s*:?|\bdecid(?:e|ed|ing|ion)\b|\berror\b|\bfail(?:ed|ure|ing)?\b|\bblock(?:ed|er)?\b|\bbreaking(?:\s+change)?s?\b|\bcritical\b|\b\w+\s+chosen\s+(?:for|over|as)\b|\bpublish(?:ed)?\b.*@?\d+\.\d+|\bmerge[d]?\s+(?:PR|pull\s+request)\b|\bshipped\b|\breleased?\b.*v?\d+\.\d+)/i;
 const DEADLINE_WITH_DATE_RE = /(?:(?:\bdeadline\b|\bdue(?:\s+date)?\b|\bcutoff\b).*(?:\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2})|(?:\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}).*(?:\bdeadline\b|\bdue(?:\s+date)?\b|\bcutoff\b))/i;
-const NOTABLE_RE = /\b(prefer(?:ence|s)?|likes?|dislikes?|context|pattern|architecture|approach|trade[- ]?off|milestone|stakeholder|teammate|collaborat(?:e|ed|ion)|discussion|notable|deadline|due|timeline)\b/i;
+const NOTABLE_RE = /\b(prefer(?:ence|s)?|likes?|dislikes?|context|pattern|architecture|approach|trade[- ]?off|milestone|stakeholder|teammate|collaborat(?:e|ed|ion)|discussion|notable|deadline|due|timeline|deploy(?:ed|ment)?|built|configured|launched)\b/i;
 
 export class Compressor {
   private readonly model?: string;
@@ -81,9 +81,9 @@ export class Compressor {
       '- Group observations by date heading: ## YYYY-MM-DD',
       '- Each line must follow: <emoji> <HH:MM> <observation>',
       '- Priority emojis: 🔴 critical, 🟡 notable, 🟢 info',
-      '- 🔴 for: decisions between alternatives, blockers, deadlines with explicit dates, breaking changes, commitments made to people',
-      '- 🟡 for: preferences, architecture discussions, trade-offs, milestones, people interactions, notable context',
-      '- 🟢 for: completed tasks, deployments, builds, general progress',
+      '- 🔴 for: decisions between alternatives, blockers, deadlines with explicit dates, breaking changes, commitments made to people, version releases/publishes, merged PRs, shipped features',
+      '- 🟡 for: preferences, architecture discussions, trade-offs, milestones, people interactions, notable context, deployments to production, new tools/commands built, project configuration changes',
+      '- 🟢 for: routine tasks, intermediate build steps, general progress, minor fixes',
       '- Preserve source tags when present (e.g., [main], [telegram-dm], [discord], [telegram-group]).',
       '',
       'QUALITY FILTERS (important):',
@@ -97,6 +97,15 @@ export class Compressor {
       'AGENT ATTRIBUTION:',
       '- If the transcript shows multiple speakers/agents, prefix observations with who did it: "Pedro asked...", "Clawdious deployed...", "Zeca generated..."',
       '- If only one agent is acting, attribution is optional.',
+      '',
+      'PROJECT MILESTONES (critical — these are the most valuable observations):',
+      '- Version releases: "🔴 HH:MM Published project@version to npm/PyPI/etc" — ALWAYS 🔴',
+      '- PR merges: "🔴 HH:MM Merged PR #N: <title> into <branch>" — ALWAYS 🔴',
+      '- Feature completion: "🔴 HH:MM Shipped <feature> in <project>" — ALWAYS 🔴',
+      '- Production deploys: "🟡 HH:MM Deployed <project> to <url>" — ALWAYS at least 🟡',
+      '- New commands/APIs: "🟡 HH:MM Built <command/endpoint> for <project>"',
+      '- Config/infra changes: "🟡 HH:MM Changed <what> in <project> (<why>)"',
+      '- Do NOT collapse multiple releases into one line — each version matters for history.',
       '',
       'COMMITMENT FORMAT (when someone promises/agrees to something):',
       '- Use: "🔴 HH:MM [COMMITMENT] <who> committed to <what> by <when>" (include deadline if mentioned)',
