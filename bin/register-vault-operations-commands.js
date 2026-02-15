@@ -2,6 +2,8 @@
  * Vault operation command registrations (browse/sync/reindex/remember/shell-init/dashboard).
  */
 
+import { validatePathWithinBase } from './command-runtime.js';
+
 export function registerVaultOperationsCommands(
   program,
   {
@@ -232,7 +234,10 @@ export function registerVaultOperationsCommands(
         const vault = await getVault(options.vault);
         let content = options.content || '';
         if (options.file) {
-          content = fs.readFileSync(options.file, 'utf-8');
+          // Validate file path is within current working directory to prevent path traversal
+          const cwd = process.cwd();
+          const resolvedFilePath = validatePathWithinBase(options.file, cwd);
+          content = fs.readFileSync(resolvedFilePath, 'utf-8');
         } else if (options.stdin) {
           content = fs.readFileSync(0, 'utf-8');
         }

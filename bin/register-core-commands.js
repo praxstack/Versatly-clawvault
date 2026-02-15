@@ -2,6 +2,8 @@
  * Core vault lifecycle and write command registrations.
  */
 
+import { validatePathWithinBase } from './command-runtime.js';
+
 export function registerCoreCommands(
   program,
   { chalk, path, fs, createVault, getVault, runQmd }
@@ -179,7 +181,10 @@ export function registerCoreCommands(
         let content = options.content || '';
 
         if (options.file) {
-          content = fs.readFileSync(options.file, 'utf-8');
+          // Validate file path is within current working directory to prevent path traversal
+          const cwd = process.cwd();
+          const resolvedFilePath = validatePathWithinBase(options.file, cwd);
+          content = fs.readFileSync(resolvedFilePath, 'utf-8');
         } else if (options.stdin) {
           content = fs.readFileSync(0, 'utf-8');
         }
