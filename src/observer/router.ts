@@ -16,6 +16,7 @@ import {
   type BacklogItem,
   type Task
 } from '../lib/task-utils.js';
+import { listProjects } from '../lib/project-utils.js';
 import { listRouteRules, matchRouteRule, type RouteRule } from '../lib/config-manager.js';
 
 /**
@@ -57,6 +58,13 @@ interface ExistingWorkItem {
 interface RouteDestination {
   filePath: string;
   headerLabel: string;
+}
+
+interface KnownProjectDefinition {
+  slug: string;
+  normalizedSlug: string;
+  title: string;
+  normalizedTitle: string;
 }
 
 const CATEGORY_PATTERNS: Array<{ category: string; patterns: RegExp[] }> = [
@@ -148,6 +156,7 @@ export class Router {
     const items = this.parseObservations(observationMarkdown);
     const routed: RoutedItem[] = [];
     const knownWorkItems = this.extractTasks ? this.loadExistingWorkItems() : [];
+    const knownProjectDefinitions = this.loadKnownProjectDefinitions();
     let dedupHits = 0;
 
     for (const item of items) {
@@ -177,7 +186,7 @@ export class Router {
         date: item.date
       };
       routed.push(routedItem);
-      this.appendToCategory(category, routedItem);
+      this.appendToCategory(category, routedItem, knownProjectDefinitions);
     }
 
     const summary = this.buildSummary(routed, dedupHits);
@@ -518,6 +527,68 @@ export class Router {
     return name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
   }
 
+  private normalizeProjectReference(value: string): string {
+    return value
+      .toLowerCase()
+      .replace(/[^\w\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .trim();
+  }
+
+  private escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  private extractWikiTargets(content: string): string[] {
+    const targets: string[] = [];
+    for (const match of content.matchAll(/\[\[([^\]]+)\]\]/g)) {
+      const candidate = match[1];
+      if (!candidate) continue;
+      const target = candidate.split('|')[0].split('#')[0].trim();
+      if (target) targets.push(target);
+    }
+    return targets;
+  }
+
+  private loadKnownProjectDefinitions(): KnownProjectDefinition[] {
+    try {
+      return listProjects(this.vaultPath).map((project) => ({
+        slug: project.slug,
+        normalizedSlug: this.normalizeProjectReference(project.slug),
+        title: project.title,
+        normalizedTitle: project.title.toLowerCase()
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  private matchKnownProjectSlug(content: string, knownProjects: KnownProjectDefinition[]): string | null {
+    if (knownProjects.length === 0) {
+      return null;
+    }
+
+    const normalizedContent = content.toLowerCase();
+    const wikiTargets = this.extractWikiTargets(content).map((target) => this.normalizeProjectReference(target));
+
+    for (const project of knownProjects) {
+      if (wikiTargets.includes(project.normalizedSlug)) {
+        return project.slug;
+      }
+      if (project.normalizedTitle && normalizedContent.includes(project.normalizedTitle)) {
+        return project.slug;
+      }
+      const slugPattern = new RegExp(`\\b${this.escapeRegExp(project.normalizedSlug)}\\b`, 'i');
+      if (slugPattern.test(content)) {
+        return project.slug;
+      }
+    }
+
+    return null;
+  }
+
   private loadCustomRoutes(): RouteRule[] {
     try {
       return listRouteRules(this.vaultPath);
@@ -552,7 +623,11 @@ export class Router {
    * For people/projects: entity-slug subfolder with date file (e.g., people/pedro/2026-02-12.md)
    * For other categories: category/date.md
    */
-  private resolveFilePath(category: string, item: RoutedItem): RouteDestination {
+  private resolveFilePath(
+    category: string,
+    item: RoutedItem,
+    knownProjectDefinitions: KnownProjectDefinition[]
+  ): RouteDestination {
     const customEntityPath = this.resolveCustomEntityPath(item.content, category);
     if (customEntityPath) {
       const customEntityDir = path.join(this.vaultPath, category, customEntityPath);
@@ -563,15 +638,28 @@ export class Router {
       };
     }
 
-    const entitySlug = this.extractEntitySlug(item.content, category);
-    if (entitySlug) {
-      const entityDir = path.join(this.vaultPath, category, entitySlug);
-      fs.mkdirSync(entityDir, { recursive: true });
-      return {
-        filePath: path.join(entityDir, `${item.date}.md`),
-        headerLabel: `${category}/${entitySlug}`
-      };
+    if (category === 'projects') {
+      const matchedProjectSlug = this.matchKnownProjectSlug(item.content, knownProjectDefinitions);
+      if (matchedProjectSlug) {
+        const projectDir = path.join(this.vaultPath, category, matchedProjectSlug);
+        fs.mkdirSync(projectDir, { recursive: true });
+        return {
+          filePath: path.join(projectDir, `${item.date}.md`),
+          headerLabel: `${category}/${matchedProjectSlug}`
+        };
+      }
+    } else {
+      const entitySlug = this.extractEntitySlug(item.content, category);
+      if (entitySlug) {
+        const entityDir = path.join(this.vaultPath, category, entitySlug);
+        fs.mkdirSync(entityDir, { recursive: true });
+        return {
+          filePath: path.join(entityDir, `${item.date}.md`),
+          headerLabel: `${category}/${entitySlug}`
+        };
+      }
     }
+
     const categoryDir = path.join(this.vaultPath, category);
     fs.mkdirSync(categoryDir, { recursive: true });
     return {
@@ -580,9 +668,13 @@ export class Router {
     };
   }
 
-  private appendToCategory(category: string, item: RoutedItem): void {
+  private appendToCategory(
+    category: string,
+    item: RoutedItem,
+    knownProjectDefinitions: KnownProjectDefinition[]
+  ): void {
     // Resolve file path (entity-aware for people/projects, custom routes first)
-    const destination = this.resolveFilePath(category, item);
+    const destination = this.resolveFilePath(category, item, knownProjectDefinitions);
     const filePath = destination.filePath;
     // Ensure parent dir exists (resolveFilePath handles entity dirs, but be safe)
     fs.mkdirSync(path.dirname(filePath), { recursive: true });

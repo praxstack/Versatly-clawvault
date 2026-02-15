@@ -91,6 +91,84 @@ describe('Router', () => {
     }
   });
 
+  it('routes known project observations to project subfolders', () => {
+    const vaultPath = makeTempVault();
+    const router = new Router(vaultPath);
+    const projectsDir = path.join(vaultPath, 'projects');
+    fs.mkdirSync(projectsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(projectsDir, 'apollo.md'),
+      [
+        '---',
+        'type: project',
+        'status: active',
+        'created: 2026-02-01T00:00:00.000Z',
+        'updated: 2026-02-01T00:00:00.000Z',
+        '---',
+        '',
+        '# Apollo',
+        ''
+      ].join('\n')
+    );
+
+    const markdown = [
+      '## 2026-02-11',
+      '',
+      '- [project|c=0.90|i=0.82] 09:00 shipped [[apollo]] with zero rollback incidents'
+    ].join('\n');
+
+    try {
+      router.route(markdown);
+
+      const projectFile = path.join(vaultPath, 'projects', 'apollo', '2026-02-11.md');
+      const rootDateFile = path.join(vaultPath, 'projects', '2026-02-11.md');
+      expect(fs.existsSync(projectFile)).toBe(true);
+      expect(fs.existsSync(rootDateFile)).toBe(false);
+      expect(fs.readFileSync(projectFile, 'utf-8')).toContain('shipped [[apollo]]');
+    } finally {
+      fs.rmSync(vaultPath, { recursive: true, force: true });
+    }
+  });
+
+  it('routes unknown project observations to projects root date file', () => {
+    const vaultPath = makeTempVault();
+    const router = new Router(vaultPath);
+    const projectsDir = path.join(vaultPath, 'projects');
+    fs.mkdirSync(projectsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(projectsDir, 'apollo.md'),
+      [
+        '---',
+        'type: project',
+        'status: active',
+        'created: 2026-02-01T00:00:00.000Z',
+        'updated: 2026-02-01T00:00:00.000Z',
+        '---',
+        '',
+        '# Apollo',
+        ''
+      ].join('\n')
+    );
+
+    const markdown = [
+      '## 2026-02-11',
+      '',
+      '- [project|c=0.88|i=0.75] 10:20 launched [[zeus]] API diagnostics endpoint'
+    ].join('\n');
+
+    try {
+      router.route(markdown);
+
+      const rootDateFile = path.join(vaultPath, 'projects', '2026-02-11.md');
+      const unknownProjectFile = path.join(vaultPath, 'projects', 'zeus', '2026-02-11.md');
+      expect(fs.existsSync(rootDateFile)).toBe(true);
+      expect(fs.existsSync(unknownProjectFile)).toBe(false);
+      expect(fs.readFileSync(rootDateFile, 'utf-8')).toContain('launched [[zeus]] API diagnostics endpoint');
+    } finally {
+      fs.rmSync(vaultPath, { recursive: true, force: true });
+    }
+  });
+
   it('does not create files at vault root', () => {
     const vaultPath = makeTempVault();
     const router = new Router(vaultPath);

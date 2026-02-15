@@ -232,6 +232,16 @@ export {
   listSubtasks,
   listDependentTasks
 } from './lib/task-utils.js';
+export {
+  listProjects,
+  readProject,
+  createProject,
+  updateProject,
+  archiveProject,
+  getProjectTasks,
+  getProjectActivity
+} from './lib/project-utils.js';
+export type { ProjectStatus, ProjectFrontmatter, Project } from './lib/project-utils.js';
 
 // Type exports
 export type {

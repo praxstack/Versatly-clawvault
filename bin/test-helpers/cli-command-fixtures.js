@@ -12,6 +12,7 @@ import { registerConfigCommands } from '../register-config-commands.js';
 import { registerRouteCommands } from '../register-route-commands.js';
 import { registerTaskCommands } from '../register-task-commands.js';
 import { registerKanbanCommands } from '../register-kanban-commands.js';
+import { registerProjectCommands } from '../register-project-commands.js';
 
 export const chalkStub = {
   cyan: (value) => value,
@@ -106,6 +107,10 @@ export function registerAllCommandModules(program = new Command()) {
     resolveVaultPath: stubResolveVaultPath
   });
   registerKanbanCommands(program, {
+    chalk: chalkStub,
+    resolveVaultPath: stubResolveVaultPath
+  });
+  registerProjectCommands(program, {
     chalk: chalkStub,
     resolveVaultPath: stubResolveVaultPath
   });

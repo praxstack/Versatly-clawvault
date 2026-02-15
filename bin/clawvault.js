@@ -19,6 +19,7 @@ import { registerVaultOperationsCommands } from './register-vault-operations-com
 import { registerConfigCommands } from './register-config-commands.js';
 import { registerRouteCommands } from './register-route-commands.js';
 import { registerKanbanCommands } from './register-kanban-commands.js';
+import { registerProjectCommands } from './register-project-commands.js';
 
 import { registerTaskCommands } from './register-task-commands.js';
 
@@ -95,6 +96,10 @@ registerTaskCommands(program, {
   resolveVaultPath
 });
 registerKanbanCommands(program, {
+  chalk,
+  resolveVaultPath
+});
+registerProjectCommands(program, {
   chalk,
   resolveVaultPath
 });
