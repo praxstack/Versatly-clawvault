@@ -9,10 +9,37 @@ import {
 } from '../lib/observation-format.js';
 
 export interface CompressorOptions {
+  provider?: CompressionProvider;
   model?: string;
+  baseUrl?: string;
+  apiKey?: string;
   now?: () => Date;
   fetchImpl?: typeof fetch;
 }
+
+export type CompressionProvider =
+  | 'anthropic'
+  | 'openai'
+  | 'gemini'
+  | 'openai-compatible'
+  | 'ollama';
+
+type ResolvedCompressionBackend = {
+  provider: CompressionProvider;
+  model: string;
+  apiKey?: string;
+  baseUrl?: string;
+};
+
+const OPENAI_BASE_URL = 'https://api.openai.com/v1';
+const OLLAMA_BASE_URL = 'http://localhost:11434/v1';
+const DEFAULT_PROVIDER_MODELS: Record<CompressionProvider, string> = {
+  anthropic: 'claude-3-5-haiku-latest',
+  openai: 'gpt-4o-mini',
+  gemini: 'gemini-2.0-flash',
+  'openai-compatible': 'gpt-4o-mini',
+  ollama: 'llama3.2'
+};
 
 const CRITICAL_RE =
   /(?:\b(?:decision|decided|chose|chosen|selected|picked|opted|switched to)\s*:?|\bdecid(?:e|ed|ing|ion)\b|\berror\b|\bfail(?:ed|ure|ing)?\b|\bblock(?:ed|er)?\b|\bbreaking(?:\s+change)?s?\b|\bcritical\b|\b\w+\s+chosen\s+(?:for|over|as)\b|\bpublish(?:ed)?\b.*@?\d+\.\d+|\bmerge[d]?\s+(?:PR|pull\s+request)\b|\bshipped\b|\breleased?\b.*v?\d+\.\d+|\bsigned\b.*\b(?:contract|agreement|deal)\b|\bpricing\b.*\$|\bdemo\b.*\b(?:completed?|done|finished)\b|\bmeeting\b.*\b(?:completed?|done|finished)\b|\bstrategy\b.*\b(?:pivot|change|shift)\b)/i;
@@ -24,12 +51,18 @@ const UNRESOLVED_COMMITMENT_RE = /\b(?:need to figure out|tbd|to be determined)\
 const DEADLINE_SIGNAL_RE = /\b(?:by\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow)|before\s+the\s+\w+|deadline is)\b/i;
 
 export class Compressor {
+  private readonly provider?: CompressionProvider;
   private readonly model?: string;
+  private readonly baseUrl?: string;
+  private readonly apiKey?: string;
   private readonly now: () => Date;
   private readonly fetchImpl: typeof fetch;
 
   constructor(options: CompressorOptions = {}) {
+    this.provider = options.provider;
     this.model = options.model;
+    this.baseUrl = options.baseUrl;
+    this.apiKey = options.apiKey;
     this.now = options.now ?? (() => new Date());
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
@@ -41,15 +74,17 @@ export class Compressor {
     }
 
     const prompt = this.buildPrompt(cleanedMessages, existingObservations);
-    const provider = this.resolveProvider();
+    const backend = this.resolveProvider();
 
-    if (provider) {
+    if (backend) {
       try {
-        const llmOutput = provider === 'anthropic'
-          ? await this.callAnthropic(prompt)
-          : provider === 'gemini'
-          ? await this.callGemini(prompt)
-          : await this.callOpenAI(prompt);
+        const llmOutput = backend.provider === 'anthropic'
+          ? await this.callAnthropic(prompt, backend)
+          : backend.provider === 'gemini'
+          ? await this.callGemini(prompt, backend)
+          : backend.provider === 'openai'
+          ? await this.callOpenAI(prompt, backend)
+          : await this.callOpenAICompatible(prompt, backend);
         const normalized = this.normalizeLlmOutput(llmOutput);
         if (normalized) {
           return this.mergeObservations(existingObservations, normalized);
@@ -63,18 +98,137 @@ export class Compressor {
     return this.mergeObservations(existingObservations, fallback);
   }
 
-  private resolveProvider(): 'anthropic' | 'openai' | 'gemini' | null {
+  private resolveProvider(): ResolvedCompressionBackend | null {
     if (process.env.CLAWVAULT_NO_LLM) return null;
-    if (process.env.ANTHROPIC_API_KEY) {
-      return 'anthropic';
+
+    if (this.provider) {
+      const configured = this.resolveConfiguredProvider(this.provider);
+      if (configured) {
+        return configured;
+      }
+      return this.resolveProviderFromEnv(false);
     }
-    if (process.env.OPENAI_API_KEY) {
-      return 'openai';
+
+    return this.resolveProviderFromEnv(true);
+  }
+
+  private resolveConfiguredProvider(provider: CompressionProvider): ResolvedCompressionBackend | null {
+    const model = this.resolveModel(provider);
+    if (provider === 'anthropic') {
+      const apiKey = this.resolveApiKey(provider);
+      if (!apiKey) {
+        return null;
+      }
+      return {
+        provider,
+        model,
+        apiKey
+      };
     }
-    if (process.env.GEMINI_API_KEY) {
-      return 'gemini';
+
+    if (provider === 'gemini') {
+      const apiKey = this.resolveApiKey(provider);
+      if (!apiKey) {
+        return null;
+      }
+      return {
+        provider,
+        model,
+        apiKey
+      };
     }
+
+    if (provider === 'openai') {
+      const apiKey = this.resolveApiKey(provider);
+      if (!apiKey) {
+        return null;
+      }
+      return {
+        provider,
+        model,
+        apiKey,
+        baseUrl: this.resolveBaseUrl(provider)
+      };
+    }
+
+    const apiKey = this.resolveApiKey(provider) ?? undefined;
+    return {
+      provider,
+      model,
+      apiKey,
+      baseUrl: this.resolveBaseUrl(provider)
+    };
+  }
+
+  private resolveProviderFromEnv(allowConfiguredModel: boolean): ResolvedCompressionBackend | null {
+    const anthropicApiKey = this.readEnvValue('ANTHROPIC_API_KEY');
+    if (anthropicApiKey) {
+      return {
+        provider: 'anthropic',
+        model: allowConfiguredModel ? this.resolveModel('anthropic') : DEFAULT_PROVIDER_MODELS.anthropic,
+        apiKey: anthropicApiKey
+      };
+    }
+
+    const openAiApiKey = this.readEnvValue('OPENAI_API_KEY');
+    if (openAiApiKey) {
+      return {
+        provider: 'openai',
+        model: allowConfiguredModel ? this.resolveModel('openai') : DEFAULT_PROVIDER_MODELS.openai,
+        apiKey: openAiApiKey,
+        baseUrl: OPENAI_BASE_URL
+      };
+    }
+
+    const geminiApiKey = this.readEnvValue('GEMINI_API_KEY');
+    if (geminiApiKey) {
+      return {
+        provider: 'gemini',
+        model: allowConfiguredModel ? this.resolveModel('gemini') : DEFAULT_PROVIDER_MODELS.gemini,
+        apiKey: geminiApiKey
+      };
+    }
+
     return null;
+  }
+
+  private resolveModel(provider: CompressionProvider): string {
+    const configuredModel = this.model?.trim();
+    if (configuredModel) {
+      return configuredModel;
+    }
+    return DEFAULT_PROVIDER_MODELS[provider];
+  }
+
+  private resolveApiKey(provider: CompressionProvider): string | null {
+    const configuredApiKey = this.apiKey?.trim();
+    if (configuredApiKey) {
+      return configuredApiKey;
+    }
+
+    if (provider === 'anthropic') {
+      return this.readEnvValue('ANTHROPIC_API_KEY');
+    }
+    if (provider === 'gemini') {
+      return this.readEnvValue('GEMINI_API_KEY');
+    }
+    return this.readEnvValue('OPENAI_API_KEY');
+  }
+
+  private resolveBaseUrl(provider: CompressionProvider): string {
+    const configuredBaseUrl = this.baseUrl?.trim();
+    if (configuredBaseUrl) {
+      return configuredBaseUrl.replace(/\/+$/, '');
+    }
+    if (provider === 'ollama') {
+      return OLLAMA_BASE_URL;
+    }
+    return OPENAI_BASE_URL;
+  }
+
+  private readEnvValue(name: string): string | null {
+    const value = process.env[name]?.trim();
+    return value ? value : null;
   }
 
   private buildPrompt(messages: string[], existingObservations: string): string {
@@ -135,9 +289,51 @@ export class Compressor {
     ].join('\n');
   }
 
-  private async callAnthropic(prompt: string): Promise<string> {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
+  private buildOpenAICompatibleUrl(baseUrl: string): string {
+    const normalizedBaseUrl = baseUrl.replace(/\/+$/, '');
+    return `${normalizedBaseUrl}/chat/completions`;
+  }
+
+  private buildOpenAICompatibleHeaders(apiKey?: string): Record<string, string> {
+    const headers: Record<string, string> = {
+      'content-type': 'application/json'
+    };
+    if (apiKey) {
+      headers.authorization = `Bearer ${apiKey}`;
+    }
+    return headers;
+  }
+
+  private extractOpenAIContent(content: unknown): string {
+    if (typeof content === 'string') {
+      return content.trim();
+    }
+
+    if (!Array.isArray(content)) {
+      return '';
+    }
+
+    const parts = content
+      .map((part) => {
+        if (typeof part === 'string') {
+          return part;
+        }
+        if (!part || typeof part !== 'object') {
+          return '';
+        }
+        const candidate = part as { text?: unknown };
+        return typeof candidate.text === 'string' ? candidate.text : '';
+      })
+      .filter((part) => part.trim().length > 0);
+
+    return parts.join('\n').trim();
+  }
+
+  private async callAnthropic(
+    prompt: string,
+    backend: ResolvedCompressionBackend
+  ): Promise<string> {
+    if (!backend.apiKey) {
       return '';
     }
 
@@ -145,11 +341,11 @@ export class Compressor {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'x-api-key': apiKey,
+        'x-api-key': backend.apiKey,
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: this.model ?? 'claude-3-5-haiku-latest',
+        model: backend.model,
         temperature: 0.1,
         max_tokens: 1400,
         messages: [{ role: 'user', content: prompt }]
@@ -171,20 +367,23 @@ export class Compressor {
       .trim() ?? '';
   }
 
-  private async callOpenAI(prompt: string): Promise<string> {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return '';
-    }
+  private async callOpenAI(
+    prompt: string,
+    backend: ResolvedCompressionBackend
+  ): Promise<string> {
+    return this.callOpenAICompatible(prompt, backend);
+  }
 
-    const response = await this.fetchImpl('https://api.openai.com/v1/chat/completions', {
+  private async callOpenAICompatible(
+    prompt: string,
+    backend: ResolvedCompressionBackend
+  ): Promise<string> {
+    const baseUrl = backend.baseUrl ?? this.resolveBaseUrl(backend.provider);
+    const response = await this.fetchImpl(this.buildOpenAICompatibleUrl(baseUrl), {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        authorization: `Bearer ${apiKey}`
-      },
+      headers: this.buildOpenAICompatibleHeaders(backend.apiKey),
       body: JSON.stringify({
-        model: this.model ?? 'gpt-4o-mini',
+        model: backend.model,
         temperature: 0.1,
         messages: [
           { role: 'system', content: 'You transform session logs into concise observations.' },
@@ -194,24 +393,26 @@ export class Compressor {
     });
 
     if (!response.ok) {
-      throw new Error(`OpenAI request failed (${response.status})`);
+      throw new Error(`OpenAI-compatible request failed (${response.status})`);
     }
 
     const payload = await response.json() as {
-      choices?: Array<{ message?: { content?: string } }>;
+      choices?: Array<{ message?: { content?: unknown } }>;
     };
-    return payload.choices?.[0]?.message?.content?.trim() ?? '';
+    return this.extractOpenAIContent(payload.choices?.[0]?.message?.content);
   }
 
-  private async callGemini(prompt: string): Promise<string> {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
+  private async callGemini(
+    prompt: string,
+    backend: ResolvedCompressionBackend
+  ): Promise<string> {
+    if (!backend.apiKey) {
       return '';
     }
 
-    const model = this.model ?? 'gemini-2.0-flash';
+    const model = encodeURIComponent(backend.model);
     const response = await this.fetchImpl(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${backend.apiKey}`,
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },

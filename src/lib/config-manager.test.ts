@@ -40,6 +40,10 @@ describe('config-manager', () => {
       setConfigValue(vaultPath, 'theme', 'minimal');
       setConfigValue(vaultPath, 'observe.provider', 'openai');
       setConfigValue(vaultPath, 'observe.model', 'gpt-5-mini');
+      setConfigValue(vaultPath, 'observer.compression.provider', 'openai-compatible');
+      setConfigValue(vaultPath, 'observer.compression.model', 'llama3.2');
+      setConfigValue(vaultPath, 'observer.compression.baseUrl', 'http://localhost:11434/v1');
+      setConfigValue(vaultPath, 'observer.compression.apiKey', 'config-api-key');
       setConfigValue(vaultPath, 'context.maxResults', '11');
       setConfigValue(vaultPath, 'context.defaultProfile', 'planning');
       setConfigValue(vaultPath, 'graph.maxHops', '4');
@@ -49,6 +53,10 @@ describe('config-manager', () => {
       expect(getConfigValue(vaultPath, 'theme')).toBe('minimal');
       expect(getConfigValue(vaultPath, 'observe.provider')).toBe('openai');
       expect(getConfigValue(vaultPath, 'observe.model')).toBe('gpt-5-mini');
+      expect(getConfigValue(vaultPath, 'observer.compression.provider')).toBe('openai-compatible');
+      expect(getConfigValue(vaultPath, 'observer.compression.model')).toBe('llama3.2');
+      expect(getConfigValue(vaultPath, 'observer.compression.baseUrl')).toBe('http://localhost:11434/v1');
+      expect(getConfigValue(vaultPath, 'observer.compression.apiKey')).toBe('config-api-key');
       expect(getConfigValue(vaultPath, 'context.maxResults')).toBe(11);
       expect(getConfigValue(vaultPath, 'context.defaultProfile')).toBe('planning');
       expect(getConfigValue(vaultPath, 'graph.maxHops')).toBe(4);
@@ -61,6 +69,14 @@ describe('config-manager', () => {
         observe: {
           provider: 'openai',
           model: 'gpt-5-mini'
+        },
+        observer: {
+          compression: {
+            provider: 'openai-compatible',
+            model: 'llama3.2',
+            baseUrl: 'http://localhost:11434/v1',
+            apiKey: 'config-api-key'
+          }
         },
         context: {
           maxResults: 11,
@@ -81,6 +97,8 @@ describe('config-manager', () => {
       setConfigValue(vaultPath, 'name', 'custom-name');
       setConfigValue(vaultPath, 'categories', 'custom-a,custom-b');
       setConfigValue(vaultPath, 'theme', 'neural');
+      setConfigValue(vaultPath, 'observer.compression.provider', 'ollama');
+      setConfigValue(vaultPath, 'observer.compression.model', 'llama3.2:latest');
       addRouteRule(vaultPath, 'Pedro', 'people/pedro');
 
       const reset = resetConfig(vaultPath);
@@ -91,6 +109,9 @@ describe('config-manager', () => {
         observe: {
           provider: 'gemini',
           model: 'gemini-2.0-flash'
+        },
+        observer: {
+          compression: {}
         },
         context: {
           maxResults: 5,

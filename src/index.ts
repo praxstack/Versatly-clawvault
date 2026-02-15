@@ -109,6 +109,7 @@ export {
 export { getVaultPath, findNearestVaultPath, resolveVaultPath } from './lib/config.js';
 export {
   SUPPORTED_CONFIG_KEYS,
+  getConfig,
   listConfig,
   getConfigValue,
   setConfigValue,
@@ -123,6 +124,7 @@ export type {
   ManagedConfigKey,
   RouteRule,
   ObserveProvider,
+  ObserverCompressionProvider,
   Theme,
   ContextProfile as ConfigDefaultProfile
 } from './lib/config-manager.js';
@@ -162,7 +164,7 @@ export type { TransitionEvent } from './lib/transition-ledger.js';
 export { Observer } from './observer/observer.js';
 export type { ObserverOptions, ObserverCompressor, ObserverReflector } from './observer/observer.js';
 export { Compressor } from './observer/compressor.js';
-export type { CompressorOptions } from './observer/compressor.js';
+export type { CompressorOptions, CompressionProvider } from './observer/compressor.js';
 export { Reflector } from './observer/reflector.js';
 export type { ReflectorOptions } from './observer/reflector.js';
 export { SessionWatcher } from './observer/watcher.js';

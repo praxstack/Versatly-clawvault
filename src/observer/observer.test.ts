@@ -16,10 +16,13 @@ function withFixedNow(isoTimestamp: string): () => Date {
 
 const originalAnthropic = process.env.ANTHROPIC_API_KEY;
 const originalOpenAI = process.env.OPENAI_API_KEY;
+const originalGemini = process.env.GEMINI_API_KEY;
 
 afterEach(() => {
   process.env.ANTHROPIC_API_KEY = originalAnthropic;
   process.env.OPENAI_API_KEY = originalOpenAI;
+  process.env.GEMINI_API_KEY = originalGemini;
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
@@ -156,6 +159,105 @@ describe('Observer', () => {
       const updated = fs.readFileSync(observationPath, 'utf-8');
       expect((updated.match(/Keep deployment logs/g) ?? []).length).toBe(1);
       expect((updated.match(/Added rollback checklist/g) ?? []).length).toBe(1);
+    } finally {
+      fs.rmSync(vaultPath, { recursive: true, force: true });
+    }
+  });
+
+  it('loads observer compression provider/model from config and overrides env sniffing', async () => {
+    const vaultPath = makeTempVault();
+    const now = withFixedNow('2026-02-11T16:00:00.000Z');
+    const configPath = path.join(vaultPath, '.clawvault.json');
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
+    config.observer = {
+      compression: {
+        provider: 'openai-compatible',
+        model: 'local-model-v1',
+        baseUrl: 'http://localhost:11434/v1'
+      }
+    };
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
+
+    process.env.ANTHROPIC_API_KEY = 'anthropic-test-key';
+    process.env.OPENAI_API_KEY = '';
+    process.env.GEMINI_API_KEY = '';
+
+    const fetchSpy = vi.fn(async (_input: unknown, _init?: RequestInit) => ({
+      ok: true,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: '## 2026-02-11\n\n- [fact|c=0.80|i=0.40] 16:00 Config backend selected'
+            }
+          }
+        ]
+      })
+    } as Response));
+    vi.stubGlobal('fetch', fetchSpy as unknown as typeof fetch);
+
+    try {
+      const observer = new Observer(vaultPath, {
+        tokenThreshold: 1,
+        reflectThreshold: 99999,
+        now
+      });
+      await observer.processMessages(['capture state']);
+
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const [url, request] = fetchSpy.mock.calls[0] as [unknown, RequestInit];
+      const requestUrl = typeof url === 'string' ? url : String(url);
+      const body = JSON.parse(String(request.body)) as { model?: string };
+      expect(requestUrl).toBe('http://localhost:11434/v1/chat/completions');
+      expect(body.model).toBe('local-model-v1');
+      expect(observer.getObservations()).toContain('Config backend selected');
+    } finally {
+      fs.rmSync(vaultPath, { recursive: true, force: true });
+    }
+  });
+
+  it('falls back to env-based provider when configured provider lacks required credentials', async () => {
+    const vaultPath = makeTempVault();
+    const now = withFixedNow('2026-02-11T16:10:00.000Z');
+    const configPath = path.join(vaultPath, '.clawvault.json');
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
+    config.observer = {
+      compression: {
+        provider: 'openai'
+      }
+    };
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
+
+    process.env.ANTHROPIC_API_KEY = 'anthropic-fallback-key';
+    process.env.OPENAI_API_KEY = '';
+    process.env.GEMINI_API_KEY = '';
+
+    const fetchSpy = vi.fn(async (_input: unknown, _init?: RequestInit) => ({
+      ok: true,
+      json: async () => ({
+        content: [
+          {
+            type: 'text',
+            text: '## 2026-02-11\n\n- [fact|c=0.80|i=0.40] 16:10 Fallback to Anthropic'
+          }
+        ]
+      })
+    } as Response));
+    vi.stubGlobal('fetch', fetchSpy as unknown as typeof fetch);
+
+    try {
+      const observer = new Observer(vaultPath, {
+        tokenThreshold: 1,
+        reflectThreshold: 99999,
+        now
+      });
+      await observer.processMessages(['capture state']);
+
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const [url] = fetchSpy.mock.calls[0] as [unknown, RequestInit];
+      const requestUrl = typeof url === 'string' ? url : String(url);
+      expect(requestUrl).toBe('https://api.anthropic.com/v1/messages');
+      expect(observer.getObservations()).toContain('Fallback to Anthropic');
     } finally {
       fs.rmSync(vaultPath, { recursive: true, force: true });
     }

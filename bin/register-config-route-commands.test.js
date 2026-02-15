@@ -31,6 +31,10 @@ vi.mock('../dist/index.js', () => ({
     'theme',
     'observe.model',
     'observe.provider',
+    'observer.compression.provider',
+    'observer.compression.model',
+    'observer.compression.baseUrl',
+    'observer.compression.apiKey',
     'context.maxResults',
     'context.defaultProfile',
     'graph.maxHops'

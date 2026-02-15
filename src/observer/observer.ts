@@ -1,8 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { Compressor } from './compressor.js';
+import { Compressor, type CompressionProvider } from './compressor.js';
 import { Reflector } from './reflector.js';
 import { Router } from './router.js';
+import { listConfig } from '../lib/config-manager.js';
 import {
   ensureLedgerStructure,
   ensureParentDir,
@@ -30,6 +31,9 @@ export interface ObserverOptions {
   tokenThreshold?: number;
   reflectThreshold?: number;
   model?: string;
+  compressionProvider?: CompressionProvider;
+  compressionBaseUrl?: string;
+  compressionApiKey?: string;
   compressor?: ObserverCompressor;
   reflector?: ObserverReflector;
   now?: () => Date;
@@ -42,6 +46,64 @@ export interface ObserverProcessOptions {
   sessionKey?: string;
   transcriptId?: string;
   timestamp?: Date;
+}
+
+type CompressionConfigSnapshot = {
+  provider?: CompressionProvider;
+  model?: string;
+  baseUrl?: string;
+  apiKey?: string;
+};
+
+const COMPRESSION_PROVIDERS = new Set<CompressionProvider>([
+  'anthropic',
+  'openai',
+  'gemini',
+  'openai-compatible',
+  'ollama'
+]);
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function asNonEmptyString(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function asCompressionProvider(value: unknown): CompressionProvider | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const normalized = value.trim() as CompressionProvider;
+  return COMPRESSION_PROVIDERS.has(normalized) ? normalized : undefined;
+}
+
+function readCompressionConfig(vaultPath: string): CompressionConfigSnapshot {
+  try {
+    const config = listConfig(vaultPath);
+    const root = asRecord(config);
+    const observer = asRecord(root?.observer);
+    const compression = asRecord(observer?.compression);
+    if (!compression) {
+      return {};
+    }
+    return {
+      provider: asCompressionProvider(compression.provider),
+      model: asNonEmptyString(compression.model),
+      baseUrl: asNonEmptyString(compression.baseUrl),
+      apiKey: asNonEmptyString(compression.apiKey)
+    };
+  } catch {
+    return {};
+  }
 }
 
 export class Observer {
@@ -66,7 +128,14 @@ export class Observer {
     this.tokenThreshold = options.tokenThreshold ?? 30000;
     this.reflectThreshold = options.reflectThreshold ?? 40000;
     this.now = options.now ?? (() => new Date());
-    this.compressor = options.compressor ?? new Compressor({ model: options.model, now: this.now });
+    const compressionConfig = readCompressionConfig(this.vaultPath);
+    this.compressor = options.compressor ?? new Compressor({
+      provider: options.compressionProvider ?? compressionConfig.provider,
+      model: options.model ?? compressionConfig.model,
+      baseUrl: options.compressionBaseUrl ?? compressionConfig.baseUrl,
+      apiKey: options.compressionApiKey ?? compressionConfig.apiKey,
+      now: this.now
+    });
     this.reflector = options.reflector ?? new Reflector({ now: this.now });
     this.rawCapture = options.rawCapture ?? true;
 
