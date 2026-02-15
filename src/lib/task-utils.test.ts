@@ -295,18 +295,12 @@ describe('task-utils', () => {
 
     it('keeps task updates successful when transition ledger writes fail', () => {
       createTask(tempDir, 'Ledger Failure');
-      const appendSpy = vi.spyOn(fs, 'appendFileSync').mockImplementation(() => {
-        const error = new Error('simulated disk full') as NodeJS.ErrnoException;
-        error.code = 'ENOSPC';
-        throw error;
-      });
+      const ledgerRoot = path.join(tempDir, 'ledger');
+      fs.mkdirSync(ledgerRoot, { recursive: true });
+      fs.writeFileSync(path.join(ledgerRoot, 'transitions'), 'occupied');
 
-      try {
-        const updated = updateTask(tempDir, 'ledger-failure', { status: 'in-progress' });
-        expect(updated.frontmatter.status).toBe('in-progress');
-      } finally {
-        appendSpy.mockRestore();
-      }
+      const updated = updateTask(tempDir, 'ledger-failure', { status: 'in-progress' });
+      expect(updated.frontmatter.status).toBe('in-progress');
 
       expect(readAllTransitions(tempDir)).toHaveLength(0);
       expect(readTask(tempDir, 'ledger-failure')?.frontmatter.status).toBe('in-progress');

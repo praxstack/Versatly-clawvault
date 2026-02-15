@@ -140,15 +140,25 @@ export function readAllTransitions(vaultPath: string): TransitionEvent[] {
   const ledgerDir = getLedgerDir(vaultPath);
   if (!fs.existsSync(ledgerDir)) return [];
 
-  const files = fs.readdirSync(ledgerDir)
-    .filter(f => f.endsWith('.jsonl'))
-    .sort();
+  let files: string[] = [];
+  try {
+    files = fs.readdirSync(ledgerDir)
+      .filter(f => f.endsWith('.jsonl'))
+      .sort();
+  } catch {
+    return [];
+  }
 
   const events: TransitionEvent[] = [];
   for (const file of files) {
-    const lines = fs.readFileSync(path.join(ledgerDir, file), 'utf-8')
-      .split('\n')
-      .filter(l => l.trim());
+    let lines: string[] = [];
+    try {
+      lines = fs.readFileSync(path.join(ledgerDir, file), 'utf-8')
+        .split('\n')
+        .filter(l => l.trim());
+    } catch {
+      continue;
+    }
     for (const line of lines) {
       try {
         events.push(JSON.parse(line));
