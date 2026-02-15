@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.4.7] — 2026-02-15
+
+### Added
+- **Dynamic prompt injection** — `clawvault inject` with two-layer matching (deterministic rules + optional LLM classification). Shared LLM provider across observer and inject systems.
+- **Pluggable compression backends** — observer now supports Ollama, Minimax, GLM, and any OpenAI-compatible backend via config.
+- **First-class project primitive** — `clawvault project` for managing project entities with metadata, goals, and team.
+- **Transition logging** — centralized task state transition ledger in `task-utils`, with edge-case hardening.
+
+### Improved
+- Canvas refactored to single generator, stripped 4 templates (-2,081 lines).
+- Inject: LLM matching disabled by default (deterministic-only unless opted in via `--llm`).
+- Global inject scope treated as unfiltered.
+- Observer: stabilized pluggable backend assertions.
+- Test suite expanded to **429 passing tests across 64 files**.
+
+### Fixed
+- Ledger write failures no longer crash task updates.
+- Task list metadata visibility preserved correctly.
+
+---
+
 ## [2.4.0] — 2026-02-14
 
 ### Added
