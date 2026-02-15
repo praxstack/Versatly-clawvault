@@ -696,7 +696,7 @@ export async function runPromptInjection(
 ): Promise<InjectResult> {
   const vaultPath = path.resolve(vaultPathInput);
   const maxResults = Math.max(1, Math.floor(options.maxResults ?? 8));
-  const useLlm = options.useLlm ?? true;
+  const useLlm = options.useLlm ?? false;
   const startDeterministic = Date.now();
 
   const items = indexInjectableItems(vaultPath);
