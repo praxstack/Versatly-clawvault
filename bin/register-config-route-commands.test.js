@@ -37,7 +37,10 @@ vi.mock('../dist/index.js', () => ({
     'observer.compression.apiKey',
     'context.maxResults',
     'context.defaultProfile',
-    'graph.maxHops'
+    'graph.maxHops',
+    'inject.maxResults',
+    'inject.useLlm',
+    'inject.scope'
   ],
   getConfigValue: getConfigValueMock,
   setConfigValue: setConfigValueMock,
