@@ -42,6 +42,18 @@ function readOptionalFile(filePath: string): string | null {
   }
 }
 
+function findPackageRoot(): string {
+  let dir = path.dirname(fileURLToPath(import.meta.url));
+  while (dir !== path.dirname(dir)) {
+    if (fs.existsSync(path.join(dir, 'package.json'))) {
+      return dir;
+    }
+    dir = path.dirname(dir);
+  }
+  // Unreachable in practice — we're always inside the package
+  return path.dirname(fileURLToPath(import.meta.url));
+}
+
 function resolveProjectFile(relativePath: string, baseDir?: string): string {
   if (baseDir) {
     return path.resolve(baseDir, relativePath);
@@ -51,7 +63,7 @@ function resolveProjectFile(relativePath: string, baseDir?: string): string {
   if (fs.existsSync(fromCwd)) {
     return fromCwd;
   }
-  return fileURLToPath(new URL(`../../${relativePath}`, import.meta.url));
+  return path.resolve(findPackageRoot(), relativePath);
 }
 
 function checkOpenClawCli(): CompatCheck {
