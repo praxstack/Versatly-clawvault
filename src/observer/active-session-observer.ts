@@ -12,6 +12,7 @@ const DEFAULT_AGENT_ID = 'clawdious';
 const AGENT_ID_RE = /^[a-zA-Z0-9_-]{1,100}$/;
 const SESSION_ID_RE = /^[a-zA-Z0-9._-]{1,200}$/;
 const CURSOR_FILE_NAME = 'observe-cursors.json';
+const STALE_CURSOR_THRESHOLD_MS = 12 * 60 * 60 * 1000;
 
 export interface ObserveCursorEntry {
   lastObservedOffset: number;
@@ -45,6 +46,13 @@ export interface ActiveObservationCandidate {
   thresholdBytes: number;
 }
 
+export interface ActiveObservationFailure {
+  sessionId: string;
+  sessionKey: string;
+  sourceLabel: string;
+  error: string;
+}
+
 export interface ActiveObserveResult {
   agentId: string;
   sessionsDir: string;
@@ -54,7 +62,17 @@ export interface ActiveObserveResult {
   cursorUpdates: number;
   dryRun: boolean;
   totalNewBytes: number;
+  observedNewBytes: number;
+  routedCounts: Record<string, number>;
+  failedSessionCount: number;
+  failedSessions: ActiveObservationFailure[];
   candidates: ActiveObservationCandidate[];
+}
+
+export interface ObserverStalenessResult {
+  staleCount: number;
+  oldestMs: number;
+  newestMs: number;
 }
 
 interface SessionDescriptor {
@@ -73,6 +91,11 @@ type ObserverFactory = (vaultPath: string, options: ObserverOptions) => MinimalO
 
 interface ActiveObserveDependencies {
   createObserver?: ObserverFactory;
+  now?: () => Date;
+}
+
+interface ObserverStalenessOptions {
+  sessionsDir?: string;
   now?: () => Date;
 }
 
@@ -161,6 +184,108 @@ export function saveObserveCursorStore(vaultPath: string, store: ObserveCursorSt
   const cursorPath = getCursorPath(vaultPath);
   fs.mkdirSync(path.dirname(cursorPath), { recursive: true });
   fs.writeFileSync(cursorPath, `${JSON.stringify(store, null, 2)}\n`, 'utf-8');
+}
+
+function parseAgentIdFromSessionKey(sessionKey: string): string | null {
+  const match = /^agent:([^:]+):/.exec(sessionKey);
+  if (!match?.[1]) {
+    return null;
+  }
+
+  const candidate = match[1].trim();
+  if (!AGENT_ID_RE.test(candidate)) {
+    return null;
+  }
+
+  return candidate;
+}
+
+function resolveSessionFileForCursor(
+  sessionId: string,
+  cursor: ObserveCursorEntry,
+  sessionsDirOverride?: string
+): string | null {
+  const candidates = new Set<string>();
+  if (sessionsDirOverride?.trim()) {
+    candidates.add(path.join(path.resolve(sessionsDirOverride.trim()), `${sessionId}.jsonl`));
+  }
+
+  const agentId = parseAgentIdFromSessionKey(cursor.sessionKey) ?? DEFAULT_AGENT_ID;
+  candidates.add(path.join(getSessionsDir(agentId), `${sessionId}.jsonl`));
+
+  for (const filePath of candidates) {
+    try {
+      const stat = fs.statSync(filePath);
+      if (stat.isFile()) {
+        return filePath;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+export function getObserverStaleness(
+  vaultPath: string,
+  options: ObserverStalenessOptions = {}
+): ObserverStalenessResult {
+  const nowDate = options.now ? options.now() : new Date();
+  const nowMs = nowDate.getTime();
+  if (!Number.isFinite(nowMs)) {
+    return {
+      staleCount: 0,
+      oldestMs: 0,
+      newestMs: 0
+    };
+  }
+
+  const cursorStore = loadObserveCursorStore(path.resolve(vaultPath));
+  let staleCount = 0;
+  let oldestMs = 0;
+  let newestMs = Number.POSITIVE_INFINITY;
+
+  for (const [sessionId, cursor] of Object.entries(cursorStore)) {
+    const observedAtMs = Date.parse(cursor.lastObservedAt);
+    if (!Number.isFinite(observedAtMs)) {
+      continue;
+    }
+
+    const ageMs = Math.max(0, nowMs - observedAtMs);
+    if (ageMs <= STALE_CURSOR_THRESHOLD_MS) {
+      continue;
+    }
+
+    const sessionFilePath = resolveSessionFileForCursor(sessionId, cursor, options.sessionsDir);
+    if (!sessionFilePath) {
+      continue;
+    }
+
+    let sessionStat: fs.Stats;
+    try {
+      sessionStat = fs.statSync(sessionFilePath);
+    } catch {
+      continue;
+    }
+    if (!sessionStat.isFile()) {
+      continue;
+    }
+
+    if (cursor.lastFileSize >= sessionStat.size) {
+      continue;
+    }
+
+    staleCount += 1;
+    oldestMs = Math.max(oldestMs, ageMs);
+    newestMs = Math.min(newestMs, ageMs);
+  }
+
+  return {
+    staleCount,
+    oldestMs: staleCount > 0 ? oldestMs : 0,
+    newestMs: staleCount > 0 ? newestMs : 0
+  };
 }
 
 function loadSessionIndex(sessionsDir: string): Record<string, SessionIndexEntry> {
@@ -405,6 +530,42 @@ function createDefaultObserver(vaultPath: string, options: ObserverOptions): Min
   return new Observer(vaultPath, options);
 }
 
+function parseRoutingCounts(routingSummary: string): Record<string, number> {
+  const counts: Record<string, number> = {};
+  const [, categorySection = ''] = routingSummary.split('\u2192');
+  const summaryCategories = categorySection.split('(')[0] ?? '';
+  if (!summaryCategories) {
+    return counts;
+  }
+
+  for (const match of summaryCategories.matchAll(/\b([a-z][a-z0-9-]*):\s*(\d+)\b/gi)) {
+    const category = match[1].toLowerCase();
+    const count = Number.parseInt(match[2], 10);
+    if (!Number.isFinite(count) || count <= 0) {
+      continue;
+    }
+    counts[category] = (counts[category] ?? 0) + count;
+  }
+
+  return counts;
+}
+
+function mergeRoutingCounts(
+  target: Record<string, number>,
+  incoming: Record<string, number>
+): void {
+  for (const [category, count] of Object.entries(incoming)) {
+    target[category] = (target[category] ?? 0) + count;
+  }
+}
+
+function stringifyError(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return String(error);
+}
+
 function selectCandidates(
   descriptors: SessionDescriptor[],
   cursors: ObserveCursorStore,
@@ -468,6 +629,10 @@ export async function observeActiveSessions(
       cursorUpdates: 0,
       dryRun,
       totalNewBytes: 0,
+      observedNewBytes: 0,
+      routedCounts: {},
+      failedSessionCount: 0,
+      failedSessions: [],
       candidates: []
     };
   }
@@ -487,43 +652,66 @@ export async function observeActiveSessions(
       cursorUpdates: 0,
       dryRun,
       totalNewBytes: candidates.reduce((sum, candidate) => sum + candidate.newBytes, 0),
+      observedNewBytes: 0,
+      routedCounts: {},
+      failedSessionCount: 0,
+      failedSessions: [],
       candidates
     };
   }
 
   const observerFactory = dependencies.createObserver ?? createDefaultObserver;
-  const observer = observerFactory(vaultPath, {
+  const observerOptions: ObserverOptions = {
     tokenThreshold: options.threshold,
     reflectThreshold: options.reflectThreshold,
     model: options.model,
     extractTasks: options.extractTasks
-  });
+  };
 
   let observedSessions = 0;
   let cursorUpdates = 0;
+  let observedNewBytes = 0;
+  const routedCounts: Record<string, number> = {};
+  const failedSessions: ActiveObservationFailure[] = [];
 
   for (const candidate of candidates) {
-    const { messages, nextOffset } = await readIncrementalMessages(candidate.filePath, candidate.startOffset);
-    const taggedMessages = messages.map((message) => `[${candidate.sourceLabel}] ${message}`);
+    try {
+      const observer = observerFactory(vaultPath, observerOptions);
+      const { messages, nextOffset } = await readIncrementalMessages(candidate.filePath, candidate.startOffset);
+      const taggedMessages = messages.map((message) => `[${candidate.sourceLabel}] ${message}`);
 
-    if (taggedMessages.length > 0) {
-      await observer.processMessages(taggedMessages, {
-        source: 'openclaw',
+      if (taggedMessages.length > 0) {
+        await observer.processMessages(taggedMessages, {
+          source: 'openclaw',
+          sessionKey: candidate.sessionKey,
+          transcriptId: candidate.sessionId
+        });
+        const flushResult = await observer.flush();
+        mergeRoutingCounts(routedCounts, parseRoutingCounts(flushResult.routingSummary));
+        observedSessions += 1;
+        observedNewBytes += candidate.newBytes;
+      }
+
+      if (nextOffset > candidate.startOffset) {
+        cursors[candidate.sessionId] = {
+          lastObservedOffset: nextOffset,
+          lastObservedAt: now().toISOString(),
+          sessionKey: candidate.sessionKey,
+          lastFileSize: candidate.fileSize
+        };
+        cursorUpdates += 1;
+      }
+    } catch (error) {
+      const reason = stringifyError(error);
+      failedSessions.push({
+        sessionId: candidate.sessionId,
         sessionKey: candidate.sessionKey,
-        transcriptId: candidate.sessionId
+        sourceLabel: candidate.sourceLabel,
+        error: reason
       });
-      await observer.flush();
-      observedSessions += 1;
-    }
-
-    if (nextOffset > candidate.startOffset) {
-      cursors[candidate.sessionId] = {
-        lastObservedOffset: nextOffset,
-        lastObservedAt: now().toISOString(),
-        sessionKey: candidate.sessionKey,
-        lastFileSize: candidate.fileSize
-      };
-      cursorUpdates += 1;
+      console.error(
+        `[observer] failed to observe session ${candidate.sessionKey} (${candidate.sessionId}): ${reason}`
+      );
     }
   }
 
@@ -540,6 +728,10 @@ export async function observeActiveSessions(
     cursorUpdates,
     dryRun,
     totalNewBytes: candidates.reduce((sum, candidate) => sum + candidate.newBytes, 0),
+    observedNewBytes,
+    routedCounts,
+    failedSessionCount: failedSessions.length,
+    failedSessions,
     candidates
   };
 }

@@ -6,6 +6,7 @@ import { scanVaultLinks } from '../lib/backlinks.js';
 import { formatAge } from '../lib/time.js';
 import { hasQmd } from '../lib/search.js';
 import { loadMemoryGraphIndex } from '../lib/memory-graph.js';
+import { getObserverStaleness } from '../observer/active-session-observer.js';
 import { checkOpenClawCompatibility } from './compat.js';
 
 const CLAWVAULT_DIR = '.clawvault';
@@ -297,6 +298,22 @@ export async function doctor(vaultPath?: string): Promise<DoctorReport> {
         detail: `Last checkpoint ${ageLabel} ago`
       });
     }
+  }
+
+  const observerStaleness = getObserverStaleness(vault.getPath());
+  if (observerStaleness.staleCount > 0) {
+    checks.push({
+      label: 'observer freshness',
+      status: 'warn',
+      detail: `${observerStaleness.staleCount} stale session cursor(s); oldest ${formatAge(observerStaleness.oldestMs)} ago`,
+      hint: 'Run `clawvault observe --cron` and verify cron/hook scheduling.'
+    });
+    warnings++;
+  } else {
+    checks.push({
+      label: 'observer freshness',
+      status: 'ok'
+    });
   }
 
   const linkScan = scanVaultLinks(vault.getPath());

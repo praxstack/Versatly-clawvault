@@ -92,6 +92,7 @@ Auto-compress conversations into prioritized observations. Critical items route 
 ```bash
 clawvault observe --compress session.md      # One-shot compression
 clawvault observe --active                   # Incremental from transcripts
+clawvault observe --cron                     # Cron-safe one-shot summary + exit code
 ```
 
 ### 🛡️ Context Death Recovery

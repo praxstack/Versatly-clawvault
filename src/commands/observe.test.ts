@@ -98,6 +98,10 @@ describe('observeCommand', () => {
       cursorUpdates: 1,
       dryRun: false,
       totalNewBytes: 2048,
+      observedNewBytes: 2048,
+      routedCounts: {},
+      failedSessionCount: 0,
+      failedSessions: [],
       candidates: [
         {
           sessionId: 'abc',
@@ -132,5 +136,95 @@ describe('observeCommand', () => {
     expect(processMessagesMock).not.toHaveBeenCalled();
 
     logSpy.mockRestore();
+  });
+
+  it('prints one-line cron summary when observations are processed', async () => {
+    observeActiveSessionsMock.mockResolvedValue({
+      agentId: 'clawdious',
+      sessionsDir: '/tmp/sessions',
+      checkedSessions: 4,
+      candidateSessions: 3,
+      observedSessions: 3,
+      cursorUpdates: 3,
+      dryRun: false,
+      totalNewBytes: 47_180,
+      observedNewBytes: 45 * 1024,
+      routedCounts: { decisions: 2, lessons: 1 },
+      failedSessionCount: 0,
+      failedSessions: [],
+      candidates: []
+    });
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    await observeCommand({
+      vaultPath: '/tmp/vault',
+      cron: true,
+      threshold: 10,
+      reflectThreshold: 20
+    });
+
+    expect(logSpy).toHaveBeenCalledWith('observed 3 sessions, 45KB new content, 2 decisions extracted');
+    logSpy.mockRestore();
+  });
+
+  it('prints "nothing new" for cron when no sessions cross threshold', async () => {
+    observeActiveSessionsMock.mockResolvedValue({
+      agentId: 'clawdious',
+      sessionsDir: '/tmp/sessions',
+      checkedSessions: 2,
+      candidateSessions: 0,
+      observedSessions: 0,
+      cursorUpdates: 0,
+      dryRun: false,
+      totalNewBytes: 0,
+      observedNewBytes: 0,
+      routedCounts: {},
+      failedSessionCount: 0,
+      failedSessions: [],
+      candidates: []
+    });
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    await observeCommand({
+      vaultPath: '/tmp/vault',
+      cron: true,
+      threshold: 10,
+      reflectThreshold: 20
+    });
+
+    expect(logSpy).toHaveBeenCalledWith('nothing new');
+    logSpy.mockRestore();
+  });
+
+  it('throws in cron mode when any session observation fails', async () => {
+    observeActiveSessionsMock.mockResolvedValue({
+      agentId: 'clawdious',
+      sessionsDir: '/tmp/sessions',
+      checkedSessions: 3,
+      candidateSessions: 2,
+      observedSessions: 1,
+      cursorUpdates: 1,
+      dryRun: false,
+      totalNewBytes: 4096,
+      observedNewBytes: 2048,
+      routedCounts: {},
+      failedSessionCount: 1,
+      failedSessions: [
+        {
+          sessionId: 'session-2',
+          sessionKey: 'agent:clawdious:main',
+          sourceLabel: 'main',
+          error: 'Gemini timeout'
+        }
+      ],
+      candidates: []
+    });
+
+    await expect(observeCommand({
+      vaultPath: '/tmp/vault',
+      cron: true,
+      threshold: 10,
+      reflectThreshold: 20
+    })).rejects.toThrow('observer failed for 1 session(s)');
   });
 });

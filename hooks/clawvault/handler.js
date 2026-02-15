@@ -528,19 +528,23 @@ function resolveAgentIdForEvent(event) {
   return 'clawdious';
 }
 
-function runActiveObservation(vaultPath, agentId, options = {}) {
-  const args = ['observe', '--active', '--agent', agentId, '-v', vaultPath];
+function runObserverCron(vaultPath, agentId, options = {}) {
+  const args = ['observe', '--cron', '--agent', agentId, '-v', vaultPath];
   if (Number.isFinite(options.minNewBytes) && Number(options.minNewBytes) > 0) {
     args.push('--min-new', String(Math.floor(Number(options.minNewBytes))));
   }
 
   const result = runClawvault(args, { timeoutMs: 120000 });
   if (!result.success) {
-    console.warn(`[clawvault] Active observation failed (${options.reason || 'unknown reason'})`);
+    console.warn(`[clawvault] Observer cron failed (${options.reason || 'unknown reason'})`);
     return false;
   }
 
-  console.log(`[clawvault] Active observation complete (${options.reason || 'triggered'})`);
+  if (result.output) {
+    console.log(`[clawvault] Observer cron: ${result.output}`);
+  } else {
+    console.log('[clawvault] Observer cron: complete');
+  }
   return true;
 }
 
@@ -659,7 +663,7 @@ async function handleNew(event) {
   }
 
   const agentId = resolveAgentIdForEvent(event);
-  runActiveObservation(vaultPath, agentId, {
+  runObserverCron(vaultPath, agentId, {
     minNewBytes: 1,
     reason: 'command:new flush'
   });
@@ -741,7 +745,7 @@ async function handleHeartbeat(event) {
     return;
   }
 
-  runActiveObservation(vaultPath, agentId, { reason: 'heartbeat threshold crossed' });
+  runObserverCron(vaultPath, agentId, { reason: 'heartbeat threshold crossed' });
 }
 
 // Handle context compaction - force flush any pending session deltas
@@ -753,7 +757,7 @@ async function handleContextCompaction(event) {
   }
 
   const agentId = resolveAgentIdForEvent(event);
-  runActiveObservation(vaultPath, agentId, {
+  runObserverCron(vaultPath, agentId, {
     minNewBytes: 1,
     reason: 'context compaction'
   });

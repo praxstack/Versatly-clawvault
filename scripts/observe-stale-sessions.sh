@@ -51,7 +51,7 @@ fi
 run_stale_mode() {
   # Legacy stale sweep behavior: force observation for any unseen session delta.
   local min_new="${CLAWVAULT_STALE_MIN_NEW:-1}"
-  "${CLAWVAULT_BIN}" observe --active --min-new "${min_new}" "${BASE_ARGS[@]}" "${EXTRA_ARGS[@]}"
+  "${CLAWVAULT_BIN}" observe --cron --min-new "${min_new}" "${BASE_ARGS[@]}" "${EXTRA_ARGS[@]}"
 }
 
 run_active_mode() {

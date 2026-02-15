@@ -214,6 +214,7 @@ export function registerQueryCommands(
     .description('Observe session files and build observational memory')
     .option('--watch <path>', 'Watch session file or directory')
     .option('--active', 'Observe active OpenClaw sessions incrementally')
+    .option('--cron', 'Run one-shot active observation for cron hooks')
     .option('--agent <id>', 'OpenClaw agent ID (default: OPENCLAW_AGENT_ID or clawdious)')
     .option('--min-new <bytes>', 'Override minimum new-content threshold in bytes')
     .option('--sessions-dir <path>', 'Override OpenClaw sessions directory')
@@ -245,6 +246,7 @@ export function registerQueryCommands(
         await observeCommand({
           watch: options.watch,
           active: options.active,
+          cron: options.cron,
           agent: options.agent,
           minNew,
           sessionsDir: options.sessionsDir,

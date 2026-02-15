@@ -186,6 +186,21 @@ export type { TransitionEvent } from './lib/transition-ledger.js';
 
 export { Observer } from './observer/observer.js';
 export type { ObserverOptions, ObserverCompressor, ObserverReflector } from './observer/observer.js';
+export {
+  observeActiveSessions,
+  getScaledObservationThresholdBytes,
+  parseSessionSourceLabel,
+  getObserverStaleness
+} from './observer/active-session-observer.js';
+export type {
+  ActiveObserveOptions,
+  ActiveObserveResult,
+  ActiveObservationCandidate,
+  ActiveObservationFailure,
+  ObserveCursorEntry,
+  ObserveCursorStore,
+  ObserverStalenessResult
+} from './observer/active-session-observer.js';
 export { Compressor } from './observer/compressor.js';
 export type { CompressorOptions, CompressionProvider } from './observer/compressor.js';
 export { Reflector } from './observer/reflector.js';

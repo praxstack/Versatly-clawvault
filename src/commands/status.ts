@@ -6,6 +6,7 @@ import { hasQmd, QmdUnavailableError } from '../lib/search.js';
 import { formatAge } from '../lib/time.js';
 import { scanVaultLinks } from '../lib/backlinks.js';
 import { loadMemoryGraphIndex } from '../lib/memory-graph.js';
+import { getObserverStaleness } from '../observer/active-session-observer.js';
 import type { CheckpointData } from './checkpoint.js';
 
 export interface VaultStatus {
@@ -32,6 +33,11 @@ export interface VaultStatus {
     generatedAt?: string;
     nodeCount?: number;
     edgeCount?: number;
+  };
+  observer: {
+    staleCount: number;
+    oldestMs: number;
+    newestMs: number;
   };
   git?: {
     repoRoot: string;
@@ -233,6 +239,11 @@ export async function getStatus(vaultPath: string): Promise<VaultStatus> {
     }
   }
 
+  const observerStaleness = getObserverStaleness(vault.getPath());
+  if (observerStaleness.staleCount > 0) {
+    issues.push(`Observer stale sessions: ${observerStaleness.staleCount}`);
+  }
+
   return {
     vaultName: vault.getName(),
     vaultPath: vault.getPath(),
@@ -246,6 +257,7 @@ export async function getStatus(vaultPath: string): Promise<VaultStatus> {
       error: qmdError
     },
     graph: graphStatus,
+    observer: observerStaleness,
     git: gitStatus,
     links: {
       total: linkScan.linkCount,
@@ -308,6 +320,13 @@ export function formatStatus(status: VaultStatus): string {
   }
   if (status.graph.nodeCount !== undefined && status.graph.edgeCount !== undefined) {
     output += `  - Size: ${status.graph.nodeCount} nodes, ${status.graph.edgeCount} edges\n`;
+  }
+
+  output += '\nObserver:\n';
+  output += `  - Stale sessions: ${status.observer.staleCount}\n`;
+  if (status.observer.staleCount > 0) {
+    output += `  - Oldest stale age: ${formatAge(status.observer.oldestMs)}\n`;
+    output += `  - Newest stale age: ${formatAge(status.observer.newestMs)}\n`;
   }
 
   output += '\nLinks:\n';

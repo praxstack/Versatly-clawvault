@@ -228,6 +228,50 @@ describe('Router', () => {
     }
   });
 
+  it('skips past-tense completed task candidates without future intent', () => {
+    const vaultPath = makeTempVault();
+    const router = new Router(vaultPath);
+
+    const markdown = [
+      '## 2026-02-11',
+      '',
+      '- [task|c=0.84|i=0.70] 10:00 Completed deployment runbook and merged the release PR'
+    ].join('\n');
+
+    try {
+      const { routed, summary } = router.route(markdown, { sessionKey: 'agent:clawdious:main' });
+      const backlogItems = routed.filter((item) => item.category === 'backlog');
+      expect(backlogItems).toHaveLength(0);
+      expect(summary).toBe('No items routed to vault categories.');
+      expect(fs.existsSync(path.join(vaultPath, 'backlog'))).toBe(false);
+    } finally {
+      fs.rmSync(vaultPath, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps past-tense task candidates when future intent is present', () => {
+    const vaultPath = makeTempVault();
+    const router = new Router(vaultPath);
+
+    const markdown = [
+      '## 2026-02-11',
+      '',
+      '- [task|c=0.84|i=0.70] 10:00 Fixed auth fallback and need to add integration tests'
+    ].join('\n');
+
+    try {
+      const { routed } = router.route(markdown, { sessionKey: 'agent:clawdious:main' });
+      const backlogItems = routed.filter((item) => item.category === 'backlog');
+      expect(backlogItems).toHaveLength(1);
+      const backlogDir = path.join(vaultPath, 'backlog');
+      expect(fs.existsSync(backlogDir)).toBe(true);
+      const entries = fs.readdirSync(backlogDir).filter((entry) => entry.endsWith('.md'));
+      expect(entries).toHaveLength(1);
+    } finally {
+      fs.rmSync(vaultPath, { recursive: true, force: true });
+    }
+  });
+
   it('deduplicates repeated task observations into a single backlog item', () => {
     const vaultPath = makeTempVault();
     const router = new Router(vaultPath);

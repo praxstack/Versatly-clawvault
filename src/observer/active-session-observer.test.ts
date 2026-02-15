@@ -4,12 +4,14 @@ import * as os from 'os';
 import * as path from 'path';
 import { listLedgerObservationFiles } from '../lib/ledger.js';
 import {
+  getObserverStaleness,
   getScaledObservationThresholdBytes,
   observeActiveSessions,
   parseSessionSourceLabel
 } from './active-session-observer.js';
 
 const originalNoLlm = process.env.CLAWVAULT_NO_LLM;
+const originalOpenClawStateDir = process.env.OPENCLAW_STATE_DIR;
 
 function makeTempDir(prefix: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -53,6 +55,7 @@ function messageLine(role: 'user' | 'assistant', text: string): string {
 
 afterEach(() => {
   process.env.CLAWVAULT_NO_LLM = originalNoLlm;
+  process.env.OPENCLAW_STATE_DIR = originalOpenClawStateDir;
 });
 
 describe('active-session-observer', () => {
@@ -152,6 +155,109 @@ describe('active-session-observer', () => {
 
       const cursorPath = path.join(vaultPath, '.clawvault', 'observe-cursors.json');
       expect(fs.existsSync(cursorPath)).toBe(false);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('continues observing remaining sessions when one session fails', async () => {
+    const root = makeTempDir('clawvault-active-observe-failures-');
+    const vaultPath = writeVault(root);
+    const sessionsDir = path.join(root, 'sessions');
+    fs.mkdirSync(sessionsDir, { recursive: true });
+
+    const sessionOk = 'session-ok';
+    const sessionFail = 'session-fail';
+    fs.writeFileSync(
+      path.join(sessionsDir, 'sessions.json'),
+      JSON.stringify({
+        'agent:clawdious:main': { sessionId: sessionOk, updatedAt: Date.now() },
+        'agent:clawdious:telegram:dm:123': { sessionId: sessionFail, updatedAt: Date.now() - 1 }
+      }),
+      'utf-8'
+    );
+    fs.writeFileSync(path.join(sessionsDir, `${sessionOk}.jsonl`), `${messageLine('user', 'Need migration plan')}\n`);
+    fs.writeFileSync(path.join(sessionsDir, `${sessionFail}.jsonl`), `${messageLine('assistant', 'Deploy patch')}\n`);
+
+    try {
+      const result = await observeActiveSessions(
+        {
+          vaultPath,
+          sessionsDir,
+          minNewBytes: 1
+        },
+        {
+          createObserver: () => ({
+            processMessages: async (_messages, options?: unknown): Promise<void> => {
+              const transcriptId = (options as { transcriptId?: string } | undefined)?.transcriptId;
+              if (transcriptId === sessionFail) {
+                throw new Error('Gemini timeout');
+              }
+            },
+            flush: async (): Promise<{ observations: string; routingSummary: string }> => ({
+              observations: '',
+              routingSummary: 'Routed 1 observations \u2192 decisions: 1'
+            })
+          })
+        }
+      );
+
+      expect(result.candidateSessions).toBe(2);
+      expect(result.observedSessions).toBe(1);
+      expect(result.cursorUpdates).toBe(1);
+      expect(result.failedSessionCount).toBe(1);
+      expect(result.failedSessions[0]?.sessionId).toBe(sessionFail);
+      expect(result.routedCounts.decisions).toBe(1);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reports stale observer cursors when session file has grown for over 12h', () => {
+    const root = makeTempDir('clawvault-observer-staleness-');
+    const vaultPath = writeVault(root);
+    const stateRoot = path.join(root, 'openclaw-state');
+    process.env.OPENCLAW_STATE_DIR = stateRoot;
+
+    const sessionsDir = path.join(stateRoot, 'agents', 'clawdious', 'sessions');
+    fs.mkdirSync(sessionsDir, { recursive: true });
+    fs.writeFileSync(path.join(sessionsDir, 'stale-session.jsonl'), 'x'.repeat(120), 'utf-8');
+    fs.writeFileSync(path.join(sessionsDir, 'fresh-session.jsonl'), 'x'.repeat(80), 'utf-8');
+
+    const nowMs = Date.UTC(2026, 1, 15, 12, 0, 0);
+    const cursorPath = path.join(vaultPath, '.clawvault', 'observe-cursors.json');
+    fs.mkdirSync(path.dirname(cursorPath), { recursive: true });
+    fs.writeFileSync(
+      cursorPath,
+      JSON.stringify(
+        {
+          'stale-session': {
+            lastObservedOffset: 10,
+            lastObservedAt: new Date(nowMs - 13 * 60 * 60 * 1000).toISOString(),
+            sessionKey: 'agent:clawdious:main',
+            lastFileSize: 10
+          },
+          'fresh-session': {
+            lastObservedOffset: 80,
+            lastObservedAt: new Date(nowMs - 6 * 60 * 60 * 1000).toISOString(),
+            sessionKey: 'agent:clawdious:main',
+            lastFileSize: 70
+          }
+        },
+        null,
+        2
+      ),
+      'utf-8'
+    );
+
+    try {
+      const staleness = getObserverStaleness(vaultPath, {
+        now: () => new Date(nowMs)
+      });
+
+      expect(staleness.staleCount).toBe(1);
+      expect(staleness.oldestMs).toBe(13 * 60 * 60 * 1000);
+      expect(staleness.newestMs).toBe(13 * 60 * 60 * 1000);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }

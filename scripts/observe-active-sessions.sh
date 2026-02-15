@@ -3,7 +3,7 @@ set -euo pipefail
 
 CLAWVAULT_BIN="${CLAWVAULT_BIN:-clawvault}"
 
-ARGS=(observe --active)
+ARGS=(observe --cron)
 
 if [[ -n "${CLAWVAULT_AGENT_ID:-}" ]]; then
   ARGS+=(--agent "${CLAWVAULT_AGENT_ID}")

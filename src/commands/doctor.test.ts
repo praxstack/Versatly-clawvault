@@ -1,11 +1,12 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-const { hasQmdMock, scanVaultLinksMock } = vi.hoisted(() => ({
+const { hasQmdMock, scanVaultLinksMock, getObserverStalenessMock } = vi.hoisted(() => ({
   hasQmdMock: vi.fn(),
-  scanVaultLinksMock: vi.fn()
+  scanVaultLinksMock: vi.fn(),
+  getObserverStalenessMock: vi.fn()
 }));
 
 let mockStats = { documents: 0, categories: {} as Record<string, number> };
@@ -33,6 +34,10 @@ vi.mock('../lib/search.js', async () => {
 
 vi.mock('../lib/backlinks.js', () => ({
   scanVaultLinks: scanVaultLinksMock
+}));
+
+vi.mock('../observer/active-session-observer.js', () => ({
+  getObserverStaleness: getObserverStalenessMock
 }));
 
 vi.mock('../lib/vault.js', () => ({
@@ -100,6 +105,14 @@ afterEach(() => {
   process.env.SHELL = envSnapshot.SHELL;
 });
 
+beforeEach(() => {
+  getObserverStalenessMock.mockReturnValue({
+    staleCount: 0,
+    oldestMs: 0,
+    newestMs: 0
+  });
+});
+
 describe('doctor', () => {
   it('reports when qmd is unavailable', async () => {
     hasQmdMock.mockReturnValue(false);
@@ -145,6 +158,41 @@ describe('doctor', () => {
         'orphan links',
         'inbox backlog'
       ]));
+    } finally {
+      fs.rmSync(vaultPath, { recursive: true, force: true });
+      fs.rmSync(homePath, { recursive: true, force: true });
+    }
+  });
+
+  it('warns when observer cursors are stale', async () => {
+    hasQmdMock.mockReturnValue(true);
+    getObserverStalenessMock.mockReturnValue({
+      staleCount: 3,
+      oldestMs: 36 * 60 * 60 * 1000,
+      newestMs: 13 * 60 * 60 * 1000
+    });
+    scanVaultLinksMock.mockReturnValue({
+      backlinks: new Map(),
+      orphans: [],
+      linkCount: 0
+    });
+
+    const vaultPath = makeTempDir('clawvault-doctor-observer-');
+    const homePath = makeTempDir('clawvault-home-observer-');
+    process.env.HOME = homePath;
+    process.env.SHELL = '/bin/bash';
+    fs.writeFileSync(path.join(homePath, '.bashrc'), 'export CLAWVAULT_PATH="/tmp/vault"');
+
+    mockStats = { documents: 10, categories: { inbox: 1 } };
+    mockDocuments = [makeDoc('projects', new Date())];
+    mockHandoffs = [makeDoc('handoffs', new Date())];
+    mockInbox = [makeDoc('inbox', new Date())];
+
+    try {
+      const report = await doctor(vaultPath);
+      const observerCheck = report.checks.find((check) => check.label === 'observer freshness');
+      expect(observerCheck?.status).toBe('warn');
+      expect(observerCheck?.detail).toContain('3 stale session cursor(s)');
     } finally {
       fs.rmSync(vaultPath, { recursive: true, force: true });
       fs.rmSync(homePath, { recursive: true, force: true });

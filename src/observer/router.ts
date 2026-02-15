@@ -130,6 +130,9 @@ const TYPE_TO_CATEGORY: Record<ObservationType, string> = {
   project: 'projects'
 };
 
+const PAST_TENSE_TASK_HINT_RE = /\b(completed|shipped|deployed|fixed|merged|finished|resolved|closed)\b/i;
+const FUTURE_TASK_HINT_RE = /\b(need to|should|todo|must|plan to)\b/i;
+
 export class Router {
   private readonly vaultPath: string;
   private readonly extractTasks: boolean;
@@ -211,6 +214,11 @@ export class Router {
     context: RouteContext,
     knownWorkItems: ExistingWorkItem[]
   ): { routedItem: RoutedItem | null; dedupHit: boolean } {
+    if (this.shouldSkipCompletedTaskCandidate(item.content)) {
+      console.log('[observer] skipped likely-completed task candidate');
+      return { routedItem: null, dedupHit: false };
+    }
+
     const title = this.deriveTaskTitle(item.content, item.type);
     if (!title) {
       return { routedItem: null, dedupHit: false };
@@ -366,6 +374,13 @@ export class Router {
       .trim();
 
     return title.slice(0, 120);
+  }
+
+  private shouldSkipCompletedTaskCandidate(content: string): boolean {
+    if (!PAST_TENSE_TASK_HINT_RE.test(content)) {
+      return false;
+    }
+    return !FUTURE_TASK_HINT_RE.test(content);
   }
 
   private buildTaskContextContent(

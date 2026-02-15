@@ -213,7 +213,7 @@ describe('clawvault hook handler', () => {
 
     expect(execFileSyncMock).toHaveBeenCalledWith(
       'clawvault',
-      expect.arrayContaining(['observe', '--active', '--agent', 'clawdious']),
+      expect.arrayContaining(['observe', '--cron', '--agent', 'clawdious']),
       expect.objectContaining({ shell: false })
     );
 
@@ -234,7 +234,7 @@ describe('clawvault hook handler', () => {
 
     expect(execFileSyncMock).toHaveBeenCalledWith(
       'clawvault',
-      expect.arrayContaining(['observe', '--active', '--min-new', '1']),
+      expect.arrayContaining(['observe', '--cron', '--min-new', '1']),
       expect.objectContaining({ shell: false })
     );
 

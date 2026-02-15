@@ -9,6 +9,9 @@ import { observeActiveSessions } from '../observer/active-session-observer.js';
 import { resolveVaultPath } from '../lib/config.js';
 import { getObservationPath } from '../lib/ledger.js';
 
+const ONE_KIB = 1024;
+const ONE_MIB = ONE_KIB * ONE_KIB;
+
 export interface ObserveCommandOptions {
   watch?: string;
   threshold?: number;
@@ -23,6 +26,7 @@ export interface ObserveCommandOptions {
   minNew?: number;
   sessionsDir?: string;
   dryRun?: boolean;
+  cron?: boolean;
 }
 
 function parsePositiveInteger(raw: string, optionName: string): number {
@@ -60,6 +64,26 @@ function buildDaemonArgs(options: ObserveCommandOptions): string[] {
   }
 
   return args;
+}
+
+function formatByteSummary(bytes: number): string {
+  const normalized = Number.isFinite(bytes) ? Math.max(0, bytes) : 0;
+  if (normalized === 0) {
+    return '0KB';
+  }
+  if (normalized >= ONE_MIB) {
+    return `${(normalized / ONE_MIB).toFixed(1)}MB`;
+  }
+  return `${Math.max(1, Math.round(normalized / ONE_KIB))}KB`;
+}
+
+function formatCronSummary(result: {
+  observedSessions: number;
+  observedNewBytes: number;
+  routedCounts: Record<string, number>;
+}): string {
+  const decisionCount = result.routedCounts.decisions ?? 0;
+  return `observed ${result.observedSessions} sessions, ${formatByteSummary(result.observedNewBytes)} new content, ${decisionCount} decision${decisionCount === 1 ? '' : 's'} extracted`;
 }
 
 async function runOneShotCompression(
@@ -116,6 +140,14 @@ async function watchSessions(observer: Observer, watchPath: string): Promise<voi
 }
 
 export async function observeCommand(options: ObserveCommandOptions): Promise<void> {
+  if (options.cron && (options.active || options.watch || options.compress || options.daemon)) {
+    throw new Error('--cron cannot be combined with --active, --watch, --compress, or --daemon.');
+  }
+
+  if (options.cron && options.dryRun) {
+    throw new Error('--cron cannot be combined with --dry-run.');
+  }
+
   if (options.active && (options.watch || options.compress || options.daemon)) {
     throw new Error('--active cannot be combined with --watch, --compress, or --daemon.');
   }
@@ -126,7 +158,7 @@ export async function observeCommand(options: ObserveCommandOptions): Promise<vo
 
   const vaultPath = resolveVaultPath({ explicitPath: options.vaultPath });
 
-  if (options.active) {
+  if (options.active || options.cron) {
     const result = await observeActiveSessions({
       vaultPath,
       agentId: options.agent,
@@ -138,6 +170,31 @@ export async function observeCommand(options: ObserveCommandOptions): Promise<vo
       model: options.model,
       extractTasks: options.extractTasks
     });
+    const failedSessionCount = result.failedSessionCount ?? 0;
+
+    if (options.cron) {
+      if (failedSessionCount > 0) {
+        const firstFailure = result.failedSessions[0];
+        if (firstFailure) {
+          throw new Error(
+            `observer failed for ${failedSessionCount} session(s); first error: ${firstFailure.sessionKey} - ${firstFailure.error}`
+          );
+        }
+        throw new Error(`observer failed for ${failedSessionCount} session(s).`);
+      }
+
+      if (result.candidateSessions === 0) {
+        console.log('nothing new');
+        return;
+      }
+
+      console.log(formatCronSummary({
+        observedSessions: result.observedSessions,
+        observedNewBytes: result.observedNewBytes ?? result.totalNewBytes,
+        routedCounts: result.routedCounts ?? {}
+      }));
+      return;
+    }
 
     if (result.candidateSessions === 0) {
       console.log(`No active sessions crossed threshold (${result.checkedSessions} checked).`);
@@ -157,8 +214,15 @@ export async function observeCommand(options: ObserveCommandOptions): Promise<vo
     }
 
     console.log(
-      `Active observation complete: ${result.observedSessions}/${result.candidateSessions} session(s) observed.`
+      `Active observation complete: ${result.observedSessions}/${result.candidateSessions} session(s) observed.${failedSessionCount > 0 ? ` ${failedSessionCount} failed.` : ''}`
     );
+    if (failedSessionCount > 0) {
+      for (const failure of result.failedSessions) {
+        console.error(
+          `[observer] session failed ${failure.sessionKey} (${failure.sessionId}): ${failure.error}`
+        );
+      }
+    }
     return;
   }
 
@@ -211,6 +275,7 @@ export function registerObserveCommand(program: Command): void {
     .description('Observe session files and build observational memory')
     .option('--watch <path>', 'Watch session file or directory')
     .option('--active', 'Observe active OpenClaw sessions incrementally')
+    .option('--cron', 'Run one-shot active observation for cron hooks')
     .option('--agent <id>', 'OpenClaw agent ID (default: OPENCLAW_AGENT_ID or clawdious)')
     .option('--min-new <bytes>', 'Override minimum new-content threshold in bytes')
     .option('--sessions-dir <path>', 'Override OpenClaw sessions directory')
@@ -226,6 +291,7 @@ export function registerObserveCommand(program: Command): void {
     .action(async (rawOptions: {
       watch?: string;
       active?: boolean;
+      cron?: boolean;
       agent?: string;
       minNew?: string;
       sessionsDir?: string;
@@ -241,6 +307,7 @@ export function registerObserveCommand(program: Command): void {
       await observeCommand({
         watch: rawOptions.watch,
         active: rawOptions.active,
+        cron: rawOptions.cron,
         agent: rawOptions.agent,
         minNew: rawOptions.minNew ? parsePositiveInteger(rawOptions.minNew, 'min-new') : undefined,
         sessionsDir: rawOptions.sessionsDir,
