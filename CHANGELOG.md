@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.1] — 2026-02-16
+
+### Fixed
+- Moved Gemini API key from URL query parameter (`?key=`) to `x-goog-api-key` request header in both `llm-provider.ts` and `wake.ts`. Prevents key leakage into HTTP logs, proxy caches, and monitoring middleware. Aligns Gemini auth with Anthropic/OpenAI header-based approach. (PR #40, thanks @gupsammy)
+
+---
+
 ## [2.5.4] — 2026-02-15
 
 ### Fixed
