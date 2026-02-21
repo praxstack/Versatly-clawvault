@@ -697,13 +697,14 @@ export class ClawVault {
     if (recap.recentHandoffs.length > 0) {
       md += `## Recent Sessions\n`;
       for (const h of recap.recentHandoffs) {
+        const datePart = this.extractDatePart(h.created);
         if (brief) {
           // Compact format for brief mode
-          md += `- **${h.created.split('T')[0]}:** ${h.workingOn.slice(0, 2).join(', ')}`;
+          md += `- **${datePart}:** ${h.workingOn.slice(0, 2).join(', ')}`;
           if (h.nextSteps.length > 0) md += ` → ${h.nextSteps[0]}`;
           md += `\n`;
         } else {
-          md += `\n### ${h.created.split('T')[0]}\n`;
+          md += `\n### ${datePart}\n`;
           md += `**Working on:** ${h.workingOn.join(', ')}\n`;
           if (h.blocked.length > 0) md += `**Blocked:** ${h.blocked.join(', ')}\n`;
           md += `**Next:** ${h.nextSteps.join(', ')}\n`;
@@ -749,7 +750,7 @@ export class ClawVault {
    */
   private parseHandoff(doc: Document): HandoffDocument {
     return {
-      created: doc.frontmatter.date as string || doc.modified.toISOString(),
+      created: this.toDateString(doc.frontmatter.date, doc.modified.toISOString()),
       sessionKey: doc.frontmatter.sessionKey as string,
       workingOn: (doc.frontmatter.workingOn as string[]) || [],
       blocked: (doc.frontmatter.blocked as string[]) || [],
@@ -761,6 +762,32 @@ export class ClawVault {
   }
 
   // === Private helpers ===
+
+  /**
+   * Safely convert a date value to ISO string format.
+   * Handles Date objects, strings, and undefined values.
+   */
+  private toDateString(value: unknown, fallback?: string): string {
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+    if (typeof value === 'string' && value.length > 0) {
+      return value;
+    }
+    return fallback || new Date().toISOString();
+  }
+
+  /**
+   * Extract the date portion (YYYY-MM-DD) from an ISO date string or Date object.
+   * Provides safe handling for various date formats.
+   */
+  private extractDatePart(value: unknown): string {
+    const dateStr = this.toDateString(value);
+    if (dateStr.includes('T')) {
+      return dateStr.split('T')[0];
+    }
+    return dateStr.slice(0, 10);
+  }
 
   private applyQmdConfig(meta?: VaultMeta): void {
     const collection = meta?.qmdCollection || this.config.qmdCollection || this.config.name;
