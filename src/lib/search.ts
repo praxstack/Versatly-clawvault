@@ -201,7 +201,7 @@ export function qmdEmbed(collection?: string, indexName?: string): void {
  */
 export class SearchEngine {
   private documents: Map<string, Document> = new Map();
-  private collection: string = 'clawvault';
+  private collection: string = '';
   private vaultPath: string = '';
   private collectionRoot: string = '';
   private qmdIndexName?: string;
@@ -211,6 +211,13 @@ export class SearchEngine {
    */
   setCollection(name: string): void {
     this.collection = name;
+  }
+
+  /**
+   * Get the current collection name
+   */
+  getCollection(): string {
+    return this.collection;
   }
 
   /**

@@ -114,3 +114,35 @@ export function removeQmdCollection(name: string): void {
     execFileSync('qmd', ['collection', 'rm', name], { stdio: 'ignore' });
   }
 }
+
+export function collectionExists(name: string): boolean {
+  try {
+    const collections = listQmdCollections();
+    return collections.some(c => c.name === name);
+  } catch {
+    return false;
+  }
+}
+
+export function findCollectionByRoot(rootPath: string): QmdCollectionInfo | undefined {
+  try {
+    const collections = listQmdCollections();
+    const normalizedRoot = rootPath.replace(/\/$/, '');
+    return collections.find(c => {
+      if (!c.root) return false;
+      const normalizedCollectionRoot = c.root.replace(/\/$/, '');
+      return normalizedCollectionRoot === normalizedRoot;
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+export function getFirstCollection(): QmdCollectionInfo | undefined {
+  try {
+    const collections = listQmdCollections();
+    return collections[0];
+  } catch {
+    return undefined;
+  }
+}

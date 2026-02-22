@@ -25,6 +25,7 @@ import {
 } from '../types.js';
 import { SearchEngine, extractWikiLinks, extractTags, hasQmd, qmdUpdate, qmdEmbed, QmdUnavailableError } from './search.js';
 import { buildOrUpdateMemoryGraphIndex } from './memory-graph.js';
+import { loadVaultQmdConfig } from './vault-qmd-config.js';
 
 const CONFIG_FILE = '.clawvault.json';
 const INDEX_FILE = '.clawvault-index.json';
@@ -790,8 +791,16 @@ export class ClawVault {
   }
 
   private applyQmdConfig(meta?: VaultMeta): void {
-    const collection = meta?.qmdCollection || this.config.qmdCollection || this.config.name;
-    const root = meta?.qmdRoot || this.config.qmdRoot || this.config.path;
+    const explicitCollection = meta?.qmdCollection || this.config.qmdCollection;
+    const explicitRoot = meta?.qmdRoot || this.config.qmdRoot || this.config.path;
+
+    const qmdConfig = loadVaultQmdConfig(this.config.path);
+    const collection = explicitCollection || qmdConfig.qmdCollection || this.config.name;
+    const root = explicitRoot || qmdConfig.qmdRoot;
+
+    if (qmdConfig.autoDetected) {
+      console.warn(`[clawvault] Auto-detected qmd collection: ${collection}`);
+    }
 
     this.config.qmdCollection = collection;
     this.config.qmdRoot = root;
