@@ -1,10 +1,22 @@
-export type LlmProvider = 'anthropic' | 'openai' | 'gemini';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+
+export type LlmProvider = 'anthropic' | 'openai' | 'gemini' | 'openclaw';
 
 const DEFAULT_MODELS: Record<LlmProvider, string> = {
   anthropic: 'claude-3-5-haiku-latest',
   openai: 'gpt-4o-mini',
-  gemini: 'gemini-2.0-flash'
+  gemini: 'gemini-2.0-flash',
+  openclaw: 'gpt-4o-mini'
 };
+
+export interface OpenClawProviderConfig {
+  baseUrl: string;
+  apiKey: string;
+  api: string;
+  defaultModel: string;
+}
 
 export interface LlmCompletionOptions {
   prompt: string;
@@ -16,10 +28,59 @@ export interface LlmCompletionOptions {
   fetchImpl?: typeof fetch;
 }
 
+/**
+ * Resolve an OpenClaw model provider from ~/.openclaw/agents/main/agent/models.json.
+ * Returns the first provider with a baseUrl and apiKey, or null if none found.
+ */
+export function resolveOpenClawProvider(): OpenClawProviderConfig | null {
+  try {
+    const openclawHome = process.env.OPENCLAW_HOME?.trim()
+      || path.join(os.homedir(), '.openclaw');
+    const modelsPath = path.join(openclawHome, 'agents', 'main', 'agent', 'models.json');
+
+    if (!fs.existsSync(modelsPath)) {
+      return null;
+    }
+
+    const raw = JSON.parse(fs.readFileSync(modelsPath, 'utf-8')) as {
+      providers?: Record<string, {
+        baseUrl?: string;
+        apiKey?: string;
+        api?: string;
+        models?: Array<{ id: string; name?: string }>;
+      }>;
+    };
+
+    if (!raw.providers || typeof raw.providers !== 'object') {
+      return null;
+    }
+
+    for (const [, provider] of Object.entries(raw.providers)) {
+      if (provider.baseUrl && provider.apiKey) {
+        const defaultModel = provider.models?.[0]?.id ?? 'gpt-4o-mini';
+        return {
+          baseUrl: provider.baseUrl.replace(/\/+$/, ''),
+          apiKey: provider.apiKey,
+          api: provider.api ?? 'openai-completions',
+          defaultModel
+        };
+      }
+    }
+  } catch {
+    // Config not available or malformed — fall through
+  }
+  return null;
+}
+
 export function resolveLlmProvider(): LlmProvider | null {
   if (process.env.CLAWVAULT_NO_LLM) {
     return null;
   }
+  // Prefer OpenClaw provider config if available
+  if (resolveOpenClawProvider()) {
+    return 'openclaw';
+  }
+  // Fall back to direct env-key providers
   if (process.env.ANTHROPIC_API_KEY) {
     return 'anthropic';
   }
@@ -38,6 +99,9 @@ export async function requestLlmCompletion(options: LlmCompletionOptions): Promi
     return '';
   }
 
+  if (provider === 'openclaw') {
+    return callOpenClaw(options);
+  }
   if (provider === 'anthropic') {
     return callAnthropic(options, provider);
   }
@@ -151,4 +215,46 @@ async function callGemini(options: LlmCompletionOptions, provider: LlmProvider):
     candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
   };
   return payload.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? '';
+}
+
+/**
+ * Route LLM requests through an OpenClaw model provider.
+ * Uses the OpenAI-compatible chat completions API format,
+ * which is the standard for OpenClaw provider routing.
+ */
+async function callOpenClaw(options: LlmCompletionOptions): Promise<string> {
+  const config = resolveOpenClawProvider();
+  if (!config) {
+    return '';
+  }
+
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const messages: Array<{ role: 'system' | 'user'; content: string }> = [];
+  if (options.systemPrompt?.trim()) {
+    messages.push({ role: 'system', content: options.systemPrompt.trim() });
+  }
+  messages.push({ role: 'user', content: options.prompt });
+
+  const response = await fetchImpl(`${config.baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${config.apiKey}`
+    },
+    body: JSON.stringify({
+      model: options.model ?? config.defaultModel,
+      temperature: options.temperature ?? 0.1,
+      max_tokens: options.maxTokens ?? 1200,
+      messages
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`OpenClaw provider request failed (${response.status})`);
+  }
+
+  const payload = await response.json() as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  return payload.choices?.[0]?.message?.content?.trim() ?? '';
 }

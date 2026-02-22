@@ -3,13 +3,14 @@ import * as path from 'path';
 import { DEFAULT_CATEGORIES } from '../types.js';
 
 const CONFIG_FILE = '.clawvault.json';
-const OBSERVE_PROVIDERS = ['anthropic', 'openai', 'gemini'] as const;
+const OBSERVE_PROVIDERS = ['anthropic', 'openai', 'gemini', 'openclaw'] as const;
 const OBSERVER_COMPRESSION_PROVIDERS = [
   'anthropic',
   'openai',
   'gemini',
   'openai-compatible',
-  'ollama'
+  'ollama',
+  'openclaw'
 ] as const;
 const THEMES = ['neural', 'minimal', 'none'] as const;
 const CONTEXT_PROFILES = ['default', 'planning', 'incident', 'handoff', 'auto'] as const;

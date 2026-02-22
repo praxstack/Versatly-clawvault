@@ -95,6 +95,7 @@ When touching imports, follow the project path [[projects/kanban]].
 describe('inject-utils llm fuzzy layer', () => {
   it('adds llm intent matches when deterministic signals are missing', async () => {
     const vaultPath = makeVault();
+    let origOpenClawHome: string | undefined;
     try {
       writeVaultFile(
         vaultPath,
@@ -112,6 +113,9 @@ Production deploys require gate checks.
       process.env.ANTHROPIC_API_KEY = '';
       process.env.GEMINI_API_KEY = '';
       process.env.OPENAI_API_KEY = 'test-openai-key';
+      // Isolate from host OpenClaw config so resolveLlmProvider picks openai
+      origOpenClawHome = process.env.OPENCLAW_HOME;
+      process.env.OPENCLAW_HOME = '/tmp/.openclaw-test-nonexistent';
 
       const fetchImpl: typeof fetch = async () => {
         return {
@@ -149,6 +153,8 @@ Production deploys require gate checks.
       expect(result.matches[0].llmScore).toBeCloseTo(0.91, 2);
       expect(result.matches[0].reasons.some((reason) => reason.source === 'llm_intent')).toBe(true);
     } finally {
+      if (origOpenClawHome !== undefined) process.env.OPENCLAW_HOME = origOpenClawHome;
+      else delete process.env.OPENCLAW_HOME;
       fs.rmSync(vaultPath, { recursive: true, force: true });
     }
   });
