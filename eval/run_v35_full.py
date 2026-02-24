@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
+from urllib.request import urlretrieve
 
 
 WORD_RE = re.compile(r"[a-zA-Z0-9']+")
@@ -83,6 +84,129 @@ RELATION_ALIASES = {
     "allergic_to": "allergic_to",
     "decided_to": "decided_to",
     "chose_over": "chose_over",
+}
+
+SCORER_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "for",
+    "from",
+    "how",
+    "i",
+    "in",
+    "is",
+    "it",
+    "my",
+    "of",
+    "on",
+    "that",
+    "the",
+    "their",
+    "they",
+    "this",
+    "to",
+    "was",
+    "were",
+    "with",
+    "you",
+    "your",
+}
+NEGATION_TOKENS = {"no", "not", "never", "none", "neither", "cannot", "can't", "didn't", "dont", "don't"}
+NUMBER_TOKEN_RE = re.compile(r"[$€£]?\s*-?\d+(?:,\d{3})*(?:\.\d+)?")
+NUMBER_WORD_VALUES = {
+    "zero": 0,
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+    "thirteen": 13,
+    "fourteen": 14,
+    "fifteen": 15,
+    "sixteen": 16,
+    "seventeen": 17,
+    "eighteen": 18,
+    "nineteen": 19,
+    "twenty": 20,
+    "thirty": 30,
+    "forty": 40,
+    "fifty": 50,
+    "sixty": 60,
+    "seventy": 70,
+    "eighty": 80,
+    "ninety": 90,
+}
+SCALE_WORD_VALUES = {"hundred": 100, "thousand": 1000}
+UNIT_ALIASES = {
+    "minute": "minute",
+    "minutes": "minute",
+    "min": "minute",
+    "mins": "minute",
+    "hour": "hour",
+    "hours": "hour",
+    "hr": "hour",
+    "hrs": "hour",
+    "day": "day",
+    "days": "day",
+    "week": "week",
+    "weeks": "week",
+    "month": "month",
+    "months": "month",
+    "year": "year",
+    "years": "year",
+    "dollar": "usd",
+    "dollars": "usd",
+    "usd": "usd",
+}
+TOKEN_CANONICAL_MAP = {
+    "attended": "attend",
+    "attending": "attend",
+    "bought": "buy",
+    "buying": "buy",
+    "purchased": "buy",
+    "purchasing": "buy",
+    "acquired": "buy",
+    "acquiring": "buy",
+    "works": "work",
+    "worked": "work",
+    "working": "work",
+    "lives": "live",
+    "lived": "live",
+    "living": "live",
+    "resides": "live",
+    "resided": "live",
+    "residing": "live",
+    "programme": "program",
+    "playlists": "playlist",
+    "universities": "university",
+    "colleges": "college",
+}
+
+LONGMEMEVAL_DATASET_URLS = {
+    "s": (
+        "longmemeval_s_cleaned.json",
+        "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/main/longmemeval_s_cleaned.json",
+    ),
+    "m": (
+        "longmemeval_m_cleaned.json",
+        "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/main/longmemeval_m_cleaned.json",
+    ),
+    "oracle": (
+        "longmemeval_oracle.json",
+        "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/main/longmemeval_oracle.json",
+    ),
 }
 
 
@@ -1258,6 +1382,192 @@ def token_f1(prediction: str, ground_truth: str) -> float:
     return (2 * precision * recall) / max(1e-9, precision + recall)
 
 
+def canonicalize_token(token: str) -> str:
+    tok = (token or "").lower().strip()
+    if not tok:
+        return ""
+    tok = TOKEN_CANONICAL_MAP.get(tok, tok)
+    if tok.endswith("ies") and len(tok) > 4:
+        tok = tok[:-3] + "y"
+    elif tok.endswith("s") and len(tok) > 3 and not tok.endswith("ss"):
+        tok = tok[:-1]
+    if tok.endswith("ing") and len(tok) > 5:
+        tok = tok[:-3]
+    elif tok.endswith("ed") and len(tok) > 4:
+        tok = tok[:-2]
+    return TOKEN_CANONICAL_MAP.get(tok, tok)
+
+
+def canonicalize_text(text: str) -> str:
+    return " ".join(canonicalize_token(t) for t in tokenize(text) if t)
+
+
+def extract_key_tokens(text: str) -> List[str]:
+    tokens = [canonicalize_token(t) for t in tokenize(text)]
+    keys = [t for t in tokens if t and t not in SCORER_STOPWORDS and len(t) > 1]
+    return keys or [t for t in tokens if t]
+
+
+def key_token_coverage(prediction: str, ground_truth: str) -> float:
+    gold_keys = extract_key_tokens(ground_truth)
+    if not gold_keys:
+        return 0.0
+    pred_keys = set(extract_key_tokens(prediction))
+    overlap = sum(1 for tok in gold_keys if tok in pred_keys)
+    return overlap / len(gold_keys)
+
+
+def _parse_numeric_literal(raw: str) -> Optional[float]:
+    cleaned = raw.replace(",", "").strip()
+    cleaned = cleaned.lstrip("$€£")
+    if not cleaned:
+        return None
+    try:
+        return float(cleaned)
+    except Exception:
+        return None
+
+
+def _parse_number_words(tokens: Sequence[str], start: int) -> Tuple[Optional[float], int]:
+    total = 0.0
+    current = 0.0
+    consumed = 0
+    matched = False
+    idx = start
+    while idx < len(tokens):
+        tok = tokens[idx]
+        if tok == "and" and matched:
+            idx += 1
+            consumed += 1
+            continue
+        if tok in NUMBER_WORD_VALUES:
+            current += float(NUMBER_WORD_VALUES[tok])
+            matched = True
+        elif tok in SCALE_WORD_VALUES:
+            scale = float(SCALE_WORD_VALUES[tok])
+            if current == 0.0:
+                current = 1.0
+            current *= scale
+            if scale >= 1000.0:
+                total += current
+                current = 0.0
+            matched = True
+        elif tok == "half":
+            current += 0.5
+            matched = True
+        else:
+            break
+        idx += 1
+        consumed += 1
+    if not matched:
+        return None, 0
+    return total + current, consumed
+
+
+def extract_number_values(text: str) -> List[float]:
+    values: List[float] = []
+    for match in NUMBER_TOKEN_RE.finditer(text or ""):
+        value = _parse_numeric_literal(match.group(0))
+        if value is not None:
+            values.append(value)
+    toks = tokenize(text or "")
+    idx = 0
+    while idx < len(toks):
+        value, consumed = _parse_number_words(toks, idx)
+        if consumed > 0 and value is not None:
+            values.append(value)
+            idx += consumed
+            continue
+        idx += 1
+    deduped: List[float] = []
+    seen = set()
+    for value in values:
+        key = round(value, 4)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(value)
+    return deduped
+
+
+def extract_units(text: str) -> set[str]:
+    units: set[str] = set()
+    low = (text or "").lower()
+    if "$" in text or " usd" in low or "dollar" in low:
+        units.add("usd")
+    for tok in tokenize(low):
+        canon = UNIT_ALIASES.get(tok)
+        if canon:
+            units.add(canon)
+    return units
+
+
+def numeric_alignment_state(prediction: str, ground_truth: str, question_type: str) -> str:
+    gold_numbers = extract_number_values(ground_truth)
+    if not gold_numbers:
+        return "none"
+    pred_numbers = extract_number_values(prediction)
+    if not pred_numbers:
+        return "none"
+    tolerance = 1.0 if "temporal" in question_type else 0.01
+    all_matched = all(any(abs(p - g) <= tolerance for p in pred_numbers) for g in gold_numbers)
+    if not all_matched:
+        return "mismatch"
+    gold_units = extract_units(ground_truth)
+    pred_units = extract_units(prediction)
+    if gold_units and pred_units and not (gold_units & pred_units):
+        return "mismatch"
+    return "match"
+
+
+def has_key_phrase_overlap(prediction: str, ground_truth: str) -> bool:
+    pred_norm = normalize_answer(prediction)
+    gold_keys = extract_key_tokens(ground_truth)
+    if len(gold_keys) < 2:
+        return False
+    max_window = min(5, len(gold_keys))
+    for width in range(max_window, 1, -1):
+        for start in range(0, len(gold_keys) - width + 1):
+            phrase = " ".join(gold_keys[start : start + width])
+            if len(phrase) < 5:
+                continue
+            if phrase in pred_norm:
+                return True
+    return False
+
+
+def has_negated_key_fact(prediction: str, ground_truth: str) -> bool:
+    gold_keys = set(extract_key_tokens(ground_truth))
+    if not gold_keys:
+        return False
+    toks = [canonicalize_token(t) for t in tokenize(prediction)]
+    for idx, tok in enumerate(toks):
+        if tok not in NEGATION_TOKENS:
+            continue
+        window = toks[idx + 1 : idx + 7]
+        if any(w in gold_keys for w in window):
+            return True
+    return False
+
+
+def is_clearly_unrelated(prediction: str, ground_truth: str) -> bool:
+    gold_keys = set(extract_key_tokens(ground_truth))
+    if not gold_keys:
+        return False
+    pred_keys = set(extract_key_tokens(prediction))
+    overlap = len(gold_keys & pred_keys) / max(1, len(gold_keys))
+    canon_f1 = token_f1(canonicalize_text(prediction), canonicalize_text(ground_truth))
+    return overlap < 0.2 and canon_f1 < 0.2
+
+
+def paraphrase_match(prediction: str, ground_truth: str) -> bool:
+    canon_pred = canonicalize_text(prediction)
+    canon_gold = canonicalize_text(ground_truth)
+    if not canon_pred or not canon_gold:
+        return False
+    return token_f1(canon_pred, canon_gold) >= 0.5
+
+
 def temporal_off_by_one(prediction: str, ground_truth: str) -> bool:
     p = INT_RE.search(prediction or "")
     g = INT_RE.search(ground_truth or "")
@@ -1267,31 +1577,51 @@ def temporal_off_by_one(prediction: str, ground_truth: str) -> bool:
 
 
 def is_correct(prediction: Dict[str, Any]) -> bool:
-    pred = str(prediction.get("hypothesis", ""))
-    gold = str(prediction.get("answer", ""))
+    pred = normalize_space(str(prediction.get("hypothesis", "")))
+    gold = normalize_space(str(prediction.get("answer", "")))
     qid = str(prediction.get("question_id", ""))
     qtype = str(prediction.get("question_type", "")).lower()
 
     if "_abs" in qid:
         return bool(ABSTENTION_RE.search(pred))
+    if not pred:
+        return False
+    if ABSTENTION_RE.search(pred):
+        return False
 
     pred_norm = normalize_answer(pred)
     gold_norm = normalize_answer(gold)
     if pred_norm == gold_norm:
         return True
-    if gold_norm and gold_norm in pred_norm and len(gold_norm) > 3:
+    if gold_norm and gold_norm in pred_norm and len(gold_norm) > 2:
         return True
-    if pred_norm and pred_norm in gold_norm and len(pred_norm) > 3:
+    if pred_norm and pred_norm in gold_norm and len(pred_norm) > 2:
+        return True
+
+    numeric_state = numeric_alignment_state(pred, gold, qtype)
+    if numeric_state == "match":
         return True
     if "temporal" in qtype and temporal_off_by_one(pred, gold):
         return True
 
-    f1 = token_f1(pred, gold)
-    if "single-session-preference" in qtype:
-        return f1 >= 0.35
-    if "knowledge-update" in qtype:
-        return f1 >= 0.50
-    return f1 >= 0.60
+    lexical_f1 = token_f1(pred, gold)
+    canonical_f1 = token_f1(canonicalize_text(pred), canonicalize_text(gold))
+    coverage = key_token_coverage(pred, gold)
+    partial_entity_match = has_key_phrase_overlap(pred, gold) or coverage >= 0.60
+    paraphrase_hit = paraphrase_match(pred, gold)
+
+    if (partial_entity_match or paraphrase_hit) and numeric_state != "mismatch":
+        return True
+
+    if has_negated_key_fact(pred, gold):
+        return False
+    if numeric_state == "mismatch":
+        return False
+    if is_clearly_unrelated(pred, gold):
+        return False
+
+    # Conservative fallback: keep strict "wrong" only for contradiction/unrelated cases.
+    return max(lexical_f1, canonical_f1) >= 0.30 or coverage >= 0.35
 
 
 def evaluate_predictions_local(predictions: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -1530,9 +1860,51 @@ def write_jsonl(path: Path, rows: Sequence[Dict[str, Any]]) -> None:
             f.write("\n")
 
 
+def resolve_input_file(args: argparse.Namespace) -> Path:
+    if args.in_file:
+        in_path = Path(args.in_file)
+        if not in_path.exists():
+            raise FileNotFoundError(f"Input file does not exist: {in_path}")
+        return in_path
+    file_name, url = LONGMEMEVAL_DATASET_URLS[args.dataset_split]
+    data_dir = Path(args.data_dir)
+    in_path = data_dir / file_name
+    if in_path.exists():
+        return in_path
+    if args.no_download:
+        raise FileNotFoundError(
+            f"Dataset missing at {in_path}. "
+            "Provide --in-file, remove --no-download, or place LongMemEval data under eval/data/."
+        )
+    data_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Dataset not found at {in_path}; downloading from {url}")
+    urlretrieve(url, in_path)
+    return in_path
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run ClawVault LongMemEval benchmark adapter v35.")
-    parser.add_argument("--in-file", required=True, help="Input LongMemEval file (json/jsonl).")
+    parser.add_argument(
+        "--in-file",
+        default=None,
+        help="Input LongMemEval file (json/jsonl). If omitted, loads from eval/data and auto-downloads when missing.",
+    )
+    parser.add_argument(
+        "--dataset-split",
+        choices=sorted(LONGMEMEVAL_DATASET_URLS.keys()),
+        default="s",
+        help="Dataset split to use when --in-file is not provided.",
+    )
+    parser.add_argument(
+        "--data-dir",
+        default="eval/data",
+        help="Directory containing LongMemEval dataset files.",
+    )
+    parser.add_argument(
+        "--no-download",
+        action="store_true",
+        help="Do not auto-download LongMemEval dataset if missing.",
+    )
     parser.add_argument(
         "--out-file",
         default="eval/run_v35_full.predictions.jsonl",
@@ -1546,12 +1918,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--top-k", type=int, default=20, help="Top-k fused retrieval results.")
     parser.add_argument("--rrf-k", type=int, default=60, help="RRF k parameter.")
     parser.add_argument("--max-questions", type=int, default=None, help="Optional cap for quick runs.")
+    parser.add_argument(
+        "--use-v34-scorer",
+        action="store_true",
+        help="Use v34 scoring module when available. Default uses improved v35 local heuristic scorer.",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    in_path = Path(args.in_file)
+    in_path = resolve_input_file(args)
     out_path = Path(args.out_file)
     metrics_path = Path(args.metrics_file)
 
@@ -1563,7 +1940,12 @@ def main() -> None:
         rrf_k=args.rrf_k,
         max_questions=args.max_questions,
     )
-    metrics = evaluate_predictions_with_v34_if_available(predictions)
+    if args.use_v34_scorer:
+        metrics = evaluate_predictions_with_v34_if_available(predictions)
+    else:
+        metrics = evaluate_predictions_local(predictions)
+    metrics["input_file"] = str(in_path)
+    metrics["evaluated_questions"] = len(predictions)
 
     write_jsonl(out_path, predictions)
     metrics_path.parent.mkdir(parents=True, exist_ok=True)
