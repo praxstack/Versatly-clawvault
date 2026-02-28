@@ -5,6 +5,13 @@ interface ProtectedRange {
   end: number;
 }
 
+interface PlannedLink {
+  start: number;
+  end: number;
+  originalText: string;
+  path: string;
+}
+
 /**
  * Find all protected ranges in the content that should not be linked:
  * - Frontmatter (--- blocks)
@@ -50,11 +57,53 @@ function findProtectedRanges(content: string): ProtectedRange[] {
   return ranges;
 }
 
-/**
- * Check if a position is within any protected range
- */
-function isProtected(pos: number, ranges: ProtectedRange[]): boolean {
-  return ranges.some(r => pos >= r.start && pos < r.end);
+function isProtectedRange(start: number, end: number, ranges: ProtectedRange[]): boolean {
+  return ranges.some(range => start < range.end && end > range.start);
+}
+
+function createAliasRegex(alias: string): RegExp {
+  const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`\\b${escapedAlias}\\b`, 'gi');
+}
+
+function formatWikiLink(path: string, originalText: string): string {
+  return originalText.toLowerCase() === path.split('/').pop()?.toLowerCase()
+    ? `[[${path}]]`
+    : `[[${path}|${originalText}]]`;
+}
+
+function planLinks(content: string, index: EntityIndex, protectedRanges: ProtectedRange[]): PlannedLink[] {
+  const sortedAliases = getSortedAliases(index);
+  const linkedEntities = new Set<string>();
+  const claimedRanges: ProtectedRange[] = [];
+  const plannedLinks: PlannedLink[] = [];
+
+  for (const { alias, path } of sortedAliases) {
+    // Skip if we already linked this entity
+    if (linkedEntities.has(path)) continue;
+
+    const regex = createAliasRegex(alias);
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(content)) !== null) {
+      const start = match.index;
+      const end = start + match[0].length;
+
+      if (isProtectedRange(start, end, protectedRanges)) continue;
+      if (isProtectedRange(start, end, claimedRanges)) continue;
+
+      plannedLinks.push({
+        start,
+        end,
+        originalText: match[0],
+        path
+      });
+      claimedRanges.push({ start, end });
+      linkedEntities.add(path);
+      break; // Only link first occurrence
+    }
+  }
+
+  return plannedLinks;
 }
 
 function createLineLookup(content: string): (pos: number) => number {
@@ -81,46 +130,14 @@ function createLineLookup(content: string): (pos: number) => number {
  */
 export function autoLink(content: string, index: EntityIndex): string {
   const protectedRanges = findProtectedRanges(content);
-  const sortedAliases = getSortedAliases(index);
-  const linkedEntities = new Set<string>();
-  
+  const plannedLinks = planLinks(content, index, protectedRanges);
   let result = content;
-  let offset = 0;  // Track position shifts from replacements
-  
-  for (const { alias, path } of sortedAliases) {
-    // Skip if we already linked this entity
-    if (linkedEntities.has(path)) continue;
-    
-    // Create word-boundary regex (case-insensitive)
-    const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(`\\b${escapedAlias}\\b`, 'gi');
-    
-    let match;
-    while ((match = regex.exec(content)) !== null) {
-      const originalPos = match.index;
-      const adjustedPos = originalPos + offset;
-      
-      // Check if this position is protected in the ORIGINAL content
-      if (isProtected(originalPos, protectedRanges)) continue;
-      
-      // Check if already inside a link in current result
-      const beforeMatch = result.substring(0, adjustedPos);
-      const openBrackets = (beforeMatch.match(/\[\[/g) || []).length;
-      const closeBrackets = (beforeMatch.match(/\]\]/g) || []).length;
-      if (openBrackets > closeBrackets) continue;
-      
-      // Found a valid match - replace it
-      const originalText = match[0];
-      const replacement = originalText.toLowerCase() === path.split('/').pop()?.toLowerCase()
-        ? `[[${path}]]`
-        : `[[${path}|${originalText}]]`;
-      
-      result = result.substring(0, adjustedPos) + replacement + result.substring(adjustedPos + originalText.length);
-      offset += replacement.length - originalText.length;
-      
-      linkedEntities.add(path);
-      break;  // Only link first occurrence
-    }
+
+  // Apply from end to start so indexes remain valid without offset bookkeeping.
+  const sortedByPosition = plannedLinks.slice().sort((a, b) => b.start - a.start);
+  for (const planned of sortedByPosition) {
+    const replacement = formatWikiLink(planned.path, planned.originalText);
+    result = result.substring(0, planned.start) + replacement + result.substring(planned.end);
   }
   
   return result;
@@ -131,32 +148,14 @@ export function autoLink(content: string, index: EntityIndex): string {
  */
 export function dryRunLink(content: string, index: EntityIndex): Array<{ alias: string; path: string; line: number }> {
   const protectedRanges = findProtectedRanges(content);
-  const sortedAliases = getSortedAliases(index);
-  const linkedEntities = new Set<string>();
-  const matches: Array<{ alias: string; path: string; line: number }> = [];
+  const plannedLinks = planLinks(content, index, protectedRanges);
   const getLineNumber = createLineLookup(content);
-  
-  for (const { alias, path } of sortedAliases) {
-    if (linkedEntities.has(path)) continue;
-    
-    const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(`\\b${escapedAlias}\\b`, 'gi');
-    
-    let match;
-    while ((match = regex.exec(content)) !== null) {
-      if (isProtected(match.index, protectedRanges)) continue;
-      
-      matches.push({
-        alias: match[0],
-        path,
-        line: getLineNumber(match.index)
-      });
-      linkedEntities.add(path);
-      break;
-    }
-  }
-  
-  return matches;
+
+  return plannedLinks.map((planned) => ({
+    alias: planned.originalText,
+    path: planned.path,
+    line: getLineNumber(planned.start)
+  }));
 }
 
 /**
@@ -180,7 +179,9 @@ export function findUnlinkedMentions(
 
     let match;
     while ((match = regex.exec(content)) !== null) {
-      if (isProtected(match.index, protectedRanges)) continue;
+      const start = match.index;
+      const end = start + match[0].length;
+      if (isProtectedRange(start, end, protectedRanges)) continue;
 
       matches.push({
         alias: match[0],

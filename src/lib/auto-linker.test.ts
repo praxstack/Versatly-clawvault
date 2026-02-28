@@ -84,4 +84,71 @@ Another Justin mention.
     ]);
     expect(unlinked).toEqual(dryRun);
   });
+
+  it('is idempotent across repeated runs', () => {
+    const index = createIndex([
+      ['alice', 'people/alice'],
+      ['core api', 'projects/core-api'],
+    ]);
+
+    const input = [
+      'Existing [[people/alice|Alice]] reference.',
+      'Alice worked on the Core API.',
+      '```md',
+      'Alice and Core API should stay plain here.',
+      '```',
+      '`Core API` also stays plain.',
+    ].join('\n');
+
+    const linkedOnce = autoLink(input, index);
+    let linkedRepeatedly = linkedOnce;
+    for (let i = 0; i < 9; i++) {
+      linkedRepeatedly = autoLink(linkedRepeatedly, index);
+    }
+
+    expect(linkedRepeatedly).toBe(linkedOnce);
+    expect(linkedRepeatedly).not.toContain('[[[[');
+  });
+
+  it('keeps existing wiki-links stable and only links unlinked mentions', () => {
+    const index = createIndex([
+      ['alice', 'people/alice'],
+    ]);
+
+    const input = 'Keep [[people/alice|Alice]] unchanged and mention Alice once.';
+    const output = autoLink(input, index);
+
+    expect(output).toContain('[[people/alice|Alice]]');
+    expect(output).toContain('mention [[people/alice]] once.');
+    expect(output).not.toContain('[[[[people/alice');
+  });
+
+  it('does not link partial word matches', () => {
+    const index = createIndex([
+      ['ann', 'people/ann'],
+    ]);
+
+    const output = autoLink('Annette met Ann in Annex.', index);
+
+    expect(output).toBe('Annette met [[people/ann]] in Annex.');
+  });
+
+  it('does not link mentions inside fenced or inline code', () => {
+    const index = createIndex([
+      ['alice', 'people/alice'],
+      ['core api', 'projects/core-api'],
+    ]);
+
+    const input = [
+      '```ts',
+      'const user = "Alice";',
+      '```',
+      'Use `Core API` helper and then call Core API for Alice.',
+    ].join('\n');
+
+    const output = autoLink(input, index);
+
+    expect(output).toContain('const user = "Alice";');
+    expect(output).toContain('Use `Core API` helper and then call [[projects/core-api|Core API]] for [[people/alice]].');
+  });
 });
