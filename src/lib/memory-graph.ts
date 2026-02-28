@@ -2,10 +2,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import matter from 'gray-matter';
 import { glob } from 'glob';
+import { extractRawWikiLinks, normalizeWikiLinkTarget } from './wiki-links.js';
 
 export const MEMORY_GRAPH_SCHEMA_VERSION = 1;
 const GRAPH_INDEX_RELATIVE_PATH = path.join('.clawvault', 'graph-index.json');
-const WIKI_LINK_RE = /\[\[([^\]]+)\]\]/g;
 const HASH_TAG_RE = /(^|\s)#([\w-]+)/g;
 const FRONTMATTER_RELATION_FIELDS = [
   'related',
@@ -168,28 +168,6 @@ function getGraphIndexPath(vaultPath: string): string {
   return path.join(vaultPath, GRAPH_INDEX_RELATIVE_PATH);
 }
 
-function normalizeWikiTarget(target: string): string {
-  let value = target.trim();
-  if (!value) return '';
-  const pipeIndex = value.indexOf('|');
-  if (pipeIndex >= 0) {
-    value = value.slice(0, pipeIndex);
-  }
-  const hashIndex = value.indexOf('#');
-  if (hashIndex >= 0) {
-    value = value.slice(0, hashIndex);
-  }
-  value = value
-    .trim()
-    .replace(/\\/g, '/')
-    .replace(/^\.\//, '')
-    .replace(/^\/+/, '');
-  if (value.toLowerCase().endsWith('.md')) {
-    value = value.slice(0, -3);
-  }
-  return value.trim();
-}
-
 function collectTags(frontmatter: Record<string, unknown>, markdownContent: string): string[] {
   const tags = new Set<string>();
   const fmTags = frontmatter.tags;
@@ -216,13 +194,15 @@ function collectTags(frontmatter: Record<string, unknown>, markdownContent: stri
 
 function extractWikiTargets(markdownContent: string): string[] {
   const targets = new Set<string>();
-  for (const match of markdownContent.matchAll(WIKI_LINK_RE)) {
-    const candidate = match[1];
-    if (!candidate) continue;
+  for (const candidate of extractRawWikiLinks(markdownContent)) {
     const normalized = normalizeWikiTarget(candidate);
     if (normalized) targets.add(normalized);
   }
   return [...targets];
+}
+
+function normalizeWikiTarget(target: string): string {
+  return normalizeWikiLinkTarget(target);
 }
 
 function toStringArray(value: unknown): string[] {
@@ -276,16 +256,65 @@ function buildNoteRegistry(relativePaths: string[]): NoteRegistry {
   return { byLowerPath, byLowerBasename };
 }
 
-function resolveTargetNodeId(rawTarget: string, registry: NoteRegistry): string {
+function normalizeLookupPath(candidate: string): string {
+  const normalized = normalizeWikiTarget(candidate);
+  if (!normalized) return '';
+
+  const resolved = path.posix.normalize(normalized).replace(/^\/+/, '');
+  if (!resolved || resolved === '.' || resolved.startsWith('../')) {
+    return '';
+  }
+  return resolved;
+}
+
+function buildTargetLookupCandidates(target: string, sourceNoteKey: string): string[] {
+  const candidates: string[] = [];
+  const sourceDir = path.posix.dirname(sourceNoteKey);
+  const hasSourceDir = sourceDir !== '.';
+  const isRelativeTarget = target.startsWith('./') || target.startsWith('../');
+
+  const addCandidate = (candidate: string): void => {
+    const normalized = normalizeLookupPath(candidate);
+    if (!normalized || candidates.includes(normalized)) return;
+    candidates.push(normalized);
+  };
+
+  if (isRelativeTarget) {
+    if (hasSourceDir) {
+      addCandidate(path.posix.join(sourceDir, target));
+    } else {
+      addCandidate(target);
+    }
+    if (target.startsWith('./')) {
+      addCandidate(target.slice(2));
+    }
+    return candidates;
+  }
+
+  if (!target.includes('/')) {
+    if (hasSourceDir) {
+      addCandidate(`${sourceDir}/${target}`);
+    }
+    addCandidate(target);
+    return candidates;
+  }
+
+  addCandidate(target);
+  return candidates;
+}
+
+function resolveTargetNodeId(rawTarget: string, registry: NoteRegistry, sourceNoteKey: string): string {
   const normalized = normalizeWikiTarget(rawTarget);
   if (!normalized) {
     return toUnresolvedNodeId(rawTarget);
   }
-
   const lowerTarget = normalized.toLowerCase();
-  const direct = registry.byLowerPath.get(lowerTarget);
-  if (direct) {
-    return toNoteNodeId(direct);
+
+  for (const candidate of buildTargetLookupCandidates(normalized, sourceNoteKey)) {
+    const direct = registry.byLowerPath.get(candidate.toLowerCase());
+    if (direct) {
+      return toNoteNodeId(direct);
+    }
   }
 
   if (!normalized.includes('/')) {
@@ -379,7 +408,7 @@ function parseFileFragment(
 
   const wikiTargets = extractWikiTargets(parsed.content);
   for (const target of wikiTargets) {
-    const targetNodeId = resolveTargetNodeId(target, registry);
+    const targetNodeId = resolveTargetNodeId(target, registry, noteKey);
     if (targetNodeId.startsWith('unresolved:') && !nodes.has(targetNodeId)) {
       nodes.set(
         targetNodeId,
@@ -396,7 +425,7 @@ function parseFileFragment(
   }
 
   for (const relation of extractFrontmatterRelations(frontmatter)) {
-    const targetNodeId = resolveTargetNodeId(relation.target, registry);
+    const targetNodeId = resolveTargetNodeId(relation.target, registry, noteKey);
     if (targetNodeId.startsWith('unresolved:') && !nodes.has(targetNodeId)) {
       nodes.set(
         targetNodeId,

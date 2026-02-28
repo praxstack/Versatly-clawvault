@@ -1,10 +1,10 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { buildEntityIndex, type EntityIndex } from './entity-index.js';
+import { extractRawWikiLinks, normalizeWikiLinkTarget } from './wiki-links.js';
 
 const CLAWVAULT_DIR = '.clawvault';
 const BACKLINKS_FILE = 'backlinks.json';
-const WIKI_LINK_REGEX = /\[\[([^\]]+)\]\]/g;
 
 export interface BacklinksScanResult {
   backlinks: Map<string, string[]>;
@@ -26,29 +26,55 @@ function toVaultId(vaultPath: string, filePath: string): string {
 }
 
 function normalizeLinkTarget(raw: string): string {
-  let target = raw.trim();
-  if (!target) return '';
-  if (target.startsWith('[[') && target.endsWith(']]')) {
-    target = target.slice(2, -2);
+  return normalizeWikiLinkTarget(raw);
+}
+
+function normalizeLookupCandidate(value: string): string {
+  const normalized = normalizeLinkTarget(value);
+  if (!normalized) return '';
+
+  const resolved = path.posix.normalize(normalized).replace(/^\/+/, '');
+  if (!resolved || resolved === '.' || resolved.startsWith('../')) {
+    return '';
   }
-  const pipeIndex = target.indexOf('|');
-  if (pipeIndex !== -1) {
-    target = target.slice(0, pipeIndex);
+
+  return resolved;
+}
+
+function buildLookupCandidates(target: string, sourceId: string): string[] {
+  const candidates: string[] = [];
+  const sourceDir = path.posix.dirname(sourceId);
+  const hasSourceDir = sourceDir !== '.';
+  const isRelativeTarget = target.startsWith('./') || target.startsWith('../');
+
+  const addCandidate = (candidate: string): void => {
+    const normalized = normalizeLookupCandidate(candidate);
+    if (!normalized || candidates.includes(normalized)) return;
+    candidates.push(normalized);
+  };
+
+  if (isRelativeTarget) {
+    if (hasSourceDir) {
+      addCandidate(path.posix.join(sourceDir, target));
+    } else {
+      addCandidate(target);
+    }
+    if (target.startsWith('./')) {
+      addCandidate(target.slice(2));
+    }
+    return candidates;
   }
-  if (target.startsWith('#')) return '';
-  const hashIndex = target.indexOf('#');
-  if (hashIndex !== -1) {
-    target = target.slice(0, hashIndex);
+
+  if (!target.includes('/')) {
+    if (hasSourceDir) {
+      addCandidate(`${sourceDir}/${target}`);
+    }
+    addCandidate(target);
+    return candidates;
   }
-  target = target.trim();
-  if (!target) return '';
-  if (target.endsWith('.md')) {
-    target = target.slice(0, -3);
-  }
-  if (target.startsWith('/')) {
-    target = target.slice(1);
-  }
-  return target.replace(/\\/g, '/');
+
+  addCandidate(target);
+  return candidates;
 }
 
 function listMarkdownFiles(vaultPath: string): string[] {
@@ -93,13 +119,21 @@ function buildKnownIds(vaultPath: string, files: string[]): {
 
 function resolveTarget(
   target: string,
+  sourceId: string,
   known: { ids: Set<string>; idsLower: Map<string, string> },
   entityIndex?: EntityIndex
 ): string | null {
   if (!target) return null;
-  if (known.ids.has(target)) return target;
+
+  for (const candidate of buildLookupCandidates(target, sourceId)) {
+    if (known.ids.has(candidate)) return candidate;
+    const lowerCandidate = candidate.toLowerCase();
+    if (known.idsLower.has(lowerCandidate)) {
+      return known.idsLower.get(lowerCandidate)!;
+    }
+  }
+
   const lower = target.toLowerCase();
-  if (known.idsLower.has(lower)) return known.idsLower.get(lower)!;
   if (entityIndex?.entries.has(lower)) return entityIndex.entries.get(lower)!;
   return null;
 }
@@ -119,13 +153,13 @@ export function scanVaultLinks(
   for (const file of files) {
     const sourceId = toVaultId(vaultPath, file);
     const content = fs.readFileSync(file, 'utf-8');
-    const matches = content.match(WIKI_LINK_REGEX) || [];
+    const matches = extractRawWikiLinks(content);
     linkCount += matches.length;
 
     for (const match of matches) {
       const target = normalizeLinkTarget(match);
       if (!target) continue;
-      const resolved = resolveTarget(target, known, entityIndex);
+      const resolved = resolveTarget(target, sourceId, known, entityIndex);
       if (!resolved) {
         orphans.push({ source: sourceId, target });
         continue;

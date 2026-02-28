@@ -53,4 +53,49 @@ describe('backlinks scan', () => {
       fs.rmSync(vaultPath, { recursive: true, force: true });
     }
   });
+
+  it('ignores wiki links in markdown code regions and still parses aliases', () => {
+    const vaultPath = makeTempVaultDir();
+    try {
+      writeFile(vaultPath, 'people/alice.md', '# Alice');
+      writeFile(
+        vaultPath,
+        'notes/a.md',
+        [
+          'Real: [[people/alice|Alice]].',
+          '',
+          'Inline: `[[unknown-inline]]`',
+          '',
+          '```md',
+          '[[unknown-fenced]]',
+          '```',
+          '',
+          '    [[unknown-indented]]'
+        ].join('\n')
+      );
+
+      const result = scanVaultLinks(vaultPath);
+      expect(result.linkCount).toBe(1);
+      expect(result.backlinks.get('people/alice')).toEqual(['notes/a']);
+      expect(result.orphans).toEqual([]);
+    } finally {
+      fs.rmSync(vaultPath, { recursive: true, force: true });
+    }
+  });
+
+  it('resolves relative links from notes in subdirectories', () => {
+    const vaultPath = makeTempVaultDir();
+    try {
+      writeFile(vaultPath, 'notes/daily/project-plan.md', '# Plan');
+      writeFile(vaultPath, 'notes/shared/retro.md', '# Retro');
+      writeFile(vaultPath, 'notes/daily/today.md', 'See [[project-plan]] and [[../shared/retro|retro]].');
+
+      const result = scanVaultLinks(vaultPath);
+      expect(result.backlinks.get('notes/daily/project-plan')).toEqual(['notes/daily/today']);
+      expect(result.backlinks.get('notes/shared/retro')).toEqual(['notes/daily/today']);
+      expect(result.orphans).toEqual([]);
+    } finally {
+      fs.rmSync(vaultPath, { recursive: true, force: true });
+    }
+  });
 });
