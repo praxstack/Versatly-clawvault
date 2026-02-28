@@ -31,6 +31,20 @@ function shouldDropRole(role: string): boolean {
   return normalized.startsWith('tool');
 }
 
+function isConversationRolePrefix(role: string): boolean {
+  const normalized = normalizeToken(role);
+  if (!normalized) {
+    return false;
+  }
+  if (normalized === 'user' || normalized === 'assistant' || normalized === 'system') {
+    return true;
+  }
+  if (normalized === 'developer' || normalized === 'metadata') {
+    return true;
+  }
+  return normalized.startsWith('tool');
+}
+
 function isNoisyBlockType(value: unknown): boolean {
   if (typeof value !== 'string') {
     return false;
@@ -92,7 +106,7 @@ function sanitizeParsedMessage(message: string): string {
   }
 
   const roleMatch = /^([a-z][a-z0-9_-]{1,31})\s*:\s*(.+)$/i.exec(normalized);
-  if (roleMatch) {
+  if (roleMatch && isConversationRolePrefix(roleMatch[1])) {
     const role = normalizeRole(roleMatch[1]);
     if (shouldDropRole(role)) {
       return '';

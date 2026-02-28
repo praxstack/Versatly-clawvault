@@ -132,7 +132,7 @@ export class Compressor {
     }
 
     const roleMatch = ROLE_PREFIX_RE.exec(normalized);
-    if (roleMatch) {
+    if (roleMatch && this.isConversationRolePrefix(roleMatch[1])) {
       const role = this.normalizeMessageRole(roleMatch[1]);
       if (this.shouldDropMessageRole(role)) {
         return '';
@@ -156,6 +156,20 @@ export class Compressor {
 
   private normalizeMessageRole(role: string): string {
     return role.trim().toLowerCase();
+  }
+
+  private isConversationRolePrefix(role: string): boolean {
+    const normalized = role.trim().toLowerCase().replace(/[\s_-]+/g, '');
+    if (!normalized) {
+      return false;
+    }
+    if (normalized === 'user' || normalized === 'assistant' || normalized === 'system') {
+      return true;
+    }
+    if (normalized === 'developer' || normalized === 'metadata') {
+      return true;
+    }
+    return normalized.startsWith('tool');
   }
 
   private shouldDropMessageRole(role: string): boolean {

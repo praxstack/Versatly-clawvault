@@ -6,11 +6,19 @@ const originalOpenAI = process.env.OPENAI_API_KEY;
 const originalGemini = process.env.GEMINI_API_KEY;
 const originalNoLlm = process.env.CLAWVAULT_NO_LLM;
 
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[name];
+    return;
+  }
+  process.env[name] = value;
+}
+
 afterEach(() => {
-  process.env.ANTHROPIC_API_KEY = originalAnthropic;
-  process.env.OPENAI_API_KEY = originalOpenAI;
-  process.env.GEMINI_API_KEY = originalGemini;
-  process.env.CLAWVAULT_NO_LLM = originalNoLlm;
+  restoreEnv('ANTHROPIC_API_KEY', originalAnthropic);
+  restoreEnv('OPENAI_API_KEY', originalOpenAI);
+  restoreEnv('GEMINI_API_KEY', originalGemini);
+  restoreEnv('CLAWVAULT_NO_LLM', originalNoLlm);
 });
 
 describe('Compressor', () => {
