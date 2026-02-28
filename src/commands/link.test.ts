@@ -14,6 +14,29 @@ function writeFile(root: string, relative: string, content: string): void {
   fs.writeFileSync(filePath, content);
 }
 
+function snapshotMarkdownFiles(root: string): Record<string, string> {
+  const snapshot: Record<string, string> = {};
+
+  function walk(dir: string): void {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === '.clawvault') continue;
+        walk(fullPath);
+        continue;
+      }
+      if (entry.name.endsWith('.md')) {
+        const relativePath = path.relative(root, fullPath).split(path.sep).join('/');
+        snapshot[relativePath] = fs.readFileSync(fullPath, 'utf-8');
+      }
+    }
+  }
+
+  walk(root);
+  return snapshot;
+}
+
 describe('link command', () => {
   let vaultPath = '';
   let originalEnv: string | undefined;
@@ -75,5 +98,37 @@ describe('link command', () => {
     const content = fs.readFileSync(path.join(vaultPath, 'notes', 'a.md'), 'utf-8');
     expect(content).toContain('[[people/alice]]');
     expect(fs.existsSync(path.join(vaultPath, '.clawvault', 'graph-index.json'))).toBe(true);
+  });
+
+  it('keeps --all linking idempotent across repeated runs', async () => {
+    writeFile(vaultPath, 'people/alice.md', '# Alice');
+    writeFile(vaultPath, 'projects/core-api.md', '# Core API');
+    writeFile(vaultPath, 'notes/meeting.md', [
+      'Already linked [[people/alice|Alice]].',
+      '',
+      'Alice discussed the Core API roadmap.',
+      '',
+      '```md',
+      'Alice and Core API in code should stay plain.',
+      '```',
+      '',
+      '`Core API` should also stay plain inline.',
+      'Annette should not match Ann.',
+    ].join('\n'));
+    writeFile(vaultPath, 'people/ann.md', '# Ann');
+
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await linkCommand(undefined, { all: true });
+    const firstPass = snapshotMarkdownFiles(vaultPath);
+
+    await linkCommand(undefined, { all: true });
+    const secondPass = snapshotMarkdownFiles(vaultPath);
+
+    expect(secondPass).toEqual(firstPass);
+    expect(secondPass['notes/meeting.md']).not.toContain('[[[[');
+    expect(secondPass['notes/meeting.md']).toContain('Already linked [[people/alice|Alice]].');
+    expect(secondPass['notes/meeting.md']).toContain('Alice and Core API in code should stay plain.');
+    expect(secondPass['notes/meeting.md']).toContain('Annette should not match [[people/ann]].');
   });
 });
