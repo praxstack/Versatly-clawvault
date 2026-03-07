@@ -81,10 +81,10 @@ Configure the plugin via OpenClaw's config system:
 
 ```bash
 # Set vault path
-openclaw config set plugins.clawvault.config.vaultPath ~/my-vault
+openclaw config set plugins.entries.clawvault.config.vaultPath ~/my-vault
 
 # View current config
-openclaw config get plugins.clawvault.config
+openclaw config get plugins.entries.clawvault
 ```
 
 Available configuration options:
@@ -102,7 +102,7 @@ Available configuration options:
 
 The hook resolves the vault path in this order:
 
-1. Plugin config (`plugins.clawvault.config.vaultPath` set via `openclaw config`)
+1. Plugin config (`plugins.entries.clawvault.config.vaultPath` set via `openclaw config`)
 2. `OPENCLAW_PLUGIN_CLAWVAULT_VAULTPATH` environment variable
 3. `CLAWVAULT_PATH` environment variable
 4. Walking up from cwd to find `.clawvault.json`

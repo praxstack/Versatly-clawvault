@@ -457,6 +457,8 @@ function extractPluginConfig(event) {
   const candidates = [
     event?.pluginConfig,
     event?.context?.pluginConfig,
+    event?.config?.plugins?.entries?.clawvault?.config,
+    event?.context?.config?.plugins?.entries?.clawvault?.config,
     event?.config?.plugins?.clawvault?.config,
     event?.context?.config?.plugins?.clawvault?.config
   ];

@@ -148,11 +148,11 @@ Configure ClawVault behavior via OpenClaw's config system:
 
 ```bash
 # Set vault path
-openclaw config set plugins.clawvault.config.vaultPath ~/my-vault
+openclaw config set plugins.entries.clawvault.config.vaultPath ~/my-vault
 
 # Adjust context injection
-openclaw config set plugins.clawvault.config.maxContextResults 6
-openclaw config set plugins.clawvault.config.contextProfile planning
+openclaw config set plugins.entries.clawvault.config.maxContextResults 6
+openclaw config set plugins.entries.clawvault.config.contextProfile planning
 ```
 
 See [HOOK.md](../hooks/clawvault/HOOK.md) for all configuration options.
@@ -197,7 +197,7 @@ If MEMORY.md and vault conflict, instruct the agent to trust `clawvault wake` ou
 ### Context injection not working
 
 1. Verify hook is enabled: `openclaw hooks list --verbose`
-2. Check vault path: `openclaw config get plugins.clawvault.config`
+2. Check vault path: `openclaw config get plugins.entries.clawvault`
 3. Run compatibility check: `clawvault compat`
 
 ## Related Documentation
