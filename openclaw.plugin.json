@@ -1,9 +1,8 @@
 {
   "id": "clawvault",
   "name": "ClawVault",
-  "version": "2.6.1",
+  "version": "2.6.5",
   "description": "Structured memory system for AI agents with context death resilience",
-  "kind": "memory",
   "configSchema": {
     "type": "object",
     "properties": {
