@@ -81,6 +81,7 @@ export {
   doctor,
 } from './commands/doctor.js';
 export type {
+  DoctorOptions,
   DoctorCheck,
   DoctorReport,
   DoctorStatus,

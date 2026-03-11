@@ -30,7 +30,7 @@ export function registerMaintenanceCommands(program, { chalk }) {
   // === DOCTOR (health check) ===
   program
     .command('doctor')
-    .description('Diagnose vault health and optionally apply fixes')
+    .description('Run installation and environment diagnostics')
     .option('-v, --vault <path>', 'Vault path')
     .option('--fix', 'Apply safe auto-fixes for qmd index, embeddings, and dead collections')
     .option('--json', 'Output machine-readable JSON')
@@ -47,10 +47,11 @@ export function registerMaintenanceCommands(program, { chalk }) {
           return;
         }
 
-        console.log(chalk.cyan('\n🩺 ClawVault Health Check\n'));
-        console.log(chalk.dim(`Vault: ${report.vaultPath}`));
-        console.log(chalk.dim(`qmd collection: ${report.qmdCollection}`));
-        console.log(chalk.dim(`qmd root: ${report.qmdRoot}`));
+        console.log(chalk.cyan('\n🩺 ClawVault Doctor Report\n'));
+        if (report.vaultPath) {
+          console.log(chalk.dim(`Vault: ${report.vaultPath}`));
+        }
+        console.log(chalk.dim(`Generated: ${report.generatedAt}`));
         console.log();
 
         for (const check of report.checks) {
@@ -59,7 +60,7 @@ export function registerMaintenanceCommands(program, { chalk }) {
             : check.status === 'warn'
               ? chalk.yellow('⚠')
               : chalk.red('✗');
-          const line = `${check.label}: ${check.detail}`;
+          const line = check.detail ? `${check.label}: ${check.detail}` : check.label;
           const renderedLine = check.status === 'ok'
             ? chalk.green(line)
             : check.status === 'warn'

@@ -99,6 +99,9 @@ npm install -g clawvault
 
 # Optional: install qmd for backward-compatible fallback
 npm install -g github:tobi/qmd
+
+# Quick verification
+clawvault doctor
 ```
 
 ### Initialize Your Vault
@@ -275,10 +278,14 @@ See [docs/openclaw-plugin-usage.md](docs/openclaw-plugin-usage.md) for detailed 
 
 ---
 
-## Requirements
+## System Requirements
 
-- Node.js 18+
+- Node.js 18+ (22+ recommended)
+- npm 9+
+- Linux, macOS, Windows, or WSL
 - `qmd` is optional (used only for backward-compatible fallback paths)
+
+For Linux-specific install and PATH guidance, see [docs/getting-started/installation.md](docs/getting-started/installation.md).
 
 ## LLM Providers
 
@@ -450,14 +457,21 @@ vault/
 
 ## Troubleshooting
 
-- Hook not found after enable:
-  - run `openclaw hooks install clawvault` first
-  - then `openclaw hooks enable clawvault`
-  - restart gateway
+- First-line diagnostic:
+  - run `clawvault doctor` after install or environment changes
+- Global install fails with `EACCES` / permission denied:
+  - run `npm config set prefix ~/.npm-global`
+  - add `export PATH="$HOME/.npm-global/bin:$PATH"` to your shell rc and reload shell
+- `clawvault: command not found` after install:
+  - check `npm config get prefix`
+  - ensure `<prefix>/bin` is present in your `PATH`
+- `qmd` fallback errors:
+  - `qmd` is optional; in-process BM25 search is available without it
+  - if you want fallback compatibility, ensure `qmd --version` works in the same shell
+- Hook/plugin not active in OpenClaw:
+  - run `openclaw hooks install clawvault`
+  - run `openclaw hooks enable clawvault`
   - verify with `openclaw hooks list --verbose`
-- optional `qmd` fallback errors:
-  - ensure `qmd --version` works from same shell
-  - rerun `clawvault setup` after qmd install
 - OpenClaw integration drift:
   - run `clawvault compat`
 - Session transcript corruption:
