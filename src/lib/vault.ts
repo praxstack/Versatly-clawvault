@@ -23,7 +23,7 @@ import {
   HandoffDocument,
   SessionRecap
 } from '../types.js';
-import { SearchEngine, extractWikiLinks, extractTags, hasQmd, qmdUpdate, qmdEmbed, QmdUnavailableError } from './search.js';
+import { SearchEngine, extractWikiLinks, extractTags, hasQmd, qmdUpdate, qmdEmbed } from './search.js';
 import { buildOrUpdateMemoryGraphIndex } from './memory-graph.js';
 import { loadVaultQmdConfig } from './vault-qmd-config.js';
 import { recoverQmdEmbeddingIfNeeded } from './qmd-embedding-recovery.js';
@@ -40,17 +40,16 @@ export class ClawVault {
     if (typeof vaultPath !== 'string' || !vaultPath.trim()) {
       throw new Error(`Invalid vault path: expected a non-empty string, received ${typeof vaultPath}`);
     }
-    if (!hasQmd()) {
-      const error = new QmdUnavailableError('NOT_INSTALLED');
-      console.error(error.toUserMessage());
-      throw error;
-    }
     this.config = {
       path: path.resolve(vaultPath),
       name: path.basename(vaultPath),
       categories: DEFAULT_CATEGORIES,
       qmdCollection: undefined,
-      qmdRoot: undefined
+      qmdRoot: undefined,
+      search: {
+        backend: 'in-process',
+        qmdFallback: true
+      }
     };
     this.search = new SearchEngine();
     this.applyQmdConfig();
@@ -60,11 +59,6 @@ export class ClawVault {
    * Initialize a new vault
    */
   async init(options: Partial<VaultConfig> = {}, initFlags?: { skipBases?: boolean; skipTasks?: boolean; skipGraph?: boolean }): Promise<void> {
-    if (!hasQmd()) {
-      const error = new QmdUnavailableError('NOT_INSTALLED');
-      console.error(error.toUserMessage());
-      throw error;
-    }
     const vaultPath = this.config.path;
     const flags = initFlags || {};
     
@@ -123,7 +117,8 @@ export class ClawVault {
       categories: this.config.categories,
       documentCount: 0,
       qmdCollection: this.getQmdCollection(),
-      qmdRoot: this.getQmdRoot()
+      qmdRoot: this.getQmdRoot(),
+      search: this.config.search ?? { backend: 'in-process', qmdFallback: true }
     };
     fs.writeFileSync(configPath, JSON.stringify(meta, null, 2));
 
@@ -183,11 +178,6 @@ export class ClawVault {
    * Load an existing vault
    */
   async load(): Promise<void> {
-    if (!hasQmd()) {
-      const error = new QmdUnavailableError('NOT_INSTALLED');
-      console.error(error.toUserMessage());
-      throw error;
-    }
     const vaultPath = this.config.path;
     const configPath = path.join(vaultPath, CONFIG_FILE);
 
@@ -200,6 +190,9 @@ export class ClawVault {
     this.config.categories = Array.isArray(meta.categories) ? meta.categories : this.config.categories;
     this.config.qmdCollection = typeof meta.qmdCollection === 'string' ? meta.qmdCollection : undefined;
     this.config.qmdRoot = typeof meta.qmdRoot === 'string' ? meta.qmdRoot : undefined;
+    this.config.search = (meta.search && typeof meta.search === 'object' && !Array.isArray(meta.search))
+      ? meta.search
+      : this.config.search;
 
     if (!meta.qmdCollection || !meta.qmdRoot) {
       meta.qmdCollection = meta.qmdCollection || meta.name;
@@ -210,21 +203,23 @@ export class ClawVault {
     // Configure search engine with vault info
     this.applyQmdConfig(meta);
 
-    try {
-      const recovery = recoverQmdEmbeddingIfNeeded({
-        vaultPath: this.config.path,
-        collection: this.getQmdCollection(),
-        rootPath: this.getQmdRoot(),
-        mode: 'marker-only',
-        onLog: (message) => console.warn(`[clawvault] ${message}`)
-      });
-      if (recovery.recovered) {
-        console.warn(`[clawvault] qmd embedding recovery finished for "${this.getQmdCollection()}".`);
+    if (hasQmd()) {
+      try {
+        const recovery = recoverQmdEmbeddingIfNeeded({
+          vaultPath: this.config.path,
+          collection: this.getQmdCollection(),
+          rootPath: this.getQmdRoot(),
+          mode: 'marker-only',
+          onLog: (message) => console.warn(`[clawvault] ${message}`)
+        });
+        if (recovery.recovered) {
+          console.warn(`[clawvault] qmd embedding recovery finished for "${this.getQmdCollection()}".`);
+        }
+      } catch (err: any) {
+        console.warn(
+          `[clawvault] qmd embedding recovery failed: ${err?.message || 'unknown error'}`
+        );
       }
-    } catch (err: any) {
-      console.warn(
-        `[clawvault] qmd embedding recovery failed: ${err?.message || 'unknown error'}`
-      );
     }
 
     // Index all documents (local cache)
@@ -362,21 +357,21 @@ export class ClawVault {
   }
 
   /**
-   * Search the vault (BM25 via qmd)
+   * Search the vault (in-process hybrid by default, qmd fallback optional)
    */
   async find(query: string, options: SearchOptions = {}): Promise<SearchResult[]> {
     return this.search.search(query, options);
   }
 
   /**
-   * Semantic/vector search (via qmd vsearch)
+   * Semantic/vector search (hosted embeddings, qmd fallback optional)
    */
   async vsearch(query: string, options: SearchOptions = {}): Promise<SearchResult[]> {
     return this.search.vsearch(query, options);
   }
 
   /**
-   * Combined search with query expansion (via qmd query)
+   * Combined search entrypoint (currently aliases hybrid search)
    */
   async query(query: string, options: SearchOptions = {}): Promise<SearchResult[]> {
     return this.search.query(query, options);
@@ -831,10 +826,14 @@ export class ClawVault {
 
     this.config.qmdCollection = collection;
     this.config.qmdRoot = root;
+    this.config.search = (meta?.search && typeof meta.search === 'object' && !Array.isArray(meta.search))
+      ? meta.search
+      : (this.config.search ?? { backend: 'in-process', qmdFallback: true });
 
     this.search.setVaultPath(this.config.path);
     this.search.setCollection(collection);
     this.search.setCollectionRoot(root);
+    this.search.setSearchConfig(this.config.search);
   }
 
   private slugify(text: string): string {

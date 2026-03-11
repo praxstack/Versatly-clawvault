@@ -64,7 +64,6 @@ vi.mock('../lib/vault.js', () => ({
 }));
 
 import { getStatus, formatStatus } from './status.js';
-import { QmdUnavailableError } from '../lib/search.js';
 
 function makeTempVaultDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'clawvault-status-'));
@@ -83,9 +82,15 @@ beforeEach(() => {
 });
 
 describe('status command', () => {
-  it('throws when qmd is unavailable', async () => {
+  it('returns status when qmd is unavailable', async () => {
     hasQmdMock.mockReturnValue(false);
-    await expect(getStatus('/tmp/vault')).rejects.toBeInstanceOf(QmdUnavailableError);
+    const vaultPath = makeTempVaultDir();
+    try {
+      const status = await getStatus(vaultPath);
+      expect(status.qmd.error).toContain('optional');
+    } finally {
+      fs.rmSync(vaultPath, { recursive: true, force: true });
+    }
   });
 
   it('reports issues when checkpoint is missing and git/qmd are dirty', async () => {

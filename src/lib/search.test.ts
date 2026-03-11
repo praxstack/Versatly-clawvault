@@ -44,11 +44,29 @@ describe('search qmd dependency', () => {
     expect(hasQmd()).toBe(false);
   });
 
-  it('throws when searching without qmd installed', async () => {
+  it('uses in-process BM25 when qmd is not installed', async () => {
     spawnSyncMock.mockReturnValue({ error: new Error('missing') });
-    const { SearchEngine, QmdUnavailableError } = await loadSearchModule();
+    const { SearchEngine } = await loadSearchModule();
     const engine = new SearchEngine();
-    expect(() => engine.search('hello')).toThrow(QmdUnavailableError);
+    engine.setSearchConfig({ chunkSize: 30, chunkOverlap: 0 });
+    engine.addDocument({
+      id: 'notes/test',
+      path: '/vault/notes/test.md',
+      category: 'notes',
+      title: 'Test Note',
+      content: 'alpha one two three four five six seven eight nine ten eleven twelve '
+        + 'beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi '
+        + 'alpha red blue green yellow orange purple black white gray cyan magenta '
+        + 'tau upsilon phi chi psi omega alpha terminal',
+      frontmatter: {},
+      links: [],
+      tags: ['alpha'],
+      modified: new Date()
+    });
+
+    const results = await engine.search('alpha', { limit: 5 });
+    expect(results.length).toBeGreaterThan(1);
+    expect(results.every((entry) => entry.document.id === 'notes/test')).toBe(true);
   });
 
   it('keeps default qmd index when no override is provided', async () => {
@@ -86,15 +104,16 @@ describe('search qmd dependency', () => {
     );
   });
 
-  it('uses configured qmd index when search engine executes queries', async () => {
+  it('uses configured qmd index when qmd backend is selected', async () => {
     await withQmdIndexEnv('clawvault-test', async () => {
       spawnSyncMock.mockReturnValue({ error: undefined, status: 0 });
       execFileSyncMock.mockReturnValue(JSON.stringify([]));
 
       const { SearchEngine } = await loadSearchModule();
       const engine = new SearchEngine();
+      engine.setSearchConfig({ backend: 'qmd' });
       engine.setCollection('vault');
-      engine.search('hello');
+      await engine.search('hello');
 
       expect(execFileSyncMock).toHaveBeenCalledWith(
         'qmd',
@@ -129,6 +148,7 @@ describe('search qmd dependency', () => {
 
     const { SearchEngine } = await loadSearchModule();
     const engine = new SearchEngine();
+    engine.setSearchConfig({ backend: 'qmd' });
     engine.setCollection('vault');
     engine.setVaultPath('/vault');
     engine.setCollectionRoot('/vault');
@@ -144,7 +164,7 @@ describe('search qmd dependency', () => {
       modified: new Date()
     });
 
-    const results = engine.search('hello', {
+    const results = await engine.search('hello', {
       tags: ['keep'],
       category: 'projects',
       limit: 5
@@ -169,10 +189,11 @@ describe('search qmd dependency', () => {
 
     const { SearchEngine } = await loadSearchModule();
     const engine = new SearchEngine();
+    engine.setSearchConfig({ backend: 'qmd' });
     engine.setCollectionRoot('/vault');
     engine.setVaultPath('/vault');
 
-    const results = engine.search('fallback', { limit: 1 });
+    const results = await engine.search('fallback', { limit: 1 });
     expect(results).toHaveLength(1);
     expect(results[0].document.path).toBe(path.resolve('/vault/notes/a.md'));
   });
@@ -200,6 +221,7 @@ describe('search qmd dependency', () => {
 
     const { SearchEngine } = await loadSearchModule();
     const engine = new SearchEngine();
+    engine.setSearchConfig({ backend: 'qmd' });
     engine.setCollectionRoot('/vault');
     engine.setVaultPath('/vault');
     engine.addDocument({
@@ -225,7 +247,7 @@ describe('search qmd dependency', () => {
       modified: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000)
     });
 
-    const boosted = engine.search('timeline', {
+    const boosted = await engine.search('timeline', {
       limit: 2,
       temporalBoost: true
     });
@@ -233,10 +255,43 @@ describe('search qmd dependency', () => {
     expect(boosted[0].score).toBeCloseTo(1.0, 5);
     expect(boosted[1].score).toBeCloseTo(0.63, 5);
 
-    const unboosted = engine.search('timeline', {
+    const unboosted = await engine.search('timeline', {
       limit: 2,
       temporalBoost: false
     });
     expect(unboosted[1].score).toBeCloseTo(0.9, 5);
+  });
+
+  it('falls back to qmd for vsearch when semantic cache is unavailable', async () => {
+    spawnSyncMock.mockReturnValue({ error: undefined, status: 0 });
+    execFileSyncMock.mockReturnValue(
+      JSON.stringify([
+        {
+          docid: '1',
+          score: 1.5,
+          file: 'qmd://vault/notes/fallback.md',
+          title: 'Fallback',
+          snippet: 'semantic fallback'
+        }
+      ])
+    );
+
+    const { SearchEngine } = await loadSearchModule();
+    const engine = new SearchEngine();
+    engine.setCollection('vault');
+    engine.setCollectionRoot('/vault');
+    engine.setVaultPath('/vault');
+    engine.setSearchConfig({ backend: 'in-process', qmdFallback: true });
+
+    const results = await engine.vsearch('fallback', { limit: 3 });
+    expect(results).toHaveLength(1);
+    expect(results[0].document.path).toBe(path.resolve('/vault/notes/fallback.md'));
+    expect(execFileSyncMock).toHaveBeenCalledWith(
+      'qmd',
+      expect.arrayContaining(['vsearch', 'fallback']),
+      expect.objectContaining({
+        encoding: 'utf-8'
+      })
+    );
   });
 });

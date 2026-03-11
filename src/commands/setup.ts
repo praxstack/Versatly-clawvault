@@ -388,7 +388,7 @@ export async function setupCommand(options: SetupOptions = {}): Promise<void> {
       console.log('⊘ qmd collection already exists.');
     }
   } else {
-    console.log('⊘ qmd not found — skipping semantic search setup.');
+    console.log('⊘ qmd not found — skipping optional qmd fallback setup.');
   }
 
   console.log('\nTip: add this to your shell config:');

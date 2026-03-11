@@ -17,7 +17,7 @@ export function registerQueryCommands(
   // === SEARCH ===
   program
     .command('search <query>')
-    .description('Search the vault via qmd (BM25), optionally with semantic hybrid search')
+    .description('Search the vault using in-process hybrid retrieval (BM25 + semantic when configured)')
     .option('-n, --limit <n>', 'Max results (default: 10)', '10')
     .option('-c, --category <category>', 'Filter by category')
     .option('--tags <tags>', 'Filter by tags (comma-separated)')
@@ -25,8 +25,8 @@ export function registerQueryCommands(
     .option('--full', 'Include full content in results')
     .option('-v, --vault <path>', 'Vault path')
     .option('--json', 'Output as JSON')
-    .option('--semantic', 'Enable hybrid search (BM25 + semantic with RRF)')
-    .option('--rebuild-embeddings', 'Rebuild the embedding cache before searching')
+    .option('--semantic', 'Legacy alias. Hybrid retrieval is already default when embeddings are configured.')
+    .option('--rebuild-embeddings', 'Rebuild hosted embedding cache before searching')
     .action(async (query, options) => {
       try {
         const vaultPath = resolveVaultPath(options.vault);
@@ -45,34 +45,16 @@ export function registerQueryCommands(
           console.log();
         }
 
-        // Get BM25 results
-        const bm25Results = await vault.find(query, {
-          limit: options.semantic ? 50 : parseInt(options.limit, 10),
+        const results = await vault.find(query, {
+          limit: parseInt(options.limit, 10),
           category: options.category,
           tags: options.tags?.split(',').map((value) => value.trim()),
           fullContent: options.full,
           temporalBoost: options.recent
         });
-
-        let results = bm25Results;
-        let searchMode = 'BM25';
-
-        // Apply hybrid search if --semantic flag is set
-        if (options.semantic) {
-          const { EmbeddingCache, hybridSearch } = await import('../dist/lib/hybrid-search.js');
-          const cache = new EmbeddingCache(vaultPath);
-          cache.load();
-
-          if (cache.size === 0) {
-            console.log(chalk.yellow('Warning: No embeddings found. Run with --rebuild-embeddings to build the cache.'));
-          } else {
-            results = await hybridSearch(query, bm25Results, cache, {
-              topK: parseInt(options.limit, 10),
-              rrfK: 60
-            });
-            searchMode = 'Hybrid (BM25 + Semantic)';
-          }
-        }
+        const searchMode = options.semantic
+          ? 'Hybrid (legacy flag acknowledged)'
+          : 'Hybrid (in-process)';
 
         if (options.json) {
           console.log(JSON.stringify({ searchMode, results }, null, 2));
@@ -84,7 +66,7 @@ export function registerQueryCommands(
           return;
         }
 
-        const icon = options.semantic ? '🔍🧠' : '🔍';
+        const icon = '🔍🧠';
         console.log(chalk.cyan(`\n${icon} Found ${results.length} result(s) for "${query}" [${searchMode}]:\n`));
 
         for (const result of results) {
@@ -114,7 +96,7 @@ export function registerQueryCommands(
   // === VSEARCH ===
   program
     .command('vsearch <query>')
-    .description('Semantic search via qmd (requires qmd installed)')
+    .description('Semantic search via hosted embeddings (qmd fallback when available)')
     .option('-n, --limit <n>', 'Max results (default: 5)', '5')
     .option('-c, --category <category>', 'Filter by category')
     .option('--tags <tags>', 'Filter by tags (comma-separated)')

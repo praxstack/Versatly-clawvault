@@ -40,7 +40,6 @@ vi.mock('./vault-qmd-config.js', () => ({
 }));
 
 import { ClawVault, createVault, findVault } from './vault.js';
-import { QmdUnavailableError } from './search.js';
 
 function makeTempDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'clawvault-vault-core-'));
@@ -75,10 +74,10 @@ describe('vault core', () => {
     consoleWarnSpy.mockRestore();
   });
 
-  it('throws when qmd is unavailable', () => {
+  it('does not require qmd to construct a vault instance', () => {
     hasQmdMock.mockReturnValue(false);
-    expect(() => new ClawVault(tempDir)).toThrow(QmdUnavailableError);
-    expect(consoleErrorSpy).toHaveBeenCalled();
+    expect(() => new ClawVault(tempDir)).not.toThrow();
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
   });
 
   it('initializes a vault with skip flags and writes key bootstrap files', async () => {

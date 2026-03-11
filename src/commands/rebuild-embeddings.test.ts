@@ -1,21 +1,24 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-const { embedMock } = vi.hoisted(() => ({
-  embedMock: vi.fn()
+const { embedMock, resolveEmbeddingConfigMock } = vi.hoisted(() => ({
+  embedMock: vi.fn(),
+  resolveEmbeddingConfigMock: vi.fn()
 }));
 
-vi.mock('../lib/hybrid-search.js', async () => {
-  const actual = await vi.importActual<typeof import('../lib/hybrid-search.js')>('../lib/hybrid-search.js');
+vi.mock('../lib/hosted-embeddings.js', async () => {
+  const actual = await vi.importActual<typeof import('../lib/hosted-embeddings.js')>('../lib/hosted-embeddings.js');
   return {
     ...actual,
-    embed: embedMock
+    embedText: embedMock,
+    resolveEmbeddingConfig: resolveEmbeddingConfigMock
   };
 });
 
 import { rebuildEmbeddingsCommand, rebuildEmbeddingsForVault } from './rebuild-embeddings.js';
+import { computeEmbeddingHash } from '../lib/embedding-store.js';
 
 const createdTempDirs: string[] = [];
 
@@ -35,8 +38,22 @@ function writeCache(vaultPath: string, data: Record<string, number[]>): void {
   const cacheBinPath = path.join(vaultPath, '.clawvault', 'embeddings.bin');
   const cachePath = path.join(vaultPath, '.clawvault', 'embeddings.bin.json');
   fs.mkdirSync(path.dirname(cachePath), { recursive: true });
+  const envelope = {
+    version: 2,
+    provider: 'openai',
+    model: 'text-embedding-3-small',
+    vectors: Object.fromEntries(
+      Object.entries(data).map(([key, embedding]) => [
+        key,
+        {
+          hash: '',
+          embedding
+        }
+      ])
+    )
+  };
   fs.writeFileSync(cacheBinPath, '', 'utf-8');
-  fs.writeFileSync(cachePath, JSON.stringify(data), 'utf-8');
+  fs.writeFileSync(cachePath, JSON.stringify(envelope), 'utf-8');
 }
 
 afterEach(() => {
@@ -48,6 +65,15 @@ afterEach(() => {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   }
+});
+
+beforeEach(() => {
+  resolveEmbeddingConfigMock.mockReturnValue({
+    provider: 'openai',
+    model: 'text-embedding-3-small',
+    baseUrl: 'https://api.openai.com/v1',
+    apiKey: 'test'
+  });
 });
 
 describe('rebuildEmbeddingsForVault', () => {
@@ -73,8 +99,16 @@ describe('rebuildEmbeddingsForVault', () => {
 
   it('skips documents already present in cache when force is false', async () => {
     const vaultPath = makeTempVault();
-    writeMarkdown(vaultPath, 'docs/cached.md', 'This cached document should not be re-embedded.');
+    const content = 'This cached document should not be re-embedded.';
+    writeMarkdown(vaultPath, 'docs/cached.md', content);
     writeCache(vaultPath, { 'docs/cached': [0.25, 0.5, 0.75] });
+
+    const cachePath = path.join(vaultPath, '.clawvault', 'embeddings.bin.json');
+    const envelope = JSON.parse(fs.readFileSync(cachePath, 'utf-8')) as {
+      vectors: Record<string, { hash: string; embedding: number[] }>;
+    };
+    envelope.vectors['docs/cached'].hash = computeEmbeddingHash(content.slice(0, 12000));
+    fs.writeFileSync(cachePath, JSON.stringify(envelope), 'utf-8');
 
     const result = await rebuildEmbeddingsForVault(vaultPath, { force: false });
 
@@ -139,5 +173,13 @@ describe('rebuildEmbeddingsCommand', () => {
     expect(
       writeSpy.mock.calls.some((call) => String(call[0]).includes('Embedding 1/1 documents...'))
     ).toBe(true);
+  });
+
+  it('fails with a helpful error when no embedding provider is configured', async () => {
+    resolveEmbeddingConfigMock.mockReturnValue(null);
+    const vaultPath = makeTempVault();
+    writeMarkdown(vaultPath, 'notes/long.md', 'A long markdown document to trigger provider validation.');
+
+    await expect(rebuildEmbeddingsForVault(vaultPath)).rejects.toThrow('No hosted embedding provider configured');
   });
 });

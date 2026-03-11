@@ -18,12 +18,18 @@ const OBSERVER_COMPRESSION_PROVIDERS = [
 const THEMES = ['neural', 'minimal', 'none'] as const;
 const CONTEXT_PROFILES = ['default', 'planning', 'incident', 'handoff', 'auto'] as const;
 const FACT_EXTRACTION_MODES = ['off', 'rule', 'llm', 'hybrid'] as const;
+const SEARCH_BACKENDS = ['in-process', 'qmd'] as const;
+const SEARCH_EMBEDDING_PROVIDERS = ['none', 'openai', 'gemini', 'ollama'] as const;
+const SEARCH_RERANK_PROVIDERS = ['none', 'jina', 'voyage', 'siliconflow', 'pinecone'] as const;
 
 export type ObserveProvider = (typeof OBSERVE_PROVIDERS)[number];
 export type ObserverCompressionProvider = (typeof OBSERVER_COMPRESSION_PROVIDERS)[number];
 export type Theme = (typeof THEMES)[number];
 export type ContextProfile = (typeof CONTEXT_PROFILES)[number];
 export type FactExtractionMode = (typeof FACT_EXTRACTION_MODES)[number];
+export type SearchBackend = (typeof SEARCH_BACKENDS)[number];
+export type SearchEmbeddingProvider = (typeof SEARCH_EMBEDDING_PROVIDERS)[number];
+export type SearchRerankProvider = (typeof SEARCH_RERANK_PROVIDERS)[number];
 export type ManagedConfigKey =
   | 'name'
   | 'categories'
@@ -40,7 +46,20 @@ export type ManagedConfigKey =
   | 'graph.maxHops'
   | 'inject.maxResults'
   | 'inject.useLlm'
-  | 'inject.scope';
+  | 'inject.scope'
+  | 'search.backend'
+  | 'search.qmdFallback'
+  | 'search.chunkSize'
+  | 'search.chunkOverlap'
+  | 'search.embeddings.provider'
+  | 'search.embeddings.model'
+  | 'search.embeddings.baseUrl'
+  | 'search.embeddings.apiKey'
+  | 'search.rerank.provider'
+  | 'search.rerank.model'
+  | 'search.rerank.endpoint'
+  | 'search.rerank.apiKey'
+  | 'search.rerank.weight';
 
 export interface RouteRule {
   pattern: string;
@@ -77,6 +96,25 @@ export interface ManagedDefaults {
     useLlm: boolean;
     scope: string[];
   };
+  search: {
+    backend: SearchBackend;
+    qmdFallback: boolean;
+    chunkSize: number;
+    chunkOverlap: number;
+    embeddings: {
+      provider: SearchEmbeddingProvider;
+      model?: string;
+      baseUrl?: string;
+      apiKey?: string;
+    };
+    rerank: {
+      provider: SearchRerankProvider;
+      model?: string;
+      endpoint?: string;
+      apiKey?: string;
+      weight: number;
+    };
+  };
   routes: RouteRule[];
 }
 
@@ -96,7 +134,20 @@ export const SUPPORTED_CONFIG_KEYS: ManagedConfigKey[] = [
   'graph.maxHops',
   'inject.maxResults',
   'inject.useLlm',
-  'inject.scope'
+  'inject.scope',
+  'search.backend',
+  'search.qmdFallback',
+  'search.chunkSize',
+  'search.chunkOverlap',
+  'search.embeddings.provider',
+  'search.embeddings.model',
+  'search.embeddings.baseUrl',
+  'search.embeddings.apiKey',
+  'search.rerank.provider',
+  'search.rerank.model',
+  'search.rerank.endpoint',
+  'search.rerank.apiKey',
+  'search.rerank.weight'
 ];
 
 const DEFAULT_THEME: Theme = 'none';
@@ -109,6 +160,13 @@ const DEFAULT_GRAPH_MAX_HOPS = 2;
 const DEFAULT_INJECT_MAX_RESULTS = 8;
 const DEFAULT_INJECT_USE_LLM = true;
 const DEFAULT_INJECT_SCOPE = ['global'];
+const DEFAULT_SEARCH_BACKEND: SearchBackend = 'in-process';
+const DEFAULT_SEARCH_QMD_FALLBACK = true;
+const DEFAULT_SEARCH_CHUNK_SIZE = 700;
+const DEFAULT_SEARCH_CHUNK_OVERLAP = 100;
+const DEFAULT_SEARCH_EMBEDDINGS_PROVIDER: SearchEmbeddingProvider = 'none';
+const DEFAULT_SEARCH_RERANK_PROVIDER: SearchRerankProvider = 'none';
+const DEFAULT_SEARCH_RERANK_WEIGHT = 0.6;
 
 function configPathFor(vaultPath: string): string {
   return path.join(path.resolve(vaultPath), CONFIG_FILE);
@@ -161,6 +219,19 @@ function asPositiveInteger(value: unknown): number | null {
   return null;
 }
 
+function asFiniteNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return null;
+}
+
 function asBoolean(value: unknown): boolean | null {
   if (typeof value === 'boolean') {
     return value;
@@ -196,6 +267,20 @@ function isContextProfile(value: unknown): value is ContextProfile {
 
 function isFactExtractionMode(value: unknown): value is FactExtractionMode {
   return typeof value === 'string' && FACT_EXTRACTION_MODES.includes(value as FactExtractionMode);
+}
+
+function isSearchBackend(value: unknown): value is SearchBackend {
+  return typeof value === 'string' && SEARCH_BACKENDS.includes(value as SearchBackend);
+}
+
+function isSearchEmbeddingProvider(value: unknown): value is SearchEmbeddingProvider {
+  return typeof value === 'string'
+    && SEARCH_EMBEDDING_PROVIDERS.includes(value as SearchEmbeddingProvider);
+}
+
+function isSearchRerankProvider(value: unknown): value is SearchRerankProvider {
+  return typeof value === 'string'
+    && SEARCH_RERANK_PROVIDERS.includes(value as SearchRerankProvider);
 }
 
 function normalizeRouteTarget(target: string): string {
@@ -305,6 +390,19 @@ function withDefaults(vaultPath: string, config: Record<string, unknown>): Recor
       useLlm: DEFAULT_INJECT_USE_LLM,
       scope: [...DEFAULT_INJECT_SCOPE]
     },
+    search: {
+      backend: DEFAULT_SEARCH_BACKEND,
+      qmdFallback: DEFAULT_SEARCH_QMD_FALLBACK,
+      chunkSize: DEFAULT_SEARCH_CHUNK_SIZE,
+      chunkOverlap: DEFAULT_SEARCH_CHUNK_OVERLAP,
+      embeddings: {
+        provider: DEFAULT_SEARCH_EMBEDDINGS_PROVIDER
+      },
+      rerank: {
+        provider: DEFAULT_SEARCH_RERANK_PROVIDER,
+        weight: DEFAULT_SEARCH_RERANK_WEIGHT
+      }
+    },
     routes: []
   };
 
@@ -364,6 +462,21 @@ function withDefaults(vaultPath: string, config: Record<string, unknown>): Recor
       ? config.inject
       : {}
   ) as Record<string, unknown>;
+  const searchRecord = (
+    config.search && typeof config.search === 'object' && !Array.isArray(config.search)
+      ? config.search
+      : {}
+  ) as Record<string, unknown>;
+  const searchEmbeddingsRecord = (
+    searchRecord.embeddings && typeof searchRecord.embeddings === 'object' && !Array.isArray(searchRecord.embeddings)
+      ? searchRecord.embeddings
+      : {}
+  ) as Record<string, unknown>;
+  const searchRerankRecord = (
+    searchRecord.rerank && typeof searchRecord.rerank === 'object' && !Array.isArray(searchRecord.rerank)
+      ? searchRecord.rerank
+      : {}
+  ) as Record<string, unknown>;
 
   return {
     ...config,
@@ -410,6 +523,50 @@ function withDefaults(vaultPath: string, config: Record<string, unknown>): Recor
         )
         ?? [...defaults.inject.scope]
       )
+    },
+    search: {
+      ...searchRecord,
+      backend: isSearchBackend(searchRecord.backend)
+        ? searchRecord.backend
+        : defaults.search.backend,
+      qmdFallback: asBoolean(searchRecord.qmdFallback) ?? defaults.search.qmdFallback,
+      chunkSize: asPositiveInteger(searchRecord.chunkSize) ?? defaults.search.chunkSize,
+      chunkOverlap: asPositiveInteger(searchRecord.chunkOverlap) ?? defaults.search.chunkOverlap,
+      embeddings: {
+        ...searchEmbeddingsRecord,
+        provider: isSearchEmbeddingProvider(searchEmbeddingsRecord.provider)
+          ? searchEmbeddingsRecord.provider
+          : defaults.search.embeddings.provider,
+        model: typeof searchEmbeddingsRecord.model === 'string' && searchEmbeddingsRecord.model.trim()
+          ? searchEmbeddingsRecord.model.trim()
+          : undefined,
+        baseUrl: typeof searchEmbeddingsRecord.baseUrl === 'string' && searchEmbeddingsRecord.baseUrl.trim()
+          ? searchEmbeddingsRecord.baseUrl.trim()
+          : undefined,
+        apiKey: typeof searchEmbeddingsRecord.apiKey === 'string' && searchEmbeddingsRecord.apiKey.trim()
+          ? searchEmbeddingsRecord.apiKey.trim()
+          : undefined
+      },
+      rerank: {
+        ...searchRerankRecord,
+        provider: isSearchRerankProvider(searchRerankRecord.provider)
+          ? searchRerankRecord.provider
+          : defaults.search.rerank.provider,
+        model: typeof searchRerankRecord.model === 'string' && searchRerankRecord.model.trim()
+          ? searchRerankRecord.model.trim()
+          : undefined,
+        endpoint: typeof searchRerankRecord.endpoint === 'string' && searchRerankRecord.endpoint.trim()
+          ? searchRerankRecord.endpoint.trim()
+          : undefined,
+        apiKey: typeof searchRerankRecord.apiKey === 'string' && searchRerankRecord.apiKey.trim()
+          ? searchRerankRecord.apiKey.trim()
+          : undefined,
+        weight: (() => {
+          const parsed = asFiniteNumber(searchRerankRecord.weight);
+          if (parsed === null) return defaults.search.rerank.weight;
+          return Math.max(0, Math.min(1, parsed));
+        })()
+      }
     },
     routes: normalizeRoutes(config.routes)
   };
@@ -557,6 +714,70 @@ function coerceManagedValue(key: ManagedConfigKey, value: unknown): unknown {
     return normalized;
   }
 
+  if (key === 'search.backend') {
+    if (!isSearchBackend(value)) {
+      throw new Error(`Config key "search.backend" must be one of: ${SEARCH_BACKENDS.join(', ')}`);
+    }
+    return value;
+  }
+
+  if (key === 'search.qmdFallback') {
+    const parsed = asBoolean(value);
+    if (parsed === null) {
+      throw new Error('Config key "search.qmdFallback" must be a boolean.');
+    }
+    return parsed;
+  }
+
+  if (key === 'search.chunkSize' || key === 'search.chunkOverlap') {
+    const parsed = asPositiveInteger(value);
+    if (parsed === null) {
+      throw new Error(`Config key "${key}" must be a positive integer.`);
+    }
+    return parsed;
+  }
+
+  if (key === 'search.embeddings.provider') {
+    if (!isSearchEmbeddingProvider(value)) {
+      throw new Error(
+        `Config key "search.embeddings.provider" must be one of: ${SEARCH_EMBEDDING_PROVIDERS.join(', ')}`
+      );
+    }
+    return value;
+  }
+
+  if (key === 'search.embeddings.model'
+    || key === 'search.embeddings.baseUrl'
+    || key === 'search.rerank.model'
+    || key === 'search.rerank.endpoint') {
+    if (typeof value !== 'string' || !value.trim()) {
+      throw new Error(`Config key "${key}" must be a non-empty string.`);
+    }
+    return value.trim();
+  }
+
+  if (key === 'search.embeddings.apiKey' || key === 'search.rerank.apiKey') {
+    if (typeof value !== 'string') {
+      throw new Error(`Config key "${key}" must be a string.`);
+    }
+    return value.trim();
+  }
+
+  if (key === 'search.rerank.provider') {
+    if (!isSearchRerankProvider(value)) {
+      throw new Error(`Config key "search.rerank.provider" must be one of: ${SEARCH_RERANK_PROVIDERS.join(', ')}`);
+    }
+    return value;
+  }
+
+  if (key === 'search.rerank.weight') {
+    const parsed = asFiniteNumber(value);
+    if (parsed === null || parsed < 0 || parsed > 1) {
+      throw new Error('Config key "search.rerank.weight" must be a number between 0 and 1.');
+    }
+    return parsed;
+  }
+
   throw new Error(`Unsupported config key: ${key}`);
 }
 
@@ -637,6 +858,19 @@ export function resetConfig(vaultPath: string): Record<string, unknown> {
     maxResults: DEFAULT_INJECT_MAX_RESULTS,
     useLlm: DEFAULT_INJECT_USE_LLM,
     scope: [...DEFAULT_INJECT_SCOPE]
+  };
+  document.search = {
+    backend: DEFAULT_SEARCH_BACKEND,
+    qmdFallback: DEFAULT_SEARCH_QMD_FALLBACK,
+    chunkSize: DEFAULT_SEARCH_CHUNK_SIZE,
+    chunkOverlap: DEFAULT_SEARCH_CHUNK_OVERLAP,
+    embeddings: {
+      provider: DEFAULT_SEARCH_EMBEDDINGS_PROVIDER
+    },
+    rerank: {
+      provider: DEFAULT_SEARCH_RERANK_PROVIDER,
+      weight: DEFAULT_SEARCH_RERANK_WEIGHT
+    }
   };
   document.routes = [];
   if (typeof document.lastUpdated === 'string') {

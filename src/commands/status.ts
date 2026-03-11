@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { ClawVault } from '../lib/vault.js';
-import { hasQmd, QmdUnavailableError, withQmdIndexArgs } from '../lib/search.js';
+import { hasQmd, withQmdIndexArgs } from '../lib/search.js';
 import { formatAge } from '../lib/time.js';
 import { scanVaultLinks } from '../lib/backlinks.js';
 import { loadMemoryGraphIndex } from '../lib/memory-graph.js';
@@ -179,10 +179,6 @@ export async function getStatus(
   vaultPath: string,
   options: { qmdIndexName?: string } = {}
 ): Promise<VaultStatus> {
-  if (!hasQmd()) {
-    throw new QmdUnavailableError();
-  }
-
   const vault = new ClawVault(path.resolve(vaultPath));
   await vault.load();
   const stats = await vault.stats();
@@ -220,14 +216,18 @@ export async function getStatus(
   const qmdRoot = vault.getQmdRoot();
   let qmdIndexResult: QmdIndexResult = { status: 'missing' };
   let qmdError: string | undefined;
-  try {
-    qmdIndexResult = getQmdIndexStatus(qmdCollection, qmdRoot, options.qmdIndexName);
-    if (qmdIndexResult.status !== 'present') {
-      issues.push(`qmd collection ${qmdIndexResult.status.replace('-', ' ')}`);
+  if (hasQmd()) {
+    try {
+      qmdIndexResult = getQmdIndexStatus(qmdCollection, qmdRoot, options.qmdIndexName);
+      if (qmdIndexResult.status !== 'present') {
+        issues.push(`qmd collection ${qmdIndexResult.status.replace('-', ' ')}`);
+      }
+    } catch (err: any) {
+      qmdError = err?.message || 'Failed to check qmd index';
+      issues.push(`qmd status error: ${qmdError}`);
     }
-  } catch (err: any) {
-    qmdError = err?.message || 'Failed to check qmd index';
-    issues.push(`qmd status error: ${qmdError}`);
+  } else {
+    qmdError = 'qmd not installed (optional)';
   }
 
   let gitStatus: VaultStatus['git'] | undefined;

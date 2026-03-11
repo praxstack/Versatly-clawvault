@@ -97,7 +97,7 @@ These primitives map directly to CLI commands and vault structure, creating a co
 # Install ClawVault CLI
 npm install -g clawvault
 
-# Install qmd (required for search/context features)
+# Optional: install qmd for backward-compatible fallback
 npm install -g github:tobi/qmd
 ```
 
@@ -134,8 +134,14 @@ clawvault sleep "finished auth rollout" --next "implement migration"
 # Keyword search
 clawvault search "postgresql"
 
-# Semantic search
+# Semantic search (requires hosted embeddings configured)
 clawvault vsearch "what did we decide about storage"
+
+# Configure hosted embeddings (OpenAI/Gemini/Ollama)
+clawvault config set search.embeddings.provider openai
+clawvault config set search.embeddings.model text-embedding-3-small
+clawvault config set search.embeddings.apiKey "$OPENAI_API_KEY"
+clawvault rebuild-embeddings
 
 # Get context for a task
 clawvault context "database migration"
@@ -272,7 +278,7 @@ See [docs/openclaw-plugin-usage.md](docs/openclaw-plugin-usage.md) for detailed 
 ## Requirements
 
 - Node.js 18+
-- `qmd` installed and available on `PATH` (for search/context features)
+- `qmd` is optional (used only for backward-compatible fallback paths)
 
 ## LLM Providers
 
@@ -449,7 +455,7 @@ vault/
   - then `openclaw hooks enable clawvault`
   - restart gateway
   - verify with `openclaw hooks list --verbose`
-- `qmd` errors:
+- optional `qmd` fallback errors:
   - ensure `qmd --version` works from same shell
   - rerun `clawvault setup` after qmd install
 - OpenClaw integration drift:

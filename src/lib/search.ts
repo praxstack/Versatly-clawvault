@@ -1,12 +1,13 @@
 /**
- * ClawVault Search Engine - qmd Backend
- * Uses qmd CLI for BM25 and vector search
+ * ClawVault Search Engine
+ * In-process hybrid retrieval is default; qmd remains optional fallback.
  */
 
 import { execFileSync, spawnSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
-import { Document, SearchResult, SearchOptions } from '../types.js';
+import { Document, SearchResult, SearchOptions, VaultSearchConfig } from '../types.js';
+import { InProcessSearchEngine } from './in-process-search.js';
 
 export const QMD_INSTALL_URL = 'https://github.com/tobi/qmd';
 export const QMD_INSTALL_COMMAND = 'bun install -g github:tobi/qmd';
@@ -312,11 +313,17 @@ export function qmdEmbed(collection?: string, indexName?: string): void {
  * QMD Search Engine - wraps qmd CLI
  */
 export class SearchEngine {
-  private documents: Map<string, Document> = new Map();
+  private readonly inProcess = new InProcessSearchEngine();
   private collection: string = '';
   private vaultPath: string = '';
   private collectionRoot: string = '';
   private qmdIndexName?: string;
+  private searchConfig: VaultSearchConfig = {};
+
+  setSearchConfig(config?: VaultSearchConfig): void {
+    this.searchConfig = config ?? {};
+    this.inProcess.setConfig(this.searchConfig);
+  }
 
   /**
    * Set the collection name (usually vault name)
@@ -337,6 +344,7 @@ export class SearchEngine {
    */
   setVaultPath(vaultPath: string): void {
     this.vaultPath = vaultPath;
+    this.inProcess.setVaultPath(vaultPath);
   }
 
   /**
@@ -358,70 +366,98 @@ export class SearchEngine {
    * Note: qmd indexing happens via qmd update command
    */
   addDocument(doc: Document): void {
-    this.documents.set(doc.id, doc);
+    this.inProcess.addDocument(doc);
   }
 
   /**
    * Remove a document from the local cache
    */
   removeDocument(id: string): void {
-    this.documents.delete(id);
+    this.inProcess.removeDocument(id);
   }
 
   /**
    * No-op for qmd - indexing is managed externally
    */
   rebuildIDF(): void {
-    // qmd handles this
+    // In-process BM25 stays incrementally updated.
   }
 
   /**
    * BM25 search via qmd
    */
-  search(query: string, options: SearchOptions = {}): SearchResult[] {
-    return this.runQmdQuery('search', query, options);
+  async search(query: string, options: SearchOptions = {}): Promise<SearchResult[]> {
+    if (!query.trim()) return [];
+    return this.runSearchWithFallback('search', query, options);
   }
 
   /**
    * Vector/semantic search via qmd vsearch
    */
-  vsearch(query: string, options: SearchOptions = {}): SearchResult[] {
-    return this.runQmdQuery('vsearch', query, options);
+  async vsearch(query: string, options: SearchOptions = {}): Promise<SearchResult[]> {
+    if (!query.trim()) return [];
+    return this.runSearchWithFallback('vsearch', query, options);
   }
 
   /**
    * Combined search with query expansion (qmd query command)
    */
-  query(query: string, options: SearchOptions = {}): SearchResult[] {
-    return this.runQmdQuery('query', query, options);
+  async query(query: string, options: SearchOptions = {}): Promise<SearchResult[]> {
+    if (!query.trim()) return [];
+    return this.runSearchWithFallback('query', query, options);
+  }
+
+  private async runSearchWithFallback(
+    command: 'search' | 'vsearch' | 'query',
+    query: string,
+    options: SearchOptions
+  ): Promise<SearchResult[]> {
+    const preferQmd = this.searchConfig.backend === 'qmd';
+    const qmdFallbackEnabled = this.searchConfig.qmdFallback ?? true;
+
+    if (preferQmd) {
+      if (hasQmd()) {
+        return this.runQmdQuery(command, query, options);
+      }
+      return this.runInProcessQuery(command, query, options);
+    }
+
+    try {
+      const inProcessResults = await this.runInProcessQuery(command, query, options);
+      if (inProcessResults.length > 0 || command === 'search' || !qmdFallbackEnabled || !hasQmd()) {
+        return inProcessResults;
+      }
+      return this.runQmdQuery(command, query, options);
+    } catch (error) {
+      if (qmdFallbackEnabled && hasQmd()) {
+        return this.runQmdQuery(command, query, options);
+      }
+      throw error;
+    }
+  }
+
+  private async runInProcessQuery(
+    command: 'search' | 'vsearch' | 'query',
+    query: string,
+    options: SearchOptions
+  ): Promise<SearchResult[]> {
+    if (command === 'vsearch') {
+      return this.inProcess.vsearch(query, options);
+    }
+    if (command === 'query') {
+      return this.inProcess.query(query, options);
+    }
+    return this.inProcess.search(query, options);
   }
 
   private runQmdQuery(command: 'search' | 'vsearch' | 'query', query: string, options: SearchOptions): SearchResult[] {
-    const {
-      limit = 10,
-      minScore = 0,
-      category,
-      tags,
-      fullContent = false,
-      temporalBoost = false
-    } = options;
-
-    if (!query.trim()) return [];
-
-    const args = [
-      command,
-      query,
-      '-n', String(limit * 2),
-      '--json'
-    ];
-
+    const { limit = 10, minScore = 0, category, tags, fullContent = false, temporalBoost = false } = options;
+    const args = [command, query, '-n', String(limit * 2), '--json'];
     if (this.collection) {
       args.push('-c', this.collection);
     }
 
-    const qmdResults = execQmd(args, this.qmdIndexName);
-
-    return this.convertResults(qmdResults, {
+    return this.convertResults(execQmd(args, this.qmdIndexName), {
       limit,
       minScore,
       category,
@@ -441,6 +477,8 @@ export class SearchEngine {
     const { limit = 10, minScore = 0, category, tags, fullContent = false, temporalBoost = false } = options;
     
     const results: SearchResult[] = [];
+    const docs = this.inProcess.getAllDocuments();
+    const docsById = new Map(docs.map((doc) => [doc.id, doc]));
     
     // Normalize scores - qmd uses different scales
     const maxScore = qmdResults[0]?.score || 1;
@@ -461,8 +499,8 @@ export class SearchEngine {
       
       // Get document from cache or create minimal one
       const docId = normalizedRelativePath.replace(/\.md$/, '');
-      let doc = this.documents.get(docId)
-        ?? this.documents.get(docId.split('/').join(path.sep));
+      let doc = docsById.get(docId)
+        ?? docsById.get(docId.split('/').join(path.sep));
       const modifiedAt = this.resolveModifiedAt(doc, filePath);
       
       // Determine category from path
@@ -578,40 +616,35 @@ export class SearchEngine {
    * Get all cached documents
    */
   getAllDocuments(): Document[] {
-    return [...this.documents.values()];
+    return this.inProcess.getAllDocuments();
   }
 
   /**
    * Get document count
    */
   get size(): number {
-    return this.documents.size;
+    return this.inProcess.size;
   }
 
   /**
    * Clear the local document cache
    */
   clear(): void {
-    this.documents.clear();
+    this.inProcess.clear();
   }
 
   /**
    * Export documents for persistence
    */
   export(): { documents: Document[]; } {
-    return {
-      documents: [...this.documents.values()]
-    };
+    return this.inProcess.export();
   }
 
   /**
    * Import from persisted data
    */
   import(data: { documents: Document[]; }): void {
-    this.clear();
-    for (const doc of data.documents) {
-      this.addDocument(doc);
-    }
+    this.inProcess.import(data);
   }
 }
 

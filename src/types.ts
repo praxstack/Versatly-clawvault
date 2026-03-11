@@ -15,6 +15,8 @@ export interface VaultConfig {
   qmdRoot?: string;
   /** Custom templates path (optional) */
   templatesPath?: string;
+  /** Search configuration */
+  search?: VaultSearchConfig;
 }
 
 export interface VaultMeta {
@@ -28,6 +30,39 @@ export interface VaultMeta {
   qmdCollection?: string;
   /** Root path for qmd collection (defaults to vault path) */
   qmdRoot?: string;
+  /** Search configuration */
+  search?: VaultSearchConfig;
+}
+
+export type SearchBackend = 'in-process' | 'qmd';
+export type EmbeddingProvider = 'none' | 'openai' | 'gemini' | 'ollama';
+export type RerankProvider = 'none' | 'jina' | 'voyage' | 'siliconflow' | 'pinecone';
+
+export interface VaultSearchConfig {
+  /**
+   * Default backend used for search commands.
+   * in-process is default and recommended for constrained devices.
+   */
+  backend?: SearchBackend;
+  /** Allow qmd fallback when installed and in-process search fails */
+  qmdFallback?: boolean;
+  /** Chunk size in characters for in-process BM25 indexing */
+  chunkSize?: number;
+  /** Chunk overlap in characters for in-process BM25 indexing */
+  chunkOverlap?: number;
+  embeddings?: {
+    provider?: EmbeddingProvider;
+    model?: string;
+    baseUrl?: string;
+    apiKey?: string;
+  };
+  rerank?: {
+    provider?: RerankProvider;
+    model?: string;
+    endpoint?: string;
+    apiKey?: string;
+    weight?: number;
+  };
 }
 
 export interface Document {

@@ -50,6 +50,19 @@ describe('config-manager', () => {
       setConfigValue(vaultPath, 'inject.maxResults', '9');
       setConfigValue(vaultPath, 'inject.useLlm', 'false');
       setConfigValue(vaultPath, 'inject.scope', 'project,incident');
+      setConfigValue(vaultPath, 'search.backend', 'in-process');
+      setConfigValue(vaultPath, 'search.qmdFallback', 'true');
+      setConfigValue(vaultPath, 'search.chunkSize', '640');
+      setConfigValue(vaultPath, 'search.chunkOverlap', '80');
+      setConfigValue(vaultPath, 'search.embeddings.provider', 'openai');
+      setConfigValue(vaultPath, 'search.embeddings.model', 'text-embedding-3-small');
+      setConfigValue(vaultPath, 'search.embeddings.baseUrl', 'https://api.openai.com/v1');
+      setConfigValue(vaultPath, 'search.embeddings.apiKey', 'emb-key');
+      setConfigValue(vaultPath, 'search.rerank.provider', 'jina');
+      setConfigValue(vaultPath, 'search.rerank.model', 'jina-reranker-v2-base-multilingual');
+      setConfigValue(vaultPath, 'search.rerank.endpoint', 'https://api.jina.ai/v1/rerank');
+      setConfigValue(vaultPath, 'search.rerank.apiKey', 'rerank-key');
+      setConfigValue(vaultPath, 'search.rerank.weight', '0.7');
 
       expect(getConfigValue(vaultPath, 'name')).toBe('clawvault-dev');
       expect(getConfigValue(vaultPath, 'categories')).toEqual(['people', 'projects', 'decisions']);
@@ -66,6 +79,13 @@ describe('config-manager', () => {
       expect(getConfigValue(vaultPath, 'inject.maxResults')).toBe(9);
       expect(getConfigValue(vaultPath, 'inject.useLlm')).toBe(false);
       expect(getConfigValue(vaultPath, 'inject.scope')).toEqual(['project', 'incident']);
+      expect(getConfigValue(vaultPath, 'search.backend')).toBe('in-process');
+      expect(getConfigValue(vaultPath, 'search.qmdFallback')).toBe(true);
+      expect(getConfigValue(vaultPath, 'search.chunkSize')).toBe(640);
+      expect(getConfigValue(vaultPath, 'search.chunkOverlap')).toBe(80);
+      expect(getConfigValue(vaultPath, 'search.embeddings.provider')).toBe('openai');
+      expect(getConfigValue(vaultPath, 'search.rerank.provider')).toBe('jina');
+      expect(getConfigValue(vaultPath, 'search.rerank.weight')).toBe(0.7);
 
       const listed = listConfig(vaultPath);
       expect(listed).toMatchObject({
@@ -95,6 +115,25 @@ describe('config-manager', () => {
           maxResults: 9,
           useLlm: false,
           scope: ['project', 'incident']
+        },
+        search: {
+          backend: 'in-process',
+          qmdFallback: true,
+          chunkSize: 640,
+          chunkOverlap: 80,
+          embeddings: {
+            provider: 'openai',
+            model: 'text-embedding-3-small',
+            baseUrl: 'https://api.openai.com/v1',
+            apiKey: 'emb-key'
+          },
+          rerank: {
+            provider: 'jina',
+            model: 'jina-reranker-v2-base-multilingual',
+            endpoint: 'https://api.jina.ai/v1/rerank',
+            apiKey: 'rerank-key',
+            weight: 0.7
+          }
         }
       });
     } finally {
@@ -135,6 +174,19 @@ describe('config-manager', () => {
           maxResults: 8,
           useLlm: true,
           scope: ['global']
+        },
+        search: {
+          backend: 'in-process',
+          qmdFallback: true,
+          chunkSize: 700,
+          chunkOverlap: 100,
+          embeddings: {
+            provider: 'none'
+          },
+          rerank: {
+            provider: 'none',
+            weight: 0.6
+          }
         },
         routes: []
       });

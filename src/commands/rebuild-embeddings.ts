@@ -1,11 +1,14 @@
 /**
  * Rebuild embedding cache for hybrid search.
- * Uses @huggingface/transformers (all-MiniLM-L6-v2) for local embeddings.
+ * Uses hosted embedding providers (OpenAI/Gemini/Ollama).
  */
 import * as fs from 'fs';
 import * as path from 'path';
 import { resolveVaultPath } from '../lib/config.js';
-import { EmbeddingCache, embed } from '../lib/hybrid-search.js';
+import { listConfig } from '../lib/config-manager.js';
+import { computeEmbeddingHash, EmbeddingStore } from '../lib/embedding-store.js';
+import { embedText, resolveEmbeddingConfig } from '../lib/hosted-embeddings.js';
+import type { VaultSearchConfig } from '../types.js';
 
 export interface RebuildEmbeddingsOptions {
   force?: boolean;
@@ -37,6 +40,19 @@ function walkDir(dir: string, base: string): string[] {
   return files;
 }
 
+function resolveSearchConfig(vaultPath: string): VaultSearchConfig {
+  try {
+    const config = listConfig(vaultPath) as Record<string, unknown>;
+    const search = config.search;
+    if (search && typeof search === 'object' && !Array.isArray(search)) {
+      return search as VaultSearchConfig;
+    }
+    return {};
+  } catch {
+    return {};
+  }
+}
+
 /**
  * Rebuild embeddings for all markdown files in a vault.
  */
@@ -45,15 +61,25 @@ export async function rebuildEmbeddingsForVault(
   options: RebuildEmbeddingsOptions = {}
 ): Promise<RebuildEmbeddingsResult> {
   const { force = false, onProgress } = options;
-
-  const cache = new EmbeddingCache(vaultPath);
-  if (!force) {
-    cache.load();
+  const searchConfig = resolveSearchConfig(vaultPath);
+  const embeddingConfig = resolveEmbeddingConfig(searchConfig);
+  if (!embeddingConfig) {
+    throw new Error(
+      'No hosted embedding provider configured. Set search.embeddings.provider to openai, gemini, or ollama.'
+    );
   }
+
+  const store = new EmbeddingStore(vaultPath);
+  store.load();
+  if (force || !store.isCompatible(embeddingConfig.provider, embeddingConfig.model)) {
+    store.clear();
+  }
+  store.setSignature(embeddingConfig.provider, embeddingConfig.model);
 
   const mdFiles = walkDir(vaultPath, vaultPath).filter(
     (f) => !f.startsWith('node_modules') && !f.startsWith('.')
   );
+  const validDocIds = new Set<string>();
 
   let added = 0;
   let skipped = 0;
@@ -62,11 +88,7 @@ export async function rebuildEmbeddingsForVault(
     const file = mdFiles[i];
     const docId = file.replace(/\.md$/, '');
 
-    if (!force && cache.has(docId)) {
-      skipped++;
-      if (onProgress) onProgress(i + 1, mdFiles.length);
-      continue;
-    }
+    validDocIds.add(docId);
 
     try {
       const content = fs.readFileSync(path.join(vaultPath, file), 'utf-8');
@@ -76,8 +98,15 @@ export async function rebuildEmbeddingsForVault(
         continue;
       }
 
-      const embedding = await embed(content.slice(0, 8000));
-      cache.set(docId, embedding);
+      const hash = computeEmbeddingHash(content.slice(0, 12000));
+      if (!force && store.getHash(docId) === hash) {
+        skipped++;
+        if (onProgress) onProgress(i + 1, mdFiles.length);
+        continue;
+      }
+
+      const embedding = await embedText(content, embeddingConfig, { isQuery: false });
+      store.set(docId, hash, embedding);
       added++;
     } catch {
       skipped++;
@@ -86,10 +115,11 @@ export async function rebuildEmbeddingsForVault(
     if (onProgress) onProgress(i + 1, mdFiles.length);
   }
 
-  cache.save();
+  store.prune(validDocIds);
+  store.save();
 
   return {
-    total: cache.size,
+    total: store.size,
     added,
     skipped
   };

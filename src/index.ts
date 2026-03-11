@@ -160,7 +160,10 @@ export type {
   ObserverCompressionProvider,
   Theme,
   ContextProfile as ConfigDefaultProfile,
-  FactExtractionMode
+  FactExtractionMode,
+  SearchBackend as ConfigSearchBackend,
+  SearchEmbeddingProvider as ConfigSearchEmbeddingProvider,
+  SearchRerankProvider as ConfigSearchRerankProvider
 } from './lib/config-manager.js';
 export {
   MEMORY_GRAPH_SCHEMA_VERSION,
@@ -336,6 +339,10 @@ export type {
   Document,
   SearchResult,
   SearchOptions,
+  VaultSearchConfig,
+  SearchBackend,
+  EmbeddingProvider,
+  RerankProvider,
   StoreOptions,
   SyncOptions,
   SyncResult,
