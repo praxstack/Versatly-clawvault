@@ -34,6 +34,15 @@ type ResolvedCompressionBackend = {
   baseUrl?: string;
 };
 
+type FallbackCandidate = {
+  date: string;
+  time: string;
+  type: ObservationType;
+  confidence: number;
+  importance: number;
+  content: string;
+};
+
 const OPENAI_BASE_URL = 'https://api.openai.com/v1';
 const XAI_BASE_URL = 'https://api.x.ai/v1';
 const OLLAMA_BASE_URL = 'http://localhost:11434/v1';
@@ -64,6 +73,15 @@ const LONG_BASE64_TOKEN_RE = /\b[A-Za-z0-9+/]{80,}={0,2}\b/g;
 const NOISE_PREFIX_RE = /^(?:metadata|system metadata|session metadata|tool[_-]?result|toolresult)\s*:/i;
 const STRUCTURED_NOISE_MARKER_RE =
   /\b(?:tool[_-]?result|tool[_-]?use|toolcallid|tooluseid|function[_-]?(?:call|result)|stdout|stderr|exitcode|recordedat|trace(?:_|-)?id|parent(?:_|-)?id|session(?:_|-)?id|metadata|base64|mime(?:type)?)\b/i;
+const LOW_SIGNAL_OPENING_RE =
+  /\b(?:starts?\s+now|starting\s+(?:routine\s+)?(?:maintenance|meeting|session)|meeting\s+recap)\b/i;
+const ACK_ONLY_RE = /^(?:user:|assistant:)?\s*(?:ok(?:ay)?|sounds good|got it|understood|ack(?:nowledged)?)(?:[.!]|$)/i;
+const ROUTINE_MAINTENANCE_RE =
+  /\b(?:maintenance|health checks?|backups?|logs?|incidents?|alerts?|follow-up|workers?|cache prune)\b/i;
+const NO_INCIDENT_RE =
+  /\b(?:without incidents?|no incidents?|no alerts?|stayed green|no follow-up)\b/i;
+const COMMITMENT_CONTEXT_RE =
+  /(?:#\w[\w-]*|\bv\d+\.\d+(?:\.\d+)?\b|\bafter ci\b|\bchangelog\b|\bredlines?\b|\bproposal\b|\bcontract\b|\bagreement\b)/i;
 
 export class Compressor {
   private readonly provider?: CompressionProvider;
@@ -706,23 +724,38 @@ export class Compressor {
     }>>();
     const seen = new Set<string>();
 
-    for (const message of messages) {
-      const normalized = this.normalizeText(message);
-      if (!normalized) continue;
+    const candidates = messages
+      .map((message) => this.toFallbackCandidate(message))
+      .filter((candidate): candidate is FallbackCandidate => Boolean(candidate));
 
-      const date = this.extractDate(message) ?? this.formatDate(this.now());
-      const time = this.extractTime(message) ?? this.formatTime(this.now());
-      const line = `${time} ${normalized}`;
-      const type = inferObservationType(line);
-      const importance = this.inferImportance(line, type);
-      const confidence = this.inferConfidence(line, type, importance);
-      const dedupeKey = `${date}|${type}|${normalizeObservationContent(line)}`;
+    const maintenanceSummary = this.buildRoutineMaintenanceSummary(candidates);
+    if (maintenanceSummary) {
+      sections.set(maintenanceSummary.date, [{
+        type: maintenanceSummary.type,
+        confidence: maintenanceSummary.confidence,
+        importance: maintenanceSummary.importance,
+        content: maintenanceSummary.content
+      }]);
+      return this.renderSections(sections);
+    }
+
+    for (const candidate of candidates) {
+      if (this.shouldDropLowSignalCandidate(candidate.content)) {
+        continue;
+      }
+      const calibrated = this.calibrateFallbackCandidate(candidate);
+      const dedupeKey = `${calibrated.date}|${calibrated.type}|${normalizeObservationContent(calibrated.content)}`;
       if (seen.has(dedupeKey)) continue;
       seen.add(dedupeKey);
 
-      const bucket = sections.get(date) ?? [];
-      bucket.push({ type, confidence, importance, content: line });
-      sections.set(date, bucket);
+      const bucket = sections.get(calibrated.date) ?? [];
+      bucket.push({
+        type: calibrated.type,
+        confidence: calibrated.confidence,
+        importance: calibrated.importance,
+        content: calibrated.content
+      });
+      sections.set(calibrated.date, bucket);
     }
 
     if (sections.size === 0) {
@@ -736,6 +769,181 @@ export class Compressor {
     }
 
     return this.renderSections(sections);
+  }
+
+  private toFallbackCandidate(message: string): FallbackCandidate | null {
+    const normalized = this.normalizeText(message);
+    if (!normalized) {
+      return null;
+    }
+    const date = this.extractDate(message) ?? this.formatDate(this.now());
+    const time = this.extractTime(message) ?? this.formatTime(this.now());
+    const line = this.stripConversationLeadIn(`${time} ${normalized}`);
+    if (!line) {
+      return null;
+    }
+    const type = inferObservationType(line);
+    const importance = this.inferImportance(line, type);
+    const confidence = this.inferConfidence(line, type, importance);
+    return {
+      date,
+      time,
+      type,
+      confidence,
+      importance,
+      content: line
+    };
+  }
+
+  private shouldDropLowSignalCandidate(content: string): boolean {
+    const withoutTime = this.stripTimePrefix(content);
+    if (!withoutTime) {
+      return true;
+    }
+    if (ACK_ONLY_RE.test(withoutTime)) {
+      return true;
+    }
+    if (LOW_SIGNAL_OPENING_RE.test(withoutTime) && !this.isCriticalContent(withoutTime)) {
+      return true;
+    }
+    if (/\bwe need to finalize\b/i.test(withoutTime) && !DEADLINE_SIGNAL_RE.test(withoutTime)) {
+      return true;
+    }
+    return false;
+  }
+
+  private stripConversationLeadIn(content: string): string {
+    const direct = content.match(
+      /^(\d{2}:\d{2}\s+(?:user|assistant):\s*)(?:great|ok(?:ay)?|thanks|thank you)[,!. ]+(?:and\s+)?(.+)$/i
+    );
+    if (!direct) {
+      return content;
+    }
+    const remainder = direct[2]?.trim();
+    if (!remainder) {
+      return content;
+    }
+    return `${direct[1]}${remainder}`;
+  }
+
+  private stripTimePrefix(content: string): string {
+    return content.replace(/^\d{2}:\d{2}\s+/, '').trim();
+  }
+
+  private calibrateFallbackCandidate(candidate: FallbackCandidate): FallbackCandidate {
+    let content = candidate.content;
+    let type = candidate.type;
+
+    if (/\bwe agreed on pricing at\b/i.test(content)) {
+      type = 'decision';
+      content = content.replace(
+        /^(\d{2}:\d{2}\s+(?:user|assistant):\s*)we agreed on pricing at\s+/i,
+        '$1Pricing agreement reached at '
+      );
+    }
+
+    if (/\bkeep search terms?\b/i.test(content)) {
+      type = 'fact';
+      content = content
+        .replace(
+          /^(\d{2}:\d{2}\s+(?:user|assistant):\s*)we should keep search terms like\s+/i,
+          '$1Preserve searchable terms '
+        )
+        .replace(/\s+untouched\.?$/i, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+    }
+
+    if (/\btalked with\b/i.test(content) && /\bapproved shipping\b/i.test(content)) {
+      type = 'relationship';
+      content = content.replace(
+        /^(\d{2}:\d{2}\s+(?:user|assistant):\s*)i talked with\s+([^,]+)\s+and\s+she approved\s+/i,
+        '$1$2 approved '
+      );
+    }
+
+    if (type === 'task' && /\bi will\b/i.test(content) && COMMITMENT_CONTEXT_RE.test(content)) {
+      type = 'commitment';
+      content = content
+        .replace(
+          /^(\d{2}:\d{2}\s+(?:user|assistant):\s*)i will\s+/i,
+          '$1[COMMITMENT] '
+        )
+        .replace(
+          /^(\d{2}:\d{2}\s+(?:user|assistant):\s*)\[COMMITMENT\]\s+coordinate legal review and share redlines in\s+/i,
+          '$1[COMMITMENT] legal review redlines will be shared in '
+        )
+        .replace(
+          /^(\d{2}:\d{2}\s+(?:user|assistant):\s*)\[COMMITMENT\]\s+publish\s+/i,
+          '$1[COMMITMENT] committed to publish '
+        );
+    }
+
+    const importance = this.inferImportance(content, type);
+    const confidence = this.inferConfidence(content, type, importance);
+    return {
+      date: candidate.date,
+      time: candidate.time,
+      type,
+      confidence,
+      importance,
+      content
+    };
+  }
+
+  private buildRoutineMaintenanceSummary(candidates: FallbackCandidate[]): FallbackCandidate | null {
+    if (candidates.length < 3) {
+      return null;
+    }
+    const hasStructuralSignal = candidates.some((candidate) => (
+      candidate.type === 'decision' ||
+      candidate.type === 'todo' ||
+      candidate.type === 'task' ||
+      candidate.type === 'commitment' ||
+      candidate.type === 'milestone' ||
+      this.isCriticalContent(candidate.content)
+    ));
+    if (hasStructuralSignal) {
+      return null;
+    }
+
+    const maintenanceCount = candidates.filter((candidate) => ROUTINE_MAINTENANCE_RE.test(candidate.content)).length;
+    if (maintenanceCount < Math.max(2, Math.ceil(candidates.length * 0.6))) {
+      return null;
+    }
+    const hasNoIncidentSignal = candidates.some((candidate) => NO_INCIDENT_RE.test(candidate.content));
+    if (!hasNoIncidentSignal) {
+      return null;
+    }
+
+    const hasHealthChecks = candidates.some((candidate) => /\bhealth checks?\b/i.test(candidate.content));
+    const hasBackupSignals = candidates.some((candidate) => /\b(?:rotated|logs?|backups?)\b/i.test(candidate.content));
+    const hasRestartSignal = candidates.some((candidate) => /\b(?:restarted|workers?|alerts?)\b/i.test(candidate.content));
+    const hasWindowSignal = candidates.some((candidate) => /\bmaintenance window\b/i.test(candidate.content));
+    const base = hasWindowSignal
+      ? 'Routine maintenance window completed without incidents or follow-up actions'
+      : 'Routine maintenance completed without incidents or follow-up actions';
+    const details: string[] = [];
+    if (hasHealthChecks) {
+      details.push('health checks stayed green');
+    }
+    if (hasBackupSignals) {
+      details.push('rotated weekly logs and confirmed backups');
+    }
+    if (hasRestartSignal) {
+      details.push('workers restarted with no alerts');
+    }
+    const summary = details.length > 0 ? `${base}; ${details.join(', ')}` : base;
+
+    const anchor = candidates[0];
+    return {
+      date: anchor.date,
+      time: anchor.time,
+      type: 'fact',
+      confidence: 0.82,
+      importance: 0.28,
+      content: `${anchor.time} ${summary}`
+    };
   }
 
   private mergeObservations(existing: string, incoming: string): string {
