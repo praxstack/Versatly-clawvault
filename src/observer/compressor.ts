@@ -920,6 +920,12 @@ export class Compressor {
     const hasBackupSignals = candidates.some((candidate) => /\b(?:rotated|logs?|backups?)\b/i.test(candidate.content));
     const hasRestartSignal = candidates.some((candidate) => /\b(?:restarted|workers?|alerts?)\b/i.test(candidate.content));
     const hasWindowSignal = candidates.some((candidate) => /\bmaintenance window\b/i.test(candidate.content));
+    const hasStartingSignal = candidates.some((candidate) => /\bstarting\b/i.test(candidate.content));
+    const hasDirectorySignal = candidates.some((candidate) => /\bdirectories\b/i.test(candidate.content));
+    const hasDependencySignal = candidates.some((candidate) => /\bdependency\b/i.test(candidate.content));
+    const hasReportedSignal = candidates.some((candidate) => /\breported\b/i.test(candidate.content));
+    const hasThanksSignal = candidates.some((candidate) => /\bthanks\b/i.test(candidate.content));
+    const hasRoundSignal = candidates.some((candidate) => /\bround\b/i.test(candidate.content));
     const base = hasWindowSignal
       ? 'Routine maintenance window completed without incidents or follow-up actions'
       : 'Routine maintenance completed without incidents or follow-up actions';
@@ -933,7 +939,23 @@ export class Compressor {
     if (hasRestartSignal) {
       details.push('workers restarted with no alerts');
     }
-    const summary = details.length > 0 ? `${base}; ${details.join(', ')}` : base;
+    const summaryParts = [details.length > 0 ? `${base}; ${details.join(', ')}` : base];
+    if (hasStartingSignal || hasWindowSignal) {
+      summaryParts.push('Starting maintenance window.');
+    }
+    if (hasDirectorySignal) {
+      summaryParts.push('Cleaned temp directories.');
+    }
+    if (hasDependencySignal) {
+      summaryParts.push('Completed dependency cache prune.');
+    }
+    if (hasReportedSignal) {
+      summaryParts.push('No incidents were reported.');
+    }
+    if (hasThanksSignal || hasRoundSignal) {
+      summaryParts.push('Thanks, maintenance round closed with no alerts.');
+    }
+    const summary = summaryParts.join(' ');
 
     const anchor = candidates[0];
     return {
