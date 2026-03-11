@@ -57,6 +57,13 @@ export type {
   ParsedKanbanBoard
 } from './commands/kanban.js';
 export {
+  benchmarkObserverCommand,
+  registerBenchmarkCommand
+} from './commands/benchmark.js';
+export type {
+  BenchmarkObserverCommandOptions
+} from './commands/benchmark.js';
+export {
   contextCommand,
   buildContext,
   formatContextMarkdown,
@@ -260,6 +267,29 @@ export type { ReflectorOptions } from './observer/reflector.js';
 export { SessionWatcher } from './observer/watcher.js';
 export type { SessionWatcherOptions } from './observer/watcher.js';
 export { parseSessionFile } from './observer/session-parser.js';
+export {
+  compareObservationText,
+  extractKeywordSetFromTranscript,
+  formatObserverBenchmarkSummary,
+  loadObserverBenchmarkFixtures,
+  matchObservationRecords,
+  runObserverBenchmark,
+  scoreFixtureObservations
+} from './observer/benchmark/index.js';
+export type {
+  BenchmarkFixtureResult,
+  FixtureScoringMetrics,
+  FixtureScoringResult,
+  KeywordRewriteFlag,
+  ObservationMatch,
+  ObserverBenchmarkFixture,
+  ObserverBenchmarkFixtureConfig,
+  ObserverBenchmarkProvider,
+  ObserverBenchmarkReport,
+  ObserverBenchmarkReportFormat,
+  ObserverBenchmarkRunOptions,
+  ScoreFixtureOptions
+} from './observer/benchmark/index.js';
 export { runReflection } from './observer/reflection-service.js';
 export type { ReflectOptions, ReflectResult } from './observer/reflection-service.js';
 export { archiveObservations } from './observer/archive.js';

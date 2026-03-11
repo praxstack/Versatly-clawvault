@@ -1,4 +1,5 @@
 import type { Command } from 'commander';
+import { registerBenchmarkCommand } from '../commands/benchmark.js';
 import { registerContextCommand } from '../commands/context.js';
 import { registerInjectCommand } from '../commands/inject.js';
 import { registerObserveCommand } from '../commands/observe.js';
@@ -10,6 +11,7 @@ import { registerTailscaleCommands } from '../commands/tailscale.js';
 import { registerWorkgraphCommands } from '../commands/workgraph.js';
 
 export function registerCliCommands(program: Command): Command {
+  registerBenchmarkCommand(program);
   registerContextCommand(program);
   registerInjectCommand(program);
   registerObserveCommand(program);

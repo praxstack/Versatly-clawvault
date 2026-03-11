@@ -1,0 +1,12 @@
+{
+  "now": "2026-03-10T14:06:00.000Z",
+  "scoring": {
+    "keywordHints": [
+      "Northwind",
+      "SOC2",
+      "$48K",
+      "#northwind-deal"
+    ],
+    "minimumImportanceForRecall": 0.7
+  }
+}

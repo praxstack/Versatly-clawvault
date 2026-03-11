@@ -121,6 +121,7 @@ describe('CLI command registration modules', () => {
     const names = listCommandNames(program);
     expect(names).toEqual(expect.arrayContaining([
       'doctor',
+      'benchmark',
       'maintain',
       'embed',
       'compat',

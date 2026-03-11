@@ -1,0 +1,10 @@
+{
+  "now": "2026-03-10T09:30:00.000Z",
+  "scoring": {
+    "minimumImportanceForRecall": 0.25,
+    "keywordHints": [
+      "maintenance window",
+      "health checks"
+    ]
+  }
+}

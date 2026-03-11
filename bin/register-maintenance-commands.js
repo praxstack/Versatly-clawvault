@@ -322,4 +322,31 @@ export function registerMaintenanceCommands(program, { chalk }) {
         process.exit(1);
       }
     });
+
+  // === BENCHMARK ===
+  const benchmark = program
+    .command('benchmark')
+    .description('Run benchmark harnesses');
+
+  benchmark
+    .command('observer')
+    .description('Evaluate observer output quality against annotated transcripts')
+    .option('--fixtures-dir <path>', 'Fixture root directory (default: testdata/observer-benchmark)')
+    .option('--provider <provider>', 'Compression provider (mock|anthropic|openai|gemini|xai|openai-compatible|ollama|minimax|zai)', 'mock')
+    .option('--model <model>', 'Model override for live provider runs')
+    .option('--report-format <format>', 'Report output format (json|text)', 'text')
+    .action(async (options) => {
+      try {
+        const { benchmarkObserverCommand } = await import('../dist/commands/benchmark.js');
+        await benchmarkObserverCommand({
+          fixturesDir: options.fixturesDir,
+          provider: options.provider,
+          model: options.model,
+          reportFormat: options.reportFormat
+        });
+      } catch (err) {
+        console.error(chalk.red(`Error: ${err.message}`));
+        process.exit(1);
+      }
+    });
 }
