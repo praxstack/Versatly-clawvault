@@ -184,6 +184,21 @@ describe('doctor', () => {
     }
   });
 
+  it('handles object-shaped vault path options without crashing', async () => {
+    const vaultPath = makeTempDir('clawvault-doctor-object-path-');
+    writeConfig(vaultPath, { name: 'test-vault' });
+    installSpawnDefaults(vaultPath);
+
+    try {
+      const report = await doctor({ vaultPath: { path: vaultPath } as unknown as string });
+      expect(report.vaultPath).toBe(path.resolve(vaultPath));
+      expect(checkByLabel(report, 'vault directory')?.status).toBe('ok');
+      expect(checkByLabel(report, 'vault config file')?.status).toBe('ok');
+    } finally {
+      fs.rmSync(vaultPath, { recursive: true, force: true });
+    }
+  });
+
   it('retains migration diagnostics for migrate command compatibility', async () => {
     const vaultPath = makeTempDir('clawvault-doctor-migration-');
     writeConfig(vaultPath, { name: 'my-vault', qmdCollection: 'my-vault', qmdRoot: vaultPath });

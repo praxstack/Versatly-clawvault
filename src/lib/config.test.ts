@@ -52,6 +52,21 @@ describe('config path resolution', () => {
     }
   });
 
+  it('accepts object-shaped explicitPath values', () => {
+    const explicit = makeTempDir('clawvault-explicit-object-');
+    const env = makeTempDir('clawvault-env-object-');
+    process.env.CLAWVAULT_PATH = env;
+    try {
+      const resolved = resolveVaultPath({
+        explicitPath: { path: explicit } as unknown as string
+      });
+      expect(resolved).toBe(path.resolve(explicit));
+    } finally {
+      fs.rmSync(explicit, { recursive: true, force: true });
+      fs.rmSync(env, { recursive: true, force: true });
+    }
+  });
+
   it('resolves env path before cwd discovery', () => {
     const env = makeTempDir('clawvault-env-');
     const cwdRoot = makeTempDir('clawvault-cwd-');

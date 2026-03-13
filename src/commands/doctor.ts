@@ -75,19 +75,58 @@ function majorVersionOf(versionText: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function toNonEmptyString(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function coerceVaultPath(value: unknown): string | undefined {
+  const direct = toNonEmptyString(value);
+  if (direct) return direct;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const record = value as Record<string, unknown>;
+  const candidates = [record.vaultPath, record.path, record.vault, record.explicitPath];
+  for (const candidate of candidates) {
+    const coerced = toNonEmptyString(candidate);
+    if (coerced) {
+      return coerced;
+    }
+  }
+  return undefined;
+}
+
 function normalizeDoctorOptions(input?: string | DoctorOptions): DoctorOptions {
   if (typeof input === 'string') {
     return { vaultPath: input };
   }
-  return input ?? {};
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return {};
+  }
+
+  const raw = input as Record<string, unknown>;
+  const normalized: DoctorOptions = {};
+  const vaultPath = coerceVaultPath(raw.vaultPath);
+  if (vaultPath) {
+    normalized.vaultPath = vaultPath;
+  }
+  if (typeof raw.fix === 'boolean') {
+    normalized.fix = raw.fix;
+  }
+  return normalized;
 }
 
 function resolveDoctorVaultPath(explicitPath?: string): string | undefined {
-  if (explicitPath && explicitPath.trim()) {
-    return path.resolve(explicitPath);
+  const normalizedExplicitPath = coerceVaultPath(explicitPath);
+  if (normalizedExplicitPath) {
+    return path.resolve(normalizedExplicitPath);
   }
-  if (process.env.CLAWVAULT_PATH && process.env.CLAWVAULT_PATH.trim()) {
-    return path.resolve(process.env.CLAWVAULT_PATH);
+  const envVaultPath = toNonEmptyString(process.env.CLAWVAULT_PATH);
+  if (envVaultPath) {
+    return path.resolve(envVaultPath);
   }
   const nearest = findNearestVaultPath(process.cwd());
   return nearest ? path.resolve(nearest) : undefined;

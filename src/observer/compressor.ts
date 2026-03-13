@@ -742,7 +742,7 @@ export class Compressor {
 
     // Only apply inferred task type if no content-based override was set
     if (inferredTaskType && type !== 'commitment' && type !== 'decision') {
-      type = type === 'fact' || type === 'commitment' ? inferredTaskType : type;
+      type = type === 'fact' ? inferredTaskType : type;
       importance = Math.max(importance, inferredTaskType === 'commitment-unresolved' ? 0.72 : 0.65);
       confidence = Math.max(confidence, 0.8);
     }

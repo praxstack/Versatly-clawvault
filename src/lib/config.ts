@@ -82,6 +82,30 @@ export interface ResolveVaultPathOptions {
   pluginConfig?: PluginConfig;
 }
 
+function toNonEmptyPathString(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function coercePathCandidate(value: unknown): string | null {
+  const direct = toNonEmptyPathString(value);
+  if (direct) return direct;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const candidates = [record.explicitPath, record.vaultPath, record.path, record.vault];
+  for (const candidate of candidates) {
+    const normalized = toNonEmptyPathString(candidate);
+    if (normalized) {
+      return normalized;
+    }
+  }
+  return null;
+}
+
 /**
  * Resolve vault path with support for per-agent vault paths.
  * 
@@ -94,8 +118,9 @@ export interface ResolveVaultPathOptions {
  */
 export function resolveVaultPath(options: ResolveVaultPathOptions = {}): string {
   // 1. Explicit path takes precedence
-  if (options.explicitPath) {
-    return path.resolve(options.explicitPath);
+  const explicitPath = coercePathCandidate(options.explicitPath);
+  if (explicitPath) {
+    return path.resolve(explicitPath);
   }
 
   // 2. Check agentVaults for per-agent vault path
@@ -110,14 +135,16 @@ export function resolveVaultPath(options: ResolveVaultPathOptions = {}): string 
   }
 
   // 3. Check plugin config vaultPath (fallback)
-  if (options.pluginConfig?.vaultPath) {
-    const validated = validateVaultPath(options.pluginConfig.vaultPath);
+  const configuredVaultPath = coercePathCandidate(options.pluginConfig?.vaultPath);
+  if (configuredVaultPath) {
+    const validated = validateVaultPath(configuredVaultPath);
     if (validated) return validated;
   }
 
   // 4. Check CLAWVAULT_PATH environment variable
-  if (process.env.CLAWVAULT_PATH) {
-    return path.resolve(process.env.CLAWVAULT_PATH);
+  const envVaultPath = toNonEmptyPathString(process.env.CLAWVAULT_PATH);
+  if (envVaultPath) {
+    return path.resolve(envVaultPath);
   }
 
   // 5. Walk up from cwd to find nearest vault
