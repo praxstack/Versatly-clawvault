@@ -214,6 +214,66 @@ export function registerCoreCommands(
 
   // === CAPTURE ===
   program
+    .command('patch <idOrPath>')
+    .description('Patch an existing memory document')
+    .option('--append <text>', 'Append text to the document body (or target section)')
+    .option('--replace <text>', 'Text to replace')
+    .option('--with <text>', 'Replacement text used with --replace')
+    .option('--section <heading>', 'Limit patching to a markdown section heading')
+    .option('--content <text>', 'Replace document body (or section body) with text')
+    .option('-v, --vault <path>', 'Vault path (default: find nearest)')
+    .action(async (idOrPath, options) => {
+      try {
+        const modeFlags = [
+          typeof options.append === 'string',
+          typeof options.replace === 'string',
+          typeof options.content === 'string'
+        ];
+        const selectedModes = modeFlags.filter(Boolean).length;
+        if (selectedModes !== 1) {
+          throw new Error('Select exactly one patch mode: --append, --replace/--with, or --content.');
+        }
+
+        if (typeof options.with === 'string' && typeof options.replace !== 'string') {
+          throw new Error('--with can only be used together with --replace.');
+        }
+
+        const vault = await getVault(options.vault);
+        const patchOptions = {
+          idOrPath,
+          mode: 'content'
+        };
+
+        if (typeof options.append === 'string') {
+          patchOptions.mode = 'append';
+          patchOptions.append = options.append;
+        } else if (typeof options.replace === 'string') {
+          if (typeof options.with !== 'string') {
+            throw new Error('--replace requires --with.');
+          }
+          patchOptions.mode = 'replace';
+          patchOptions.replace = options.replace;
+          patchOptions.with = options.with;
+        } else if (typeof options.content === 'string') {
+          patchOptions.mode = 'content';
+          patchOptions.content = options.content;
+        }
+
+        if (typeof options.section === 'string') {
+          patchOptions.section = options.section;
+        }
+
+        const doc = await vault.patch(patchOptions);
+        console.log(chalk.green(`✓ Patched: ${doc.id}`));
+        console.log(chalk.dim(`  Path: ${doc.path}`));
+      } catch (err) {
+        console.error(chalk.red(`Error: ${err.message}`));
+        process.exit(1);
+      }
+    });
+
+  // === CAPTURE ===
+  program
     .command('capture <note>')
     .description('Quick-capture a note to inbox')
     .option('-t, --title <title>', 'Note title')

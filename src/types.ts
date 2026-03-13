@@ -131,6 +131,25 @@ export interface StoreOptions {
   qmdIndexName?: string;
 }
 
+export type PatchMode = 'append' | 'replace' | 'content';
+
+export interface PatchOptions {
+  /** Document id/path to patch (e.g. decisions/my-note or decisions/my-note.md) */
+  idOrPath: string;
+  /** Patch mode */
+  mode: PatchMode;
+  /** Text to append when mode=append */
+  append?: string;
+  /** Search text when mode=replace */
+  replace?: string;
+  /** Replacement text when mode=replace */
+  with?: string;
+  /** Replacement body when mode=content */
+  content?: string;
+  /** Optional markdown section heading (without #) to scope the patch */
+  section?: string;
+}
+
 export interface SyncOptions {
   /** Target directory to sync to */
   target: string;

@@ -156,6 +156,103 @@ describe('vault core', () => {
     expect(qmdEmbedMock).toHaveBeenCalledWith(vault.getQmdCollection(), 'secondary-index');
   });
 
+  it('patches a document via append mode and refreshes only that document index entry', async () => {
+    const vault = await createVault(tempDir, { name: 'Patch Vault' }, { skipGraph: true, skipBases: true });
+    await vault.store({
+      category: 'decisions',
+      title: 'Patch Target',
+      content: 'Initial decision text'
+    });
+    await vault.store({
+      category: 'decisions',
+      title: 'Untouched Doc',
+      content: 'This remains unchanged'
+    });
+
+    const reindexSpy = vi.spyOn(vault, 'reindex');
+    const patched = await vault.patch({
+      idOrPath: 'decisions/patch-target',
+      mode: 'append',
+      append: 'Follow-up action added'
+    });
+
+    expect(patched.id).toBe('decisions/patch-target');
+    expect(patched.content).toContain('Initial decision text');
+    expect(patched.content).toContain('Follow-up action added');
+    expect(reindexSpy).not.toHaveBeenCalled();
+
+    const untouched = await vault.get('decisions/untouched-doc');
+    expect(untouched?.content).toContain('This remains unchanged');
+
+    const results = await vault.find('Follow-up action added');
+    expect(results.some((result) => result.document.id === 'decisions/patch-target')).toBe(true);
+  });
+
+  it('supports replace mode and section/content mode in patch', async () => {
+    const vault = await createVault(tempDir, { name: 'Patch Modes Vault' }, { skipGraph: true, skipBases: true });
+    const created = await vault.store({
+      category: 'projects',
+      title: 'Patch Modes',
+      content: [
+        '# Overview',
+        'Deploy patch this week.',
+        '',
+        '## Notes',
+        'Deploy patch in canary first.',
+        '',
+        '## Risks',
+        'Regression risk is low.'
+      ].join('\n')
+    });
+
+    await vault.patch({
+      idOrPath: created.id,
+      mode: 'replace',
+      replace: 'Deploy patch',
+      with: 'Ship rollout',
+      section: 'Notes'
+    });
+
+    await vault.patch({
+      idOrPath: created.id,
+      mode: 'content',
+      section: 'Risks',
+      content: 'Regression risk is medium without smoke tests.'
+    });
+
+    const patched = await vault.get(created.id);
+    expect(patched?.content).toContain('# Overview\nDeploy patch this week.');
+    expect(patched?.content).toContain('## Notes\nShip rollout in canary first.');
+    expect(patched?.content).toContain('## Risks\nRegression risk is medium without smoke tests.');
+  });
+
+  it('throws clear errors for missing patch targets', async () => {
+    const vault = await createVault(tempDir, { name: 'Patch Errors Vault' }, { skipGraph: true, skipBases: true });
+    await vault.store({
+      category: 'inbox',
+      title: 'Patch Error Seed',
+      content: 'Body text'
+    });
+
+    await expect(
+      vault.patch({
+        idOrPath: 'inbox/patch-error-seed',
+        mode: 'replace',
+        replace: 'missing token',
+        with: 'new token'
+      })
+    ).rejects.toThrow('No matches found');
+
+    await expect(
+      vault.patch({
+        idOrPath: 'inbox/patch-error-seed',
+        mode: 'content',
+        section: 'Unknown Section',
+        content: 'new body'
+      })
+    ).rejects.toThrow('Section not found');
+  });
+
   it('syncs files with dry-run and orphan deletion support', async () => {
     const vault = await createVault(tempDir, { name: 'Sync Vault' }, { skipGraph: true, skipBases: true });
     await vault.store({

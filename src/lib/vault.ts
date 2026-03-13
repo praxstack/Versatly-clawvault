@@ -14,6 +14,7 @@ import {
   SearchResult,
   SearchOptions,
   StoreOptions,
+  PatchOptions,
   SyncOptions,
   SyncResult,
   DEFAULT_CATEGORIES,
@@ -342,6 +343,33 @@ export class ClawVault {
     }
 
     return doc!;
+  }
+
+  /**
+   * Patch an existing document and incrementally refresh index state for that file only.
+   */
+  async patch(options: PatchOptions): Promise<Document> {
+    const relativePath = this.resolveDocumentRelativePath(options.idOrPath);
+    const absolutePath = path.join(this.config.path, relativePath);
+    if (!fs.existsSync(absolutePath)) {
+      throw new Error(`Document not found: ${options.idOrPath}`);
+    }
+
+    const raw = fs.readFileSync(absolutePath, 'utf-8');
+    const { frontmatter, body } = this.splitFrontmatter(raw);
+    const updatedBody = this.applyPatchToBody(body, options);
+
+    if (updatedBody === body) {
+      throw new Error('Patch made no changes to the document body.');
+    }
+
+    fs.writeFileSync(absolutePath, `${frontmatter}${updatedBody}`);
+
+    const doc = await this.reindexDocument(relativePath);
+    if (!doc) {
+      throw new Error(`Failed to reload patched document: ${options.idOrPath}`);
+    }
+    return doc;
   }
 
   /**
@@ -798,6 +826,160 @@ export class ClawVault {
       return value;
     }
     return fallback || new Date().toISOString();
+  }
+
+  private async reindexDocument(relativePath: string): Promise<Document | null> {
+    const doc = await this.loadDocument(relativePath);
+    if (!doc) return null;
+    this.search.addDocument(doc);
+    await this.saveIndex();
+    await this.syncMemoryGraphIndex();
+    return doc;
+  }
+
+  private resolveDocumentRelativePath(idOrPath: string): string {
+    if (typeof idOrPath !== 'string' || !idOrPath.trim()) {
+      throw new Error('idOrPath is required');
+    }
+
+    const trimmed = idOrPath.trim().replace(/^[\\/]+/, '');
+    const withExtension = trimmed.endsWith('.md') ? trimmed : `${trimmed}.md`;
+    const normalized = path.normalize(withExtension);
+    const resolved = path.resolve(this.config.path, normalized);
+    const relative = path.relative(this.config.path, resolved);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      throw new Error(`Document path escapes vault: ${idOrPath}`);
+    }
+    return relative;
+  }
+
+  private splitFrontmatter(raw: string): { frontmatter: string; body: string } {
+    const match = raw.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
+    if (!match) {
+      return { frontmatter: '', body: raw };
+    }
+    const frontmatter = match[0];
+    return {
+      frontmatter,
+      body: raw.slice(frontmatter.length)
+    };
+  }
+
+  private applyPatchToBody(body: string, options: PatchOptions): string {
+    if (options.mode === 'append') {
+      if (typeof options.append !== 'string' || options.append.length === 0) {
+        throw new Error('Append mode requires non-empty append text.');
+      }
+      if (options.section) {
+        return this.patchMarkdownSection(body, options.section, (sectionBody) =>
+          this.appendText(sectionBody, options.append as string)
+        );
+      }
+      return this.appendText(body, options.append);
+    }
+
+    if (options.mode === 'replace') {
+      if (typeof options.replace !== 'string' || options.replace.length === 0) {
+        throw new Error('Replace mode requires non-empty --replace text.');
+      }
+      if (typeof options.with !== 'string') {
+        throw new Error('Replace mode requires --with text.');
+      }
+
+      if (options.section) {
+        return this.patchMarkdownSection(body, options.section, (sectionBody) =>
+          this.replaceAllOccurrences(sectionBody, options.replace as string, options.with as string, `section "${options.section}"`)
+        );
+      }
+      return this.replaceAllOccurrences(body, options.replace, options.with, 'document');
+    }
+
+    if (options.mode === 'content') {
+      if (typeof options.content !== 'string') {
+        throw new Error('Content mode requires --content text.');
+      }
+      if (options.section) {
+        return this.patchMarkdownSection(body, options.section, () => options.content as string);
+      }
+      return options.content;
+    }
+
+    throw new Error(`Unsupported patch mode: ${String((options as { mode?: unknown }).mode)}`);
+  }
+
+  private appendText(existing: string, addition: string): string {
+    if (addition.length === 0) return existing;
+    if (existing.length === 0) return addition;
+    return existing.endsWith('\n') ? `${existing}${addition}` : `${existing}\n${addition}`;
+  }
+
+  private replaceAllOccurrences(
+    input: string,
+    searchText: string,
+    replacement: string,
+    scopeLabel: string
+  ): string {
+    if (!input.includes(searchText)) {
+      throw new Error(`No matches found for "${searchText}" in ${scopeLabel}.`);
+    }
+    return input.split(searchText).join(replacement);
+  }
+
+  private patchMarkdownSection(
+    markdown: string,
+    sectionName: string,
+    applySectionPatch: (sectionBody: string) => string
+  ): string {
+    const lines = markdown.split(/\r?\n/);
+    const normalize = (value: string): string => value.replace(/^#+\s*/, '').trim().toLowerCase();
+    const targetName = normalize(sectionName);
+    let sectionStart = -1;
+    let sectionLevel = 0;
+
+    for (let i = 0; i < lines.length; i += 1) {
+      const line = lines[i];
+      const match = line.match(/^(#{1,6})\s+(.*?)\s*$/);
+      if (!match) continue;
+      const [, marks, heading] = match;
+      if (normalize(heading) === targetName) {
+        sectionStart = i;
+        sectionLevel = marks.length;
+        break;
+      }
+    }
+
+    if (sectionStart < 0) {
+      throw new Error(`Section not found: ${sectionName}`);
+    }
+
+    let sectionEnd = lines.length;
+    for (let i = sectionStart + 1; i < lines.length; i += 1) {
+      const match = lines[i].match(/^(#{1,6})\s+(.*?)\s*$/);
+      if (!match) continue;
+      if (match[1].length <= sectionLevel) {
+        sectionEnd = i;
+        break;
+      }
+    }
+
+    const existingSectionBody = lines.slice(sectionStart + 1, sectionEnd).join('\n');
+    const updatedSectionBody = applySectionPatch(existingSectionBody);
+    const rebuiltSection = updatedSectionBody.length > 0
+      ? `${lines[sectionStart]}\n${updatedSectionBody}`
+      : lines[sectionStart];
+
+    const head = lines.slice(0, sectionStart).join('\n');
+    const tail = lines.slice(sectionEnd).join('\n');
+    if (head.length > 0 && tail.length > 0) {
+      return `${head}\n${rebuiltSection}\n${tail}`;
+    }
+    if (head.length > 0) {
+      return `${head}\n${rebuiltSection}`;
+    }
+    if (tail.length > 0) {
+      return `${rebuiltSection}\n${tail}`;
+    }
+    return rebuiltSection;
   }
 
   /**

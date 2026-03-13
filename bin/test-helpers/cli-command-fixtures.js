@@ -30,6 +30,7 @@ export function stubResolveVaultPath(value) {
 export function createVaultStub(overrides = {}) {
   return {
     store: async () => ({}),
+    patch: async () => ({}),
     capture: async () => ({}),
     find: async () => [],
     vsearch: async () => [],

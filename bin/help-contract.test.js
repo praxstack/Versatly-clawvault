@@ -12,6 +12,7 @@ describe('CLI help contract', () => {
     expect(help).toContain('maintain');
     expect(help).toContain('embed');
     expect(help).toContain('inbox');
+    expect(help).toContain('patch');
     expect(help).toContain('compat');
     expect(help).toContain('graph');
     expect(help).toContain('reflect');

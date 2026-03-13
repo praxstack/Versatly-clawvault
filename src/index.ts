@@ -379,6 +379,8 @@ export type {
   EmbeddingProvider,
   RerankProvider,
   StoreOptions,
+  PatchMode,
+  PatchOptions,
   SyncOptions,
   SyncResult,
   Category,
